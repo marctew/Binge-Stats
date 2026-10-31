@@ -515,6 +515,28 @@ As built in `services/insights.py`. Counts are per play (resumed parts fold into
 
 ---
 
+### Collection and Playback (added after M8)
+
+**Collection** (`/insights/collection`, `services/collection.py`), with filters for library and type. It looks at films and episodes in the library and never suggests deleting anything.
+- **Make-up:** files and bytes by video codec, resolution and audio codec. HDR isn't shown because Plex's library listing doesn't carry it.
+- **Re-encode for space:** files still in H.264, MPEG-2 or VC-1, with the biggest estimated saving first.
+  - The estimate is H.264 × 0.5, MPEG-2 × 0.75, VC-1 / MPEG-4 × 0.6.
+  - Shows are rolled up into one row, with their title and poster from the show.
+- **Upgrade candidates:** below 1080p (SD, 480, 576, 720). Films one by one, shows by season, most played first.
+- **Gaps in shows:** missing episode numbers inside a season you have (1 up to the highest you have), and missing seasons between your lowest and highest.
+  - Specials (season 0) are left out.
+  - Date-numbered seasons and episodes (season ≥ 200, episode > 150) are left out.
+  - Plex only knows what's on disk, so episodes after your last one can't be seen. That would need Sonarr, which is v2.
+- Each list shows 100 rows; the CSV (`/insights/collection.csv?list=reencode|upgrades|gaps`) has everything. API: `GET /api/v1/insights/collection?library_id&type&limit`.
+
+**Playback** (`/insights/playback`, `services/playback.py`, default 30 days): buffering and slow transcodes.
+- **Live plays only.** Tautulli's history has no buffering data, so imported plays would make every rate look perfect.
+- **Shown:** plays that buffered, buffer events, events per 10 hours watched, and slow transcodes (the `transcoder_slow` reason).
+- **Broken down** by person, device, place (Home network, or city from geo) and stream type, plus the worst plays.
+- API: `GET /api/v1/insights/playback?range`.
+
+---
+
 ## 13. Wrapped
 
 Per user and per year, plus server-wide (`user_id = 0`). As built in `services/wrapped.py`, `web/routes_wrapped.py` and `templates/pages/wrapped.html`.

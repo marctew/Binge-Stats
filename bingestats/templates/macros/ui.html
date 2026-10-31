@@ -84,5 +84,7 @@
 {{ tabs([(url_for('insights.binges_page'), 'Binges', active == 'binges'),
          (url_for('insights.transcodes_page'), 'Transcodes', active == 'transcodes'),
          (url_for('insights.library_health_page'), 'Library health', active == 'health'),
+         (url_for('insights.collection_page'), 'Collection', active == 'collection'),
+         (url_for('insights.playback_page'), 'Playback', active == 'playback'),
          (url_for('wrapped.index'), 'Wrapped', active == 'wrapped')]) }}
 {%- endmacro %}

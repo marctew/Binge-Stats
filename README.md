@@ -18,6 +18,8 @@ Self-hosted Plex monitoring and statistics: a modern take on Tautulli. Live acti
   - binges, plus shows in progress, finished and given up on;
   - why things transcode and which files to re-encode;
   - library health: stale and never-watched content, and GB per hour watched, with CSV.
+  - the collection: codecs, resolutions, how much a re-encode would free (nothing deleted), what to upgrade, and gaps in shows;
+  - playback problems: who buffers, on which device and from where.
 - **Wrapped:** a year in review per person and for the whole server. It's built for a phone, shared with a signed link you can revoke, and prints as one page.
 - **Notifications:** rules (trigger → conditions → message → channels) to Discord, Telegram, ntfy, Pushover, email and the rest through Apprise. A season drop sends one "recently added" digest.
 - **Stream rules:** per-person stream and transcode limits that alert, or stop the newest stream. Alerts for one account playing from two places at once, or from a new country.

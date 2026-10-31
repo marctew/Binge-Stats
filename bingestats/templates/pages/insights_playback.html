@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% from "macros/ui.html" import page_header, stat_tile, insights_tabs, poster, avatar, decision_badge %}
+{% from "macros/charts.html" import range_picker, bar_list %}
+{% from "macros/media.html" import section_title %}
+{% block title %}Playback · Binge Stats{% endblock %}
+{% block content %}
+{% call page_header('Insights', rng.label) %}{{ range_picker('insights.playback_page', preset) }}{% endcall %}
+{{ insights_tabs('playback') }}
+{% set s = summary %}
+<p class="-mt-2 mb-5 text-sm text-muted">Buffering and slow transcodes, from plays Binge Stats recorded itself{% if s.since %} (since {{ s.since | localtime('%-d %B %Y') }}){% endif %}. Tautulli's history doesn't record buffering, so imported plays aren't counted.</p>
+
+<div class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+  {{ stat_tile('Plays that buffered', s.buffered, ('of ' ~ s.plays | plural('play')) if s.plays else 'no live plays yet', 'buffer', 'transcode') }}
+  {{ stat_tile('Buffer events', s.events, 'times playback stalled', 'pause', 'danger') }}
+  {{ stat_tile('Per 10 hours', s.per_10h, (s.play_s | duration(True)) ~ ' watched', 'history', 'accent') }}
+  {{ stat_tile('Slow transcodes', s.slow, 'transcoder below real time', 'chip', 'stream') }}
+</div>
+
+<div class="mt-4 grid gap-4 md:grid-cols-2">
+  {% for key, title in [('user', 'Who'), ('device', 'Device'), ('place', 'Where'), ('decision', 'Stream type')] %}
+  {% set rows = [] %}{% for r in by[key] %}{% set _ = rows.append({'name': r.name, 'value': r.events or r.slow, 'label': r.events | plural('stall'), 'sub': (r.per_10h ~ ' per 10 h') if r.events else (r.slow ~ ' slow')}) %}{% endfor %}
+  {{ bar_list(title, rows, None, 'No problems in this range', 1) }}
+  {% endfor %}
+</div>
+
+{{ section_title('Worst plays', 'most stalls first') }}
+{% if worst %}
+<div class="card overflow-hidden">
+  <table class="w-full">
+    <thead class="border-b border-border bg-surface-2/40"><tr>
+      <th class="th">Title</th><th class="th hidden md:table-cell">Who and where</th>
+      <th class="th hidden sm:table-cell">When</th><th class="th text-right">Stalls</th><th class="th hidden lg:table-cell">Stream</th>
+    </tr></thead>
+    <tbody class="divide-y divide-border">
+      {% for w in worst %}
+      <tr>
+        <td class="td"><div class="flex items-center gap-3">{{ poster(w.thumb, w.title, 'w-8', 'poster', 150) }}
+          <div class="min-w-0"><div class="truncate font-medium">{{ w.title }}</div><div class="truncate text-xs text-muted">{{ [w.sub, w.device] | select | join(' · ') }}</div></div></div></td>
+        <td class="td hidden md:table-cell"><a href="{{ url_for('ui.user_page', user_id=w.user_id) }}" class="flex items-center gap-2 hover:text-accent">{{ avatar(w.user_id, w.user_name) }}<span class="truncate">{{ w.user_name }}</span></a>
+          <div class="mt-0.5 text-xs text-muted">{{ w.place }}{% if w.bandwidth_kbps %} · {{ '%.1f' % (w.bandwidth_kbps / 1000) }} Mbps{% endif %}</div></td>
+        <td class="td hidden text-sm text-muted sm:table-cell">{{ w.started_at | localtime('%a %d %b, %H:%M') }}</td>
+        <td class="td text-right tabular-nums">{{ w.buffer_count }}{% if w.slow %} <span class="badge-transcode ml-1">slow</span>{% endif %}</td>
+        <td class="td hidden lg:table-cell">{{ decision_badge(w.decision) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card p-6 text-center text-sm text-faint">No buffering or slow transcodes in this range{% if not s.plays %}, and no live plays yet{% endif %}.</div>
+{% endif %}
+{% endblock %}

@@ -12,7 +12,8 @@ from functools import wraps
 from flask import Blueprint, current_app, jsonify, request, session
 
 from ..plex.client import PlexError
-from ..services import activity, alerts, api_tokens, binges, completion, history, insights, libraries, settings, stats
+from ..services import (activity, alerts, api_tokens, binges, collection, completion, history, insights, libraries,
+                        playback, settings, stats)
 
 bp = Blueprint("api", __name__, url_prefix="/api/v1")
 
@@ -369,3 +370,25 @@ def api_user_completion(user_id: int):
     if libraries.get_user(conn, user_id) is None:
         return _err("not_found", "No such user", 404)
     return jsonify(completion.summary(conn, user_id))
+
+
+@bp.route("/insights/collection")
+@require("read")
+def api_collection():
+    conn = _db()
+    a = _health_args()
+    lib, kind, limit = a["library_id"], a["kind"], _int_arg("limit", 50, 1, 5000)
+    return jsonify({"makeup": collection.makeup(conn, lib, kind),
+                    "reencode": collection.reencode(conn, lib, kind, limit=limit),
+                    "upgrades": collection.upgrades(conn, lib, kind, limit=limit),
+                    "gaps": collection.gaps(conn, lib, limit=limit) if kind != "movie" else []})
+
+
+@bp.route("/insights/playback")
+@require("read")
+def api_playback():
+    conn = _db()
+    rng = stats.range_from_args(conn, request.args)
+    return jsonify({"summary": playback.summary(conn, rng),
+                    "by": {k: playback.breakdown(conn, rng, k, limit=20) for k in ("user", "device", "place", "decision")},
+                    "worst": playback.worst(conn, rng, limit=_int_arg("limit", 25, 1, 200))})

@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% from "macros/ui.html" import page_header, stat_tile, insights_tabs, tabs, poster %}
+{% from "macros/charts.html" import bar_list %}
+{% block title %}Collection · Binge Stats{% endblock %}
+{% block content %}
+{% set q = {'library': library_id or '', 'type': kind or ''} %}
+{% call page_header('Insights', 'What the collection is made of, and where it could be better') %}
+<form method="get" class="flex flex-wrap items-center gap-2">
+  <input type="hidden" name="list" value="{{ lst }}">
+  <select name="library" class="input w-auto" onchange="this.form.submit()">
+    <option value="">All libraries</option>
+    {% for l in libs %}<option value="{{ l.id }}" {{ 'selected' if l.id == library_id }}>{{ l.name }}</option>{% endfor %}
+  </select>
+  <select name="type" class="input w-auto" onchange="this.form.submit()">
+    <option value="">Films and TV</option>
+    <option value="movie" {{ 'selected' if kind == 'movie' }}>Films</option>
+    <option value="show" {{ 'selected' if kind == 'show' }}>TV</option>
+  </select>
+  <noscript><button class="btn-ghost">Filter</button></noscript>
+</form>
+{% endcall %}
+{{ insights_tabs('collection') }}
+
+<div class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+  {{ stat_tile('Collection', m.bytes | filesize, '{:,} files'.format(m.files), 'stack', 'accent') }}
+  {{ stat_tile('Older codecs', m.old_codec_bytes | filesize, ((m.old_codec_bytes / m.bytes * 100) | round | int if m.bytes else 0) ~ '% of it: H.264, MPEG-2, VC-1', 'film', 'transcode') }}
+  {{ stat_tile('Re-encode could free', '≈ ' ~ (m.saving_bytes | filesize), 'to HEVC or AV1, deleting nothing', 'refresh', 'play') }}
+  {{ stat_tile('Below 1080p', '{:,}'.format(m.low_res_items), 'files to upgrade one day', 'tv', 'stream') }}
+</div>
+
+<div class="mt-4 grid gap-4 md:grid-cols-3">
+  {% set codec_rows = [] %}{% for c in m.codecs[:8] %}{% set _ = codec_rows.append({'name': 'Unknown' if c.key == 'unknown' else (c.key | codec), 'value': c.bytes, 'label': c.bytes | filesize, 'sub': '{:,}'.format(c.files)}) %}{% endfor %}
+  {{ bar_list('Video codec', codec_rows, 'by size', 'No films or episodes yet') }}
+  {% set res_rows = [] %}{% for c in m.resolutions %}{% set _ = res_rows.append({'name': 'Unknown' if c.key in ('unknown', '') else (c.key | resolution), 'value': c.files, 'label': '{:,}'.format(c.files), 'sub': c.bytes | filesize}) %}{% endfor %}
+  {{ bar_list('Resolution', res_rows, 'files', 'No films or episodes yet') }}
+  {% set audio_rows = [] %}{% for c in m.audio[:8] %}{% set _ = audio_rows.append({'name': 'Unknown' if c.key == 'unknown' else (c.key | codec), 'value': c.files, 'label': '{:,}'.format(c.files), 'sub': c.bytes | filesize}) %}{% endfor %}
+  {{ bar_list('Audio codec', audio_rows, 'files', 'No films or episodes yet', 1) }}
+</div>
+
+<div class="mt-8 flex flex-wrap items-center justify-between gap-3">
+  {{ tabs([(url_for('insights.collection_page', list='reencode', **q), 'Re-encode for space', lst == 'reencode'),
+           (url_for('insights.collection_page', list='upgrades', **q), 'Upgrade candidates', lst == 'upgrades'),
+           (url_for('insights.collection_page', list='gaps', **q), 'Gaps in shows' ~ (' · ' ~ gap_count if gap_count else ''), lst == 'gaps')]) }}
+  <a href="{{ url_for('insights.collection_csv', list=lst, **q) }}" class="btn-ghost mb-6">Download CSV</a>
+</div>
+<p class="-mt-3 mb-4 text-sm text-muted">
+  {% if lst == 'reencode' %}Files still in older codecs, biggest saving first. Shows are rolled up. The saving is an estimate: H.264 to HEVC usually lands at about half the size.
+  {% elif lst == 'upgrades' %}Films, and seasons of shows, below 1080p. Most watched first, so you upgrade what gets played.
+  {% else %}Missing episodes inside seasons you have, and missing seasons between ones you have. Episodes after the last one you have don't show here: Plex only knows what's on disk.{% endif %}
+  {% if total_rows > rows | length %}Showing {{ rows | length }} of {{ '{:,}'.format(total_rows) }}; the CSV has them all.{% endif %}
+</p>
+
+{% if rows %}
+<div class="card overflow-hidden">
+  {% if lst == 'gaps' %}
+  <ul class="divide-y divide-border">
+    {% for r in rows %}
+    <li class="flex items-start gap-3 px-4 py-3">
+      {{ poster(r.thumb, r.title, 'w-9', 'poster', 150) }}
+      <div class="min-w-0 flex-1">
+        <a href="{{ url_for('ui.item_page', rating_key=r.rating_key) }}" class="font-medium hover:text-accent">{{ r.title }}</a>{% if r.year %} <span class="text-sm text-muted">{{ r.year }}</span>{% endif %}
+        <div class="mt-1 space-y-0.5 text-sm text-muted">
+          {% if r.missing_seasons %}<div><span class="text-transcode">Missing {{ 'season' if r.missing_seasons | length == 1 else 'seasons' }} {{ r.missing_seasons | join(', ') }}</span></div>{% endif %}
+          {% for h in r.holes[:6] %}<div><span class="text-text">S{{ '%02d' % h.season }}</span> · {{ h.have }} of {{ h.of }} · missing {{ h.text }}</div>{% endfor %}
+          {% if r.holes | length > 6 %}<div class="text-faint">and {{ r.holes | length - 6 }} more seasons</div>{% endif %}
+        </div>
+      </div>
+      <span class="shrink-0 text-sm tabular-nums text-muted">{{ r.missing_episodes | plural('episode') }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <table class="w-full">
+    <thead class="border-b border-border bg-surface-2/40"><tr>
+      <th class="th">Title</th><th class="th hidden sm:table-cell">Quality</th>
+      <th class="th text-right">Size</th>
+      <th class="th text-right">{{ 'Could free' if lst == 'reencode' else 'Plays' }}</th>
+    </tr></thead>
+    <tbody class="divide-y divide-border">
+      {% for r in rows %}
+      <tr>
+        <td class="td">
+          <a href="{{ url_for('ui.item_page', rating_key=r.rating_key or 0) }}" class="flex items-center gap-3 hover:text-accent">
+            {{ poster(r.thumb, r.title, 'w-8', 'poster', 150) }}
+            <span class="min-w-0">
+              <span class="block truncate font-medium">{{ r.title }}{% if r.type == 'season' %} · Season {{ r.season }}{% endif %}</span>
+              <span class="block truncate text-xs text-muted">{{ r.year or '' }}{% if r.year %} · {% endif %}{{ r.library_name or '' }}{% if r.files > 1 %} · {{ r.files | plural('file') }}{% endif %}</span>
+            </span>
+          </a>
+        </td>
+        <td class="td hidden text-sm sm:table-cell">{% for x in (r.resolution or '').split('/') %}{{ x | resolution }}{{ ', ' if not loop.last }}{% endfor %}{% if r.codec %} <span class="text-muted">· {% for x in r.codec.split(', ') %}{{ x | codec }}{{ ', ' if not loop.last }}{% endfor %}</span>{% endif %}</td>
+        <td class="td text-right tabular-nums">{{ r.bytes | filesize }}</td>
+        <td class="td text-right tabular-nums">{% if lst == 'reencode' %}<span class="text-play">≈ {{ r.saving | filesize }}</span>{% else %}{{ r.plays }}{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</div>
+{% else %}
+<div class="card p-6 text-center text-sm text-faint">
+  {% if lst == 'gaps' and kind == 'movie' %}Gaps are about shows: pick TV or all.
+  {% elif not m.files %}No films or episodes synced yet.
+  {% elif lst == 'reencode' %}Everything's already in a modern codec.
+  {% elif lst == 'upgrades' %}Everything is 1080p or better.
+  {% else %}No gaps: every season runs from episode 1 with nothing missing.{% endif %}
+</div>
+{% endif %}
+{% endblock %}

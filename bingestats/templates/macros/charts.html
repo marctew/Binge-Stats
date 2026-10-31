@@ -133,3 +133,27 @@
   {% endif %}
 </section>
 {%- endmacro %}
+
+{# Server-rendered ranked bars. rows: [{name, value, label, sub?}]; bar length is value / max. #}
+{% macro bar_list(title, rows, sub=None, empty='Nothing here', slot=0) -%}
+<section class="card p-4 sm:p-5">
+  <div class="mb-3 flex items-baseline justify-between gap-3">
+    <h2 class="text-sm font-semibold">{{ title }}</h2>
+    {% if sub %}<span class="text-xs text-muted">{{ sub }}</span>{% endif %}
+  </div>
+  {% if rows %}
+  {% set top = (rows | map(attribute='value') | max) or 1 %}
+  <ol class="space-y-2.5">
+    {% for r in rows %}
+    <li>
+      <div class="flex items-baseline justify-between gap-3 text-sm">
+        <span class="min-w-0 truncate">{{ r.name }}</span>
+        <span class="shrink-0 tabular-nums text-muted"><span class="text-text">{{ r.label }}</span>{% if r.sub %} · {{ r.sub }}{% endif %}</span>
+      </div>
+      <div class="mt-1 h-1.5 overflow-hidden rounded-full bg-surface-2"><div class="bar-{{ slot }} h-full rounded-full" style="width: {{ (r.value / top * 100) | round(1) }}%"></div></div>
+    </li>
+    {% endfor %}
+  </ol>
+  {% else %}<p class="py-6 text-center text-sm text-faint">{{ empty }}</p>{% endif %}
+</section>
+{%- endmacro %}
