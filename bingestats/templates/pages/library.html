@@ -1,6 +1,8 @@
 {% extends "base.html" %}
 {% from "macros/ui.html" import page_header, stat_tile, empty_state, poster %}
 {% from "macros/media.html" import poster_card, section_title %}
+{% from "macros/charts.html" import chart_scripts, chart_card %}
+{% block head %}{{ chart_scripts() }}{% endblock %}
 {% block title %}{{ lib.name }} · Binge Stats{% endblock %}
 {% block content %}
 {% call page_header(lib.name, ('Synced ' ~ (lib.synced_at | relative)) if lib.synced_at else 'Not synced yet') %}{% endcall %}
@@ -10,6 +12,11 @@
   {{ stat_tile('Size', (lib.total_size_bytes or 0) | filesize, None, 'chip', 'stream') }}
   {{ stat_tile('Plays', '{:,}'.format(lib.stats.plays), lib.stats.users | plural('person', 'people'), 'play', 'play') }}
   {{ stat_tile('Watch time', lib.stats.play_s | duration(True), None, 'history', 'transcode') }}
+</div>
+
+<div class="mt-6 grid gap-4 lg:grid-cols-3">
+  {{ chart_card('Plays by person · last 12 months', 'bars', url_for('api.api_timeseries', range='1y', split='user', library_id=lib.id), 'plays', 'h-64', None, 'lg:col-span-2') }}
+  {{ chart_card('Who watches most', 'hbar', url_for('api.api_breakdown', range='all', field='user', metric='watch_time', limit=8, library_id=lib.id), 'hours', 'h-64', 'all time, hours') }}
 </div>
 
 {% if lib.recently_added %}

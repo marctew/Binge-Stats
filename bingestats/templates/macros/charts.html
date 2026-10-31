@@ -1,0 +1,113 @@
+{# Chart and stats components. Charts load their data from /api/v1 (see static/js/charts.js). #}
+{% from "macros/ui.html" import poster, avatar %}
+
+{% macro chart_scripts() -%}
+<script src="{{ url_for('static', filename='vendor/echarts.min.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/charts.js') }}?v={{ app_sha or app_version }}" defer></script>
+{%- endmacro %}
+
+{% macro chart_card(title, kind, src, unit='plays', height='h-64', sub=None, cls='', empty=None) -%}
+<section class="card flex flex-col p-4 sm:p-5 {{ cls }}">
+  <div class="mb-3 flex items-baseline justify-between gap-3">
+    <h2 class="text-sm font-semibold">{{ title }}</h2>
+    {% if sub %}<span class="text-xs text-muted">{{ sub }}</span>{% endif %}
+  </div>
+  <div class="{{ height }} w-full" data-chart="{{ kind }}" data-src="{{ src }}" data-unit="{{ unit }}"
+       {% if empty %}data-empty="{{ empty }}"{% endif %} role="img" aria-label="{{ title }}"></div>
+</section>
+{%- endmacro %}
+
+{# Presets + metric toggle as plain links, so every view is bookmarkable. #}
+{% macro range_picker(endpoint, current, metric=None, extra={}) -%}
+{% set presets = [('7d', '7 days'), ('30d', '30 days'), ('90d', '90 days'), ('1y', '12 months'), ('all', 'All time')] %}
+<div class="flex flex-wrap items-center gap-2">
+  <div class="inline-flex rounded-xl border border-border bg-surface p-1 text-sm">
+    {% for key, label in presets %}
+    <a href="{{ url_for(endpoint, range=key, metric=metric, **extra) }}"
+       class="rounded-lg px-3 py-1.5 transition {{ 'bg-accent/20 text-text' if current == key else 'text-muted hover:text-text' }}">{{ label }}</a>
+    {% endfor %}
+  </div>
+  {% if metric %}
+  <div class="inline-flex rounded-xl border border-border bg-surface p-1 text-sm">
+    {% for key, label in [('plays', 'Plays'), ('watch_time', 'Hours')] %}
+    <a href="{{ url_for(endpoint, range=current, metric=key, **extra) }}"
+       class="rounded-lg px-3 py-1.5 transition {{ 'bg-accent/20 text-text' if metric == key else 'text-muted hover:text-text' }}">{{ label }}</a>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+{%- endmacro %}
+
+{# Ranked list with a proportional bar behind each row. kind: users|shows|movies|platforms|players #}
+{% macro top_list(title, items, kind, metric='plays', empty='Nothing yet') -%}
+<section class="card p-4 sm:p-5">
+  <h2 class="mb-3 text-sm font-semibold">{{ title }}</h2>
+  {% if items %}
+  {% set top_value = (items[0].plays if metric == 'plays' else items[0].play_s) or 1 %}
+  <ol class="space-y-1">
+    {% for it in items %}
+    {% set v = it.plays if metric == 'plays' else it.play_s %}
+    {% if kind == 'users' %}{% set href = url_for('ui.user_page', user_id=it.id) %}
+    {% elif kind in ('shows', 'movies', 'artists') and it.id %}{% set href = url_for('ui.item_page', rating_key=it.id) %}
+    {% else %}{% set href = None %}{% endif %}
+    <li>
+      {% if href %}<a href="{{ href }}" class="flex items-center gap-3 rounded-xl px-2 py-1.5 transition hover:bg-surface-2/60">
+      {% else %}<div class="flex items-center gap-3 rounded-xl px-2 py-1.5">{% endif %}
+        <span class="w-4 text-right text-xs tabular-nums text-faint">{{ loop.index }}</span>
+        {% if kind == 'users' %}{{ avatar(it.id, it.name, 'h-7 w-7') }}
+        {% elif kind in ('shows', 'movies', 'artists') %}{{ poster(it.thumb, it.name, 'w-7', 'square' if kind == 'artists' else 'poster', 150) }}{% endif %}
+        <span class="min-w-0 flex-1">
+          <span class="block truncate text-sm">{{ it.name or 'Unknown' }}</span>
+          <span class="mt-1 block h-1 overflow-hidden rounded-full bg-surface-2"><span class="block h-full rounded-full bg-[#3987e5]" style="width: {{ (v / top_value * 100) | round(1) }}%"></span></span>
+        </span>
+        <span class="shrink-0 text-right text-sm tabular-nums">
+          {% if metric == 'plays' %}{{ '{:,}'.format(it.plays or 0) }}{% else %}{{ it.play_s | duration(True) }}{% endif %}
+        </span>
+      {% if href %}</a>{% else %}</div>{% endif %}
+    </li>
+    {% endfor %}
+  </ol>
+  {% else %}
+  <p class="py-6 text-center text-sm text-faint">{{ empty }}</p>
+  {% endif %}
+</section>
+{%- endmacro %}
+
+{% macro map_scripts() -%}
+<link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet.css') }}">
+<script src="{{ url_for('static', filename='vendor/leaflet.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/map.js') }}?v={{ app_sha or app_version }}" defer></script>
+{%- endmacro %}
+
+{# Map + list of places plays came from. #}
+{% macro locations_card(locations, geo_enabled=True) -%}
+{% set mapped = locations | selectattr('lat') | list %}
+<section class="card overflow-hidden">
+  <div class="flex items-baseline justify-between gap-3 p-4 pb-3 sm:px-5">
+    <h2 class="text-sm font-semibold">Where they watch from</h2>
+    <span class="text-xs text-muted">{{ locations | length | plural('place') }}</span>
+  </div>
+  {% if not locations %}
+    <p class="px-5 pb-6 text-sm text-faint">No plays yet.</p>
+  {% else %}
+  <div class="grid md:grid-cols-5">
+    {% if mapped %}
+    <div class="h-64 bg-surface-2 md:col-span-3 md:h-auto md:min-h-[18rem]"
+         data-map='{{ mapped | map_points | tojson }}'></div>
+    {% endif %}
+    <ul class="divide-y divide-border {{ 'md:col-span-2' if mapped else 'md:col-span-5' }}">
+      {% for l in locations[:8] %}
+      <li class="flex items-center gap-3 px-4 py-2.5 text-sm sm:px-5">
+        <span class="min-w-0 flex-1">
+          <span class="block truncate font-medium">{{ l.label }}</span>
+          <span class="block truncate text-xs text-muted">{% if l.region and not l.is_lan %}{{ l.region }} · {% endif %}{{ l.ips | plural('address', 'addresses') }} · last {{ l.last_seen | relative }}</span>
+        </span>
+        <span class="shrink-0 tabular-nums text-muted">{{ '{:,}'.format(l.plays) }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  <p class="border-t border-border px-4 py-2 text-[11px] text-faint sm:px-5">{% if geo_enabled %}IP geolocation by <a href="https://db-ip.com" class="underline">DB-IP</a>, so it's approximate: often the ISP's city, not the street.{% else %}Location lookups are turned off.{% endif %}</p>
+  {% endif %}
+</section>
+{%- endmacro %}

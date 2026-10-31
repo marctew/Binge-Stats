@@ -4,7 +4,7 @@ Self-hosted Plex monitoring and statistics. A modern take on Tautulli: live acti
 
 See [DESIGN.md](DESIGN.md) for the decisions, [SPEC.md](SPEC.md) for the build spec, and [docs/verification.md](docs/verification.md) for what's been checked against a real server.
 
-**Status:** milestone 2 (live ingest, Activity, History, Users, Libraries, Tautulli import). Milestone 3, the dashboard and graphs, is next.
+**Status:** milestone 3 (dashboard, graphs, locations, REST API on top of live ingest, history, users, libraries and the Tautulli import). Milestone 4, notifications, is next.
 
 ## Run it
 
@@ -15,13 +15,11 @@ sudo GIT_SHA=$(git rev-parse --short HEAD) docker compose up -d --build
 
 Open `http://<host>:8181`. Create the admin login, then **Sign in with Plex** (or paste a URL and token). Data lives in `./data`.
 
-To update:
+To update, run `scripts/update.sh` from anywhere, as root or as the repo's owner. It pulls as the owner, rebuilds, and waits for the health check. To make it a one-word command:
 
 ```bash
-git pull && sudo GIT_SHA=$(git rev-parse --short HEAD) docker compose up -d --build
+sudo ln -sf /opt/binge-stats/scripts/update.sh /usr/local/bin/binge-update
 ```
-
-Put the variable after `sudo`: Ubuntu 26.04's sudo ignores `-E`.
 
 ## Importing from Tautulli
 

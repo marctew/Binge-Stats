@@ -48,7 +48,7 @@ def test_login_next_is_local_only(browser, app_conn):
     auth.set_admin(app_conn, "marc", "correct horse")
     browser.get("/login")
     r = browser.post("/login?next=//evil.example", {"username": "marc", "password": "correct horse"})
-    assert r.headers["Location"].endswith("/activity")
+    assert r.headers["Location"] == "/"
 
 
 def test_htmx_request_when_logged_out_gets_hx_redirect(browser, app_conn):
@@ -58,7 +58,7 @@ def test_htmx_request_when_logged_out_gets_hx_redirect(browser, app_conn):
 
 
 def test_pages_render_empty(logged_in):
-    for url in ("/activity", "/activity/partial", "/history", "/settings", "/setup/plex"):
+    for url in ("/", "/dashboard/now", "/graphs", "/activity", "/activity/partial", "/history", "/settings", "/setup/plex"):
         r = logged_in.get(url)
         assert r.status_code == 200, url
     assert b"Nothing playing right now" in logged_in.get("/activity").data

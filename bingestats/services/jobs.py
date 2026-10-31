@@ -15,6 +15,7 @@ KINDS = {
     "tautulli_import": "Import Tautulli history",
     "library_sync": "Sync libraries",
     "user_sync": "Sync users",
+    "geo": "Look up locations",
 }
 
 

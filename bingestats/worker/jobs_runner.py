@@ -9,7 +9,7 @@ import time
 from .. import db
 from ..importers import tautulli
 from ..plex.client import PlexError
-from ..services import activity, jobs, settings
+from ..services import activity, geo, jobs, settings
 from .library_sync import sync_libraries, sync_users
 
 log = logging.getLogger(__name__)
@@ -62,7 +62,12 @@ def run_job(conn, cfg, job: dict) -> dict:
     if kind == "tautulli_check":
         return tautulli.inspect(conn, params["path"], cfg.data_dir / "tmp")
     if kind == "tautulli_import":
-        return tautulli.run(conn, params["path"], cfg.data_dir / "tmp", progress)
+        result = tautulli.run(conn, params["path"], cfg.data_dir / "tmp", progress)
+        if settings.get(conn, "geo.enabled"):
+            jobs.ensure(conn, "geo")
+        return result
+    if kind == "geo":
+        return run_geo(conn, cfg, progress)
 
     client = activity.plex_client(conn)
     if client is None:
@@ -75,6 +80,17 @@ def run_job(conn, cfg, job: dict) -> dict:
     if kind == "user_sync":
         return sync_users(conn, client, progress)
     raise LookupError(f"Unknown job kind {kind}")
+
+
+def run_geo(conn, cfg, progress) -> dict:
+    result = {}
+    if geo.needs_download(cfg.data_dir):
+        progress(5, "Downloading the DB-IP city database (about 60 MB)")
+        result.update(geo.download(cfg.data_dir))
+    progress(60, "Looking up IP addresses")
+    result.update(geo.fill(conn, cfg.data_dir))
+    settings.set(conn, "geo.last_run_at", int(time.time()))
+    return result
 
 
 def schedule_due(conn, now: float | None = None) -> list[int]:
@@ -90,4 +106,10 @@ def schedule_due(conn, now: float | None = None) -> list[int]:
         queued.append(jobs.ensure(conn, "library_sync"))
     if now - (settings.get(conn, "users.last_sync_at") or 0) >= every:
         queued.append(jobs.ensure(conn, "user_sync"))
+    # Geo: new IPs at most hourly; the database itself refreshes monthly.
+    if settings.get(conn, "geo.enabled") and now - (settings.get(conn, "geo.last_run_at") or 0) >= 3600:
+        from pathlib import Path
+        data_dir = Path(conn.execute("PRAGMA database_list").fetchone()[2]).parent
+        if geo.pending(conn) or geo.needs_download(data_dir, now):
+            queued.append(jobs.ensure(conn, "geo"))
     return queued

@@ -99,6 +99,11 @@ def plural(n, word: str, plural_word: str | None = None) -> str:
     return f"{n:,} {word if n == 1 else (plural_word or word + 's')}"
 
 
+def map_points(locations) -> list[dict]:
+    return [{"label": l["label"], "lat": l["lat"], "lon": l["lon"], "plays": l["plays"]}
+            for l in locations if l.get("lat") is not None]
+
+
 def filesize(n) -> str:
     n = float(n or 0)
     for unit in ("B", "KB", "MB", "GB", "TB"):
@@ -153,7 +158,7 @@ def media_subtitle(p) -> str:
 def register(app) -> None:
     for name, fn in {
         "duration": duration, "clock": clock, "localtime": localtime, "relative": relative,
-        "resolution": resolution, "codec": codec, "channels": channels, "bandwidth": bandwidth, "filesize": filesize, "plural": plural,
+        "resolution": resolution, "codec": codec, "channels": channels, "bandwidth": bandwidth, "filesize": filesize, "plural": plural, "map_points": map_points,
         "decision_label": decision_label, "reason_label": reason_label,
         "media_title": media_title, "media_subtitle": media_subtitle,
     }.items():

@@ -2,6 +2,8 @@
 {% from "macros/ui.html" import avatar, stat_tile, empty_state %}
 {% from "macros/media.html" import poster_card, section_title %}
 {% from "macros/icons.html" import icon %}
+{% from "macros/charts.html" import chart_scripts, map_scripts, chart_card, locations_card %}
+{% block head %}{{ chart_scripts() }}{{ map_scripts() }}{% endblock %}
 {% block title %}{{ user.name }} · Binge Stats{% endblock %}
 {% block content %}
 {% set st = user.stats %}
@@ -34,6 +36,11 @@
   {{ stat_tile('Watch time', st.play_s | duration(True), (st.play_s_30d or 0) | duration(True) ~ ' in the last 30 days', 'history', 'play') }}
   {{ stat_tile('Last played', st.last_play | relative, st.last_play | localtime('%a %d %b, %H:%M') if st.last_play else None, 'tv', 'stream') }}
   {{ stat_tile('Transcoded', (((st.transcodes or 0) / st.plays * 100) | round | int ~ '%') if st.plays else '–', st.transcodes | plural('play'), 'bolt', 'transcode') }}
+</div>
+
+<div class="mt-6 grid gap-4 lg:grid-cols-3">
+  {{ chart_card('Hours watched · last 12 months', 'bars', url_for('api.api_timeseries', range='1y', metric='watch_time', split='media_type', user_id=user.id), 'hours', 'h-64', None, 'lg:col-span-2') }}
+  {{ chart_card('When ' ~ user.name ~ ' watches', 'heatmap', url_for('api.api_heatmap', range='all', user_id=user.id), 'hours', 'h-64', 'all time') }}
 </div>
 
 {% if user.top_shows %}
@@ -83,4 +90,6 @@
     {% else %}<div class="card p-4 text-sm text-muted">No devices yet.</div>{% endif %}
   </div>
 </div>
+
+<div class="mt-8">{{ locations_card(locations, geo_enabled) }}</div>
 {% endblock %}

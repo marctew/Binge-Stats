@@ -1,0 +1,28 @@
+{% from "macros/ui.html" import poster, avatar, decision_badge %}
+{% from "macros/icons.html" import icon %}
+{% if sessions %}
+<div class="card p-4">
+  <div class="mb-3 flex items-center justify-between">
+    <h2 class="flex items-center gap-2 text-sm font-semibold">
+      <span class="relative flex h-2 w-2"><span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-play opacity-60"></span><span class="relative inline-flex h-2 w-2 rounded-full bg-play"></span></span>
+      Watching now · {{ sessions | length }}
+    </h2>
+    <a href="{{ url_for('ui.activity') }}" class="text-xs text-muted hover:text-text">Activity →</a>
+  </div>
+  <div class="-mx-1 flex gap-3 overflow-x-auto px-1 pb-1">
+    {% for a in sessions %}{% set s = a.session %}
+    <a href="{{ url_for('ui.activity') }}" class="flex w-72 shrink-0 items-center gap-3 rounded-xl bg-surface-2/50 p-2.5 transition hover:bg-surface-2">
+      {{ poster(s.poster, s.title, 'w-10', 'square' if s.media_type == 'track' else 'poster', 150) }}
+      <div class="min-w-0 flex-1">
+        <div class="truncate text-sm font-medium">{{ s | media_title }}</div>
+        <div class="truncate text-xs text-muted">{{ a.user_name }} · {{ s.player_title or s.product }}</div>
+        <div class="mt-1.5 flex items-center gap-2">
+          <div class="progress-track"><div class="progress-fill" style="width: {{ '%.1f' % a.progress_pct }}%"></div></div>
+          {% if a.state == 'paused' %}<span class="text-transcode">{{ icon('pause', 'h-3 w-3') }}</span>{% endif %}
+        </div>
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}

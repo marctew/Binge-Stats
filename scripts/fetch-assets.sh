@@ -27,6 +27,7 @@ if [[ "${1:-}" == "tailwind" ]]; then
   fetch "tailwindcss-linux-$arch" .cache/tailwindcss
   chmod +x .cache/tailwindcss
 else
-  fetch htmx.min.js bingestats/static/vendor/htmx.min.js
-  fetch alpine.min.js bingestats/static/vendor/alpine.min.js
+  for f in htmx.min.js alpine.min.js echarts.min.js leaflet.js leaflet.css; do
+    fetch "$f" "bingestats/static/vendor/$f"
+  done
 fi

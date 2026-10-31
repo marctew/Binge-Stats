@@ -49,6 +49,46 @@
     {% else %}<p class="mt-3 text-sm text-muted">Nothing yet.</p>{% endif %}
   </section>
 
+  <section id="api" class="card p-5 lg:col-span-3">
+    <h2 class="font-semibold">API tokens</h2>
+    <p class="mt-1 text-sm text-muted">For Home Assistant, scripts and anything else that reads <code class="text-text">/api/v1</code>. Send <code class="text-text">Authorization: Bearer &lt;token&gt;</code>.</p>
+    {% if new_token %}
+    <div class="mt-4 rounded-2xl border border-play/30 bg-play/10 p-4" x-data="{ copied: false }">
+      <div class="text-sm font-medium">Token for {{ new_token_name }}. Copy it now: it won't be shown again.</div>
+      <div class="mt-2 flex gap-2">
+        <input class="input font-mono text-xs" readonly value="{{ new_token }}" x-ref="tok" @focus="$el.select()">
+        <button type="button" class="btn-ghost shrink-0" @click="navigator.clipboard.writeText($refs.tok.value); copied = true" x-text="copied ? 'Copied' : 'Copy'">Copy</button>
+      </div>
+    </div>
+    {% endif %}
+    <div class="mt-4 grid gap-4 lg:grid-cols-2">
+      <form method="post" action="{{ url_for('ui.settings_token_create') }}" class="flex flex-wrap items-end gap-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="min-w-0 flex-1"><label class="label" for="tname">Name</label><input id="tname" name="name" class="input" placeholder="Home Assistant" required maxlength="60"></div>
+        <div><label class="label" for="tscope">Access</label>
+          <select id="tscope" name="scope" class="input"><option value="read">Read only</option><option value="write">Read and write</option></select></div>
+        <button class="btn-primary">Create</button>
+      </form>
+      <div>
+        {% if tokens %}
+        <ul class="divide-y divide-border rounded-xl border border-border">
+          {% for t in tokens %}
+          <li class="flex items-center gap-3 px-3 py-2 text-sm">
+            <span class="min-w-0 flex-1 truncate font-medium">{{ t.name }}</span>
+            <span class="badge-muted">{{ 'read + write' if t.scope == 'write' else 'read' }}</span>
+            <span class="hidden text-xs text-muted sm:inline">{{ ('used ' ~ (t.last_used_at | relative)) if t.last_used_at else 'never used' }}</span>
+            <form method="post" action="{{ url_for('ui.settings_token_delete', token_id=t.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn-icon" title="Revoke">{{ icon('x', 'h-4 w-4') }}</button>
+            </form>
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}<p class="text-sm text-muted">No tokens yet.</p>{% endif %}
+      </div>
+    </div>
+  </section>
+
   <section class="card p-5 lg:col-span-3">
     <h2 class="font-semibold">Recording</h2>
     <p class="mt-1 text-sm text-muted">Changes apply on the worker's next poll.</p>

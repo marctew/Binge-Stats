@@ -74,6 +74,11 @@ v1 scope. Section numbers match the milestones in `SPEC.md`.
 - **Charts are ECharts with one shared theme** (palette, fonts, tooltip style) in `static/js/charts.js`. Every chart has a loading state and an empty state.
 - **Every list page has filters in the URL query string**, so views can be bookmarked and shared.
 - **Static assets are pinned** by version and sha256 in `bingestats/static/vendor/VERSIONS`, and fetched at build time into the image. No CDN at runtime.
+- **One exception: map tiles.** The location map loads basemap images from CARTO (OpenStreetMap data) in the browser. The map is the only page element that talks to a third party. It shows only on user pages, with attribution, and the page works without it.
+- **Charts follow the dataviz rules.**
+  - The categorical palette is validated for colour-blind separation against the app's own card colours, used in a fixed order, and gives each entity a fixed colour: stream type, media type, and users by all-time rank.
+  - The heatmap uses a single-hue scale.
+  - No dual axes, and no donut charts.
 
 ## 6. Security
 

@@ -60,7 +60,7 @@ def install(app) -> None:
 def _safe_next(target: str | None) -> str:
     if target and target.startswith("/") and not target.startswith("//"):
         return target
-    return url_for("ui.activity")
+    return url_for("ui.index")
 
 
 @bp.route("/login", methods=["GET", "POST"])

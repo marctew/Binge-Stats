@@ -5,7 +5,7 @@ from flask import (Blueprint, Response, current_app, flash, redirect, render_tem
                    url_for)
 
 from ..plex.client import PlexError
-from ..services import activity, history, jobs, libraries, plex_setup, settings
+from ..services import activity, api_tokens, geo, history, jobs, libraries, plex_setup, settings, stats
 
 bp = Blueprint("ui", __name__)
 
@@ -39,7 +39,39 @@ def _layout_context():
 
 @bp.route("/")
 def index():
-    return redirect(url_for("ui.activity"))
+    conn = _db()
+    tz = stats._tz(conn)
+    from datetime import datetime
+    hour = datetime.now(tz).hour
+    greeting = "Good morning" if 5 <= hour < 12 else "Good afternoon" if hour < 18 else "Good evening"
+    month = stats.make_range(conn, preset="30d")
+    srv = conn.execute("SELECT name FROM servers ORDER BY id LIMIT 1").fetchone()
+    return render_template(
+        "pages/dashboard.html", greeting=greeting, server_name=(srv["name"] if srv and srv["name"] else "Plex"),
+        sessions=activity.list_active(conn),
+        today=stats.summary(conn, stats.make_range(conn, preset="today")),
+        week=stats.summary(conn, stats.make_range(conn, preset="7d")),
+        month=stats.summary(conn, month),
+        top_users=stats.top(conn, month, kind="users", metric="watch_time", limit=6)["items"],
+        top_shows=stats.top(conn, month, kind="shows", limit=6)["items"],
+        top_movies=stats.top(conn, month, kind="movies", limit=6)["items"],
+        recent=stats.recently_added(conn, 8))
+
+
+@bp.route("/dashboard/now")
+def dashboard_now():
+    return render_template("partials/now_strip.html", sessions=activity.list_active(_db()))
+
+
+@bp.route("/graphs")
+def graphs_page():
+    conn = _db()
+    preset = request.args.get("range") if request.args.get("range") in (*stats.PRESETS, "all") else "30d"
+    metric = request.args.get("metric") if request.args.get("metric") in stats.METRICS else "plays"
+    rng = stats.make_range(conn, preset=preset)
+    return render_template("pages/graphs.html", preset=preset, metric=metric, rng=rng,
+                           summary=stats.summary(conn, rng),
+                           unit="hours" if metric == "watch_time" else "plays")
 
 
 # -- activity ----------------------------------------------------------------------
@@ -169,6 +201,25 @@ EDITABLE = [
 ]
 
 
+@bp.route("/settings/tokens", methods=["POST"])
+def settings_token_create():
+    conn = _db()
+    try:
+        token = api_tokens.create(conn, request.form.get("name", ""), request.form.get("scope", "read"))
+    except ValueError as e:
+        flash(str(e), "error")
+        return redirect(url_for("ui.settings_page") + "#api")
+    # Rendered straight into this response, never put in the session cookie.
+    return _render_settings(conn, new_token=token, new_token_name=request.form.get("name", "").strip())
+
+
+@bp.route("/settings/tokens/<int:token_id>/delete", methods=["POST"])
+def settings_token_delete(token_id: int):
+    api_tokens.revoke(_db(), token_id)
+    flash("Token revoked", "ok")
+    return redirect(url_for("ui.settings_page") + "#api")
+
+
 @bp.route("/settings", methods=["GET", "POST"])
 def settings_page():
     conn = _db()
@@ -196,8 +247,13 @@ def settings_page():
         else:
             flash("Settings saved", "ok")
         return redirect(url_for("ui.settings_page"))
+    return _render_settings(conn)
+
+
+def _render_settings(conn, **extra):
     values = {k: settings.get(conn, k) for k, _l, _t in EDITABLE}
-    return render_template("pages/settings.html", fields=EDITABLE, values=values,
+    return render_template("pages/settings.html", fields=EDITABLE, values=values, tokens=api_tokens.list_tokens(conn),
+                           **extra,
                            plex_url=settings.get(conn, "plex.url"),
                            server=conn.execute("SELECT * FROM servers ORDER BY id LIMIT 1").fetchone(),
                            library_sync=jobs.latest(conn, "library_sync"), user_sync=jobs.latest(conn, "user_sync"),
@@ -278,7 +334,9 @@ def user_page(user_id: int):
         return render_template("pages/not_found.html", what="user"), 404
     rows, cursor = libraries.user_history(conn, user_id, settings.get(conn, "ui.timezone"))
     return render_template("pages/user.html", user=user, rows=rows, cursor=None,
-                           f=history.HistoryFilter(user_id=user_id), more=bool(cursor))
+                           f=history.HistoryFilter(user_id=user_id), more=bool(cursor),
+                           locations=geo.locations(conn, user_id=user_id),
+                           geo_enabled=settings.get(conn, "geo.enabled"))
 
 
 # -- libraries ---------------------------------------------------------------------

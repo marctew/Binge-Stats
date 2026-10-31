@@ -27,6 +27,7 @@ DEFAULTS: dict[str, Any] = {
     "library.last_sync_at": 0,
     "users.last_sync_at": 0,
     "geo.enabled": True,
+    "geo.last_run_at": 0,
     "ui.timezone": "Europe/London",
     "ui.theme": "dark",
     "mqtt.enabled": False,

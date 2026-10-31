@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% from "macros/ui.html" import stat_tile, poster, avatar, decision_badge %}
+{% from "macros/charts.html" import chart_scripts, chart_card, top_list %}
+{% from "macros/media.html" import poster_card, section_title %}
+{% from "macros/icons.html" import icon %}
+{% block title %}Binge Stats{% endblock %}
+{% block head %}{{ chart_scripts() }}{% endblock %}
+{% block content %}
+<div class="mb-6 flex flex-wrap items-end justify-between gap-3">
+  <div>
+    <h1 class="text-2xl font-semibold tracking-tight sm:text-3xl">{{ greeting }}</h1>
+    <p class="mt-1 text-sm text-muted">{{ server_name }} · {{ now() | localtime('%A %d %B') }}</p>
+  </div>
+  <a href="{{ url_for('ui.graphs_page') }}" class="btn-ghost">{{ icon('activity', 'h-4 w-4') }} All graphs</a>
+</div>
+
+<div hx-get="{{ url_for('ui.dashboard_now') }}" hx-trigger="every 5s [!document.body.dataset.hold]" hx-swap="innerHTML">
+  {% include "partials/now_strip.html" %}
+</div>
+
+<div class="mt-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+  {{ stat_tile('Plays today', '{:,}'.format(today.plays), (today.watch_time_s | duration(True)) ~ ' watched', 'play', 'accent') }}
+  {{ stat_tile('Last 7 days', '{:,}'.format(week.plays), (week.watch_time_s | duration(True)) ~ ' · ' ~ (week.users | plural('person', 'people')), 'history', 'play') }}
+  {{ stat_tile('Last 30 days', month.watch_time_s | duration(True), '{:,}'.format(month.plays) ~ ' plays · ' ~ (month.titles | plural('title')), 'tv', 'stream') }}
+  {{ stat_tile('Peak streams', month.peak_concurrent, ((month.peak_at | localtime('%a %d %b, %H:%M')) ~ ' · 30 days') if month.peak_at else 'No plays yet', 'bolt', 'transcode') }}
+</div>
+
+<div class="mt-6 grid gap-4 lg:grid-cols-3">
+  {{ chart_card('Plays per day', 'bars', url_for('api.api_timeseries', range='30d', split='media_type'), 'plays', 'h-72', 'last 30 days', 'lg:col-span-2') }}
+  {{ chart_card('When people watch', 'heatmap', url_for('api.api_heatmap', range='90d'), 'hours', 'h-72', 'last 90 days, hours') }}
+</div>
+
+<div class="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+  {{ top_list('Top users · 30 days', top_users, 'users', 'watch_time', 'Nobody has watched anything yet') }}
+  {{ top_list('Top shows · 30 days', top_shows, 'shows', 'plays', 'No TV watched yet') }}
+  {{ top_list('Top films · 30 days', top_movies, 'movies', 'plays', 'No films watched yet') }}
+</div>
+
+{% if recent %}
+{{ section_title('Recently added') }}
+<div class="grid grid-cols-3 gap-3 sm:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8">
+  {% for r in recent %}
+  {{ poster_card(r.title, r.rating_key, r.thumb,
+       ((r.n | plural('new episode')) if r.type == 'episode' else (r.parent_title if r.type == 'album' and r.parent_title else (r.year or ''))) ~ ' · ' ~ (r.added_at | relative),
+       'square' if r.type == 'album' else 'poster') }}
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

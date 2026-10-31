@@ -149,6 +149,7 @@ def test_schedule_due(srv, clock):
     assert jobs_runner.schedule_due(srv, now=clock.t) == []        # plex not configured
     settings.set(srv, "plex.url", "http://p:32400")
     settings.set(srv, "plex.token", "t")
+    settings.set(srv, "geo.enabled", False)
     queued = jobs_runner.schedule_due(srv, now=clock.t)
     assert len(queued) == 2
     assert jobs_runner.schedule_due(srv, now=clock.t) == queued  # not duplicated

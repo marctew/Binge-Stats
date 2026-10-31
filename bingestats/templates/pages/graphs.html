@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% from "macros/ui.html" import page_header, stat_tile %}
+{% from "macros/charts.html" import chart_scripts, chart_card, range_picker %}
+{% block title %}Graphs · Binge Stats{% endblock %}
+{% block head %}{{ chart_scripts() }}{% endblock %}
+{% block content %}
+{% call page_header('Graphs', rng.label) %}{{ range_picker('ui.graphs_page', preset, metric) }}{% endcall %}
+{% set q = {'range': preset, 'metric': metric} %}
+{% set by_plays = metric == 'plays' %}
+
+<div class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+  {{ stat_tile('Plays', '{:,}'.format(summary.plays), summary.titles | plural('title'), 'play', 'accent') }}
+  {{ stat_tile('Watch time', summary.watch_time_s | duration(True), summary.users | plural('person', 'people'), 'history', 'play') }}
+  {{ stat_tile('Transcoded', summary.transcode_pct ~ '%', summary.remote_pct ~ '% played remotely', 'bolt', 'transcode') }}
+  {{ stat_tile('Peak streams', summary.peak_concurrent, (summary.peak_at | localtime('%a %d %b, %H:%M')) if summary.peak_at else '–', 'activity', 'stream') }}
+</div>
+
+<div class="mt-6 grid gap-4">
+  {{ chart_card(('Plays' if by_plays else 'Hours watched') ~ ' by type', 'bars', url_for('api.api_timeseries', split='media_type', **q), unit, 'h-72') }}
+  {{ chart_card(('Plays' if by_plays else 'Hours watched') ~ ' by person', 'bars', url_for('api.api_timeseries', split='user', **q), unit, 'h-72') }}
+</div>
+
+<div class="mt-4 grid gap-4 lg:grid-cols-2">
+  {{ chart_card('By day of the week', 'bars', url_for('api.api_by_period', dim='weekday', **q), unit, 'h-64') }}
+  {{ chart_card('By hour of the day', 'bars', url_for('api.api_by_period', dim='hour', **q), unit, 'h-64') }}
+</div>
+
+<div class="mt-4 grid gap-4">
+  {{ chart_card('When people watch', 'heatmap', url_for('api.api_heatmap', range=preset, metric='watch_time' if not by_plays else 'plays'), unit, 'h-72', 'day × hour') }}
+</div>
+
+<div class="mt-4 grid gap-4 lg:grid-cols-2">
+  {{ chart_card('How streams were delivered', 'bars', url_for('api.api_timeseries', split='decision', **q), unit, 'h-64') }}
+  {{ chart_card('Source vs delivered quality', 'flow', url_for('api.api_resolution', range=preset), 'plays', 'h-64', 'films and TV') }}
+  {{ chart_card('Apps', 'hbar', url_for('api.api_breakdown', field='product', limit=8, **q), unit, 'h-72') }}
+  {{ chart_card('Devices', 'hbar', url_for('api.api_breakdown', field='player', limit=8, **q), unit, 'h-72') }}
+  {{ chart_card('Libraries', 'hbar', url_for('api.api_breakdown', field='library', limit=8, **q), unit, 'h-56') }}
+  {{ chart_card('Most streams at once', 'line', url_for('api.api_concurrent', range=preset), 'streams', 'h-56', 'peak per period') }}
+</div>
+{% endblock %}
