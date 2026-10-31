@@ -33,7 +33,12 @@ Then compare it with the fixture.
 
 ## plex.tv users endpoints (SPEC 4)
 
-_Not yet checked; needed for M2 user sync._
+Checked 2026-10-31:
+- `GET https://plex.tv/api/v2/friends` returns **410 Gone**. Don't use it.
+- `GET https://plex.tv/api/users` is XML only. It lists **shared** users (3 here) with `id`, `title`, `username`, `email`, `thumb` and `home`.
+- `GET https://plex.tv/api/v2/home/users` returns JSON `{users: [...]}` for Plex Home (7 here). Each has `id`, `title`, `username`, `friendlyName`, `email`, `thumb`, `admin`, `guest` and `restricted`. The owner is in this list with `admin: true`.
+- `GET https://plex.tv/api/v2/user` returns the owner. Its `id` (5342218 here) is the same account id Tautulli stores.
+- **The owner is user `1` in `/status/sessions`**, not their account id. The poller maps 1 to the owner once user sync has found them, and user sync merges anything already recorded under 1 into the owner.
 
 ## Hardware transcode fields (SPEC 6)
 
@@ -52,4 +57,11 @@ Checked 2026-10-31 against Tautulli **v2.18.2**, `/opt/Tautulli/tautulli.db` on 
 - `users` has its own `id` plus `user_id`, which is the Plex account id, so map `user_id → users.id`. There is a `user_id = 0` row (Tautulli's "Local" user). Every play's `user_id` exists in `users`.
 - `location` is `lan`, `wan` or `cellular`.
 - Target-side columns are `stream_*` (for example `stream_video_resolution`, `stream_audio_channels`). Source-side columns are unprefixed (`video_resolution`, `audio_channels`). `transcode_hw_decoding` and `transcode_hw_encoding` are integers.
-- `tests/fixtures/tautulli_schema.sql` will be cut from this database's `.schema` in M2.
+- `tests/fixtures/tautulli_schema.sql` is this database's `.schema` for the four tables the importer reads.
+
+**Import run, 2026-10-31.** The library sync took 37 s for 56,800 items. The import then took 4.4 s:
+- 5,547 plays imported and 0 failed. Per user: Sarah 2,894, mltew 2,390, Wazzaboothy 260, natalielangbridge 3, which matches Tautulli's counts exactly.
+- 1,091 resumed plays linked to their first play, matching Tautulli's grouping (rows minus groups).
+- 3,822 plays had a show guid or a modern `plex://` guid filled in from the library.
+- 1,375 episode plays still have no show guid. Those shows are no longer in Plex (Desperate Housewives, Pretty Little Liars, Suits and others), or came from a library (section 2) that no longer exists. They group by show title instead.
+- 235 plays keep legacy `com.plexapp.agents.*` guids and about 230 have `local://` guids (Sport and YouTube libraries with no agent). Those match by rating key only.

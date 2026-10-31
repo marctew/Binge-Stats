@@ -32,6 +32,15 @@ BUFFER_WINDOW_S = 300
 BUFFER_EVENT_COUNT = 3
 SRC_LOOKUP_ATTEMPTS = 3
 GROUP_OFFSET_TOLERANCE_S = 120
+# In /status/sessions Plex reports the server owner as user "1", not their
+# plex.tv account id. Map it to the real account once user sync knows it.
+LOCAL_OWNER_ID = 1
+
+
+def owner_id(conn: sqlite3.Connection) -> int | None:
+    row = conn.execute("SELECT id FROM users WHERE is_owner = 1 AND id != ? ORDER BY id LIMIT 1",
+                       (LOCAL_OWNER_ID,)).fetchone()
+    return row["id"] if row else None
 
 
 @dataclass
@@ -110,6 +119,10 @@ class Poller:
 
         cfg = settings.get_many(self.conn, "ingest.")
         parsed = parse_sessions(data)
+        owner = owner_id(self.conn)
+        for s, _raw in parsed:
+            if s.user_id == LOCAL_OWNER_ID and owner is not None:
+                s.user_id = owner
         result.sessions = len(parsed)
         rows = {r["session_id"]: r for r in self.conn.execute("SELECT * FROM active_sessions")}
 

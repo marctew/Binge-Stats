@@ -274,3 +274,19 @@ def test_broken_event_sink_does_not_stop_ingest(conn, plex, clock):
     plex.play("sessions_direct_play.json")
     p.poll_once()
     assert active(conn)
+
+
+def test_owner_user_1_maps_to_real_account(conn, poller, plex, clock):
+    conn.execute("INSERT INTO users (id, username, share_salt, is_owner) VALUES (5342218, 'marc', 's', 1)")
+    plex.play("sessions_direct_play.json")
+    plex.meta()["User"]["id"] = "1"
+    poller.poll_once()
+    assert active(conn)[0]["user_id"] == 5342218
+    assert conn.execute("SELECT 1 FROM users WHERE id = 1").fetchone() is None
+
+
+def test_user_1_kept_until_owner_known(conn, poller, plex, clock):
+    plex.play("sessions_direct_play.json")
+    plex.meta()["User"]["id"] = "1"
+    poller.poll_once()
+    assert active(conn)[0]["user_id"] == 1

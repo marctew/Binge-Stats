@@ -141,11 +141,27 @@ def sync_users(conn: sqlite3.Connection, client: PlexClient, progress: Progress 
                     (uid, u.get("username"), _friendly(u), u.get("email"), u.get("thumb_url"),
                      int(bool(u.get("is_owner"))), int(bool(u.get("is_home"))), secrets.token_hex(8), now))
                 added += 1
+        merged = _merge_local_owner(conn, owner["id"]) if owner["id"] not in (None, 1) else 0
         ids = list(found)
         cur = conn.execute(
             f"UPDATE users SET is_active = 0 WHERE is_active = 1 AND id NOT IN ({','.join('?' * len(ids))})", ids)
     settings.set(conn, "users.last_sync_at", now)
-    return {"users": len(found), "added": added, "deactivated": cur.rowcount}
+    return {"users": len(found), "added": added, "deactivated": cur.rowcount, "owner_plays_merged": merged}
+
+
+def _merge_local_owner(conn: sqlite3.Connection, owner: int) -> int:
+    """Plex sessions call the owner user 1. Anything recorded under 1 before the
+    owner's real id was known belongs to the owner."""
+    if conn.execute("SELECT 1 FROM users WHERE id = 1").fetchone() is None:
+        return 0
+    n = conn.execute("UPDATE plays SET user_id = ? WHERE user_id = 1", (owner,)).rowcount
+    for table in ("active_sessions", "binges", "alerts"):
+        conn.execute(f"UPDATE {table} SET user_id = ? WHERE user_id = 1", (owner,))
+    conn.execute("UPDATE users SET thumb_url = COALESCE(thumb_url, (SELECT thumb_url FROM users WHERE id = 1)), "
+                 "first_seen_at = MIN(COALESCE(first_seen_at, 9e18), COALESCE((SELECT first_seen_at FROM users "
+                 "WHERE id = 1), 9e18)) WHERE id = ?", (owner,))
+    conn.execute("DELETE FROM users WHERE id = 1")
+    return n
 
 
 def _friendly(u: dict) -> str | None:

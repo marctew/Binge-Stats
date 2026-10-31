@@ -171,3 +171,18 @@ def test_run_job_dispatch(srv, lib_plex, monkeypatch, tmp_path):
     result = jobs_runner.run_job(srv, Cfg, jobs.claim_next(srv))
     assert result["items"] == 9
     assert jobs.get(srv, jid)["progress"] > 0
+
+
+def test_user_sync_merges_local_owner(srv, plex, clock):
+    srv.execute("INSERT INTO users (id, username, share_salt, thumb_url, first_seen_at) VALUES (1, 'marc', 's', 'https://plex.tv/users/m/avatar', 100)")
+    srv.execute("INSERT INTO plays (server_id, user_id, started_at, stopped_at, play_s, media_type) VALUES (1, 1, 0, 1, 1, 'movie')")
+    srv.execute("INSERT INTO active_sessions (session_id, server_id, user_id, started_at, last_seen_at, state, state_since, snapshot) "
+                "VALUES ('s1', 1, 1, 0, 0, 'playing', 0, '{}')")
+    plex.plextv_data = {"/api/v2/user": {"id": 5342218, "username": "marc"}, "/api/users": "<MediaContainer/>"}
+    r = sync_users(srv, plex, clock=clock)
+    assert r["owner_plays_merged"] == 1
+    assert srv.execute("SELECT COUNT(*) FROM plays WHERE user_id = 5342218").fetchone()[0] == 1
+    assert srv.execute("SELECT user_id FROM active_sessions").fetchone()[0] == 5342218
+    owner = srv.execute("SELECT * FROM users WHERE id = 5342218").fetchone()
+    assert owner["thumb_url"] == "https://plex.tv/users/m/avatar" and owner["first_seen_at"] == 100
+    assert srv.execute("SELECT 1 FROM users WHERE id = 1").fetchone() is None

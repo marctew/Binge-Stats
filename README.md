@@ -4,13 +4,13 @@ Self-hosted Plex monitoring and statistics. A modern take on Tautulli: live acti
 
 See [DESIGN.md](DESIGN.md) for the decisions, [SPEC.md](SPEC.md) for the build spec, and [docs/verification.md](docs/verification.md) for what's been checked against a real server.
 
-**Status:** milestone 1 (live ingest, Activity, History, setup wizard). Milestone 2, the Tautulli import, is next.
+**Status:** milestone 2 (live ingest, Activity, History, Users, Libraries, Tautulli import). Milestone 3, the dashboard and graphs, is next.
 
 ## Run it
 
 ```bash
 git clone https://github.com/marctew/Binge-Stats && cd Binge-Stats
-GIT_SHA=$(git rev-parse --short HEAD) docker compose up -d --build
+sudo GIT_SHA=$(git rev-parse --short HEAD) docker compose up -d --build
 ```
 
 Open `http://<host>:8181`. Create the admin login, then **Sign in with Plex** (or paste a URL and token). Data lives in `./data`.
@@ -18,8 +18,14 @@ Open `http://<host>:8181`. Create the admin login, then **Sign in with Plex** (o
 To update:
 
 ```bash
-git pull && GIT_SHA=$(git rev-parse --short HEAD) docker compose up -d --build
+git pull && sudo GIT_SHA=$(git rev-parse --short HEAD) docker compose up -d --build
 ```
+
+Put the variable after `sudo`: Ubuntu 26.04's sudo ignores `-E`.
+
+## Importing from Tautulli
+
+Copy `tautulli.db` into `data/import/` (or mount Tautulli's data folder read-only and use that path), then use **Settings → Import from Tautulli**. Check first, then import. It's safe to run again later to pick up plays Tautulli recorded in the meantime; nothing is imported twice, and plays Binge Stats already recorded live are skipped. The file holds your users' Plex tokens, so delete the copy when you're done.
 
 ## Development
 
