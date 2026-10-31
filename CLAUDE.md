@@ -1,0 +1,29 @@
+# Binge Stats
+
+Self-hosted Plex monitoring and stats, a modern Tautulli replacement. Read DESIGN.md before changing behaviour (it records decisions already made) and SPEC.md for build detail. Build milestone by milestone (SPEC.md section 19).
+
+## Layout
+
+- `bingestats/` the app: Flask + plain `sqlite3` (schema and migrations in `bingestats/db.py`), Jinja + HTMX + Alpine + Tailwind, ECharts. No ORM, no JS framework, no Node.
+- `bingestats/plex/` the only code that knows Plex's API shape. Everything else uses its dataclasses.
+- `bingestats/worker/` the only process that writes sessions, plays, library and user data. The web process writes settings, rules, tokens and jobs only.
+- `bingestats/services/` all business operations. UI routes and the REST API both call these; routes stay thin.
+- `docker/` Dockerfile and compose. `scripts/build-css.sh` for local CSS builds.
+
+## Rules
+
+- Plex only. Admin only. SQLite only. Don't add Jellyfin/Emby, user sign-in or another database.
+- Ingest is polling `/status/sessions`; the websocket only nudges a poll. No Plex webhooks.
+- The Plex token never reaches the browser: images go through `/img/`.
+- All timestamps are UTC epoch seconds; display in the `ui.timezone` setting.
+- Long work runs as a row in `jobs`, picked up by the worker. Never do it in a request.
+- Settings live in the `settings` table, read only through `services/settings.py`.
+- Reuse the Jinja component macros and the shared ECharts theme; no page-specific one-offs. Every chart and list needs an empty state. Pages must work at phone width.
+- Static assets are vendored with pinned versions in `bingestats/static/vendor/VERSIONS`. No CDNs at runtime.
+- Runtime data (`/data`, `*.db`, caches, config with secrets) stays out of the tracked tree.
+- v2 items in DESIGN.md section 7 are not to be built yet, but must not be blocked.
+- Anything marked "Verify against live" gets its findings written to `docs/verification.md`.
+
+## Tests
+
+`python -m pytest` from the repo root (install `requirements-dev.txt`). Add a test with every service, ingest or importer change. The poller takes an injected clock; drive it with `tests/fixtures/plex/*.json`. Schema changes need a migration in `bingestats/db.py` and a test that upgrades an old database.

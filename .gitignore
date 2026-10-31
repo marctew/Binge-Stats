@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+.venv/
+.cache/
+
+# Runtime data and config with secrets never belong in the repo
+/data/
+config.toml
+*.db
+*.db-wal
+*.db-shm
+
+# Built CSS (made by scripts/build-css.sh or the Docker build)
+bingestats/static/css/app.css
