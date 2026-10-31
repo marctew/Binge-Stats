@@ -19,6 +19,7 @@ from ..plex.ws import PlexNudger
 from ..services import activity, settings
 from ..services.notify import Notifier
 from .jobs_runner import JobRunner, schedule_due
+from . import arr_sync
 from .mqtt import MqttBridge
 from .poller import Poller
 from .recently_added import check_recent, digest
@@ -56,6 +57,7 @@ class Worker:
         self.jobs = JobRunner(cfg, self.stop, self.job_wake)
         self.client: PlexClient | None = None
         self.notifier = Notifier(self.conn, cfg.db_path, poster_fetch=self._poster)
+        self._last_queue = 0.0
         self.mqtt = MqttBridge(self.conn, stop_user=self._stop_user, wake=self.nudge.set)
 
     def _stop_user(self, user_id: int) -> int:
@@ -144,6 +146,12 @@ class Worker:
                 self.recently_added()
             except Exception:  # noqa: BLE001
                 log.exception("recently added check failed")
+            try:
+                if time.time() - self._last_queue >= 60:
+                    self._last_queue = time.time()
+                    arr_sync.queue_tick(self.conn)
+            except Exception:  # noqa: BLE001
+                log.exception("SABnzbd queue check failed")
             try:
                 self.mqtt.tick()
             except Exception:  # noqa: BLE001

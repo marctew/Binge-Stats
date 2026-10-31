@@ -88,12 +88,12 @@ class PlexClient:
         return self._request("/library/sections")
 
     # Tag elements we never use; newer PMS drops them, older ones ignore the param.
-    LEAN = "Role,Director,Writer,Producer,Genre,Country,Image,UltraBlurColors,Guid,Rating,Collection,Label"
+    LEAN = "Role,Director,Writer,Producer,Genre,Country,Image,UltraBlurColors,Rating,Collection,Label"
 
     def section_items(self, section_id: int, plex_type: int, start: int, size: int) -> dict:
         return self._request(f"/library/sections/{int(section_id)}/all", {
             "type": plex_type, "X-Plex-Container-Start": start, "X-Plex-Container-Size": size,
-            "excludeElements": self.LEAN,
+            "excludeElements": self.LEAN, "includeGuids": 1,      # tvdb/tmdb/imdb ids, to match Sonarr/Radarr
         }, timeout=60)
 
     def section_recent(self, section_id: int, plex_type: int, size: int = 30) -> dict:

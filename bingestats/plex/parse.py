@@ -350,8 +350,21 @@ def parse_library_item(m: dict) -> dict:
         "audio_channels": _int(media.get("audioChannels")),
         "container": _s(media.get("container")),
         "bitrate_kbps": _int(media.get("bitrate")),
+        **external_ids(m.get("Guid")),
     }
     return item
+
+
+def external_ids(guids) -> dict:
+    """[{'id': 'tvdb://248741'}, {'id': 'tmdb://39340'}, {'id': 'imdb://tt1845307'}] -> ids."""
+    out = {"tvdb_id": None, "tmdb_id": None, "imdb_id": None}
+    for g in guids or []:
+        scheme, _, value = str(g.get("id") or "").partition("://")
+        if scheme in ("tvdb", "tmdb") and value.isdigit():
+            out[f"{scheme}_id"] = int(value)
+        elif scheme == "imdb" and value:
+            out["imdb_id"] = value
+    return out
 
 
 # -- users (plex.tv) ----------------------------------------------------------------

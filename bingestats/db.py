@@ -281,7 +281,58 @@ def _m7(conn: sqlite3.Connection) -> None:
     )""")
 
 
-MIGRATIONS = [_m1, _m2, _m3, _m4, _m5, _m6, _m7]
+def _m8(conn: sqlite3.Connection) -> None:
+    """Sonarr, Radarr and SABnzbd (read-only snapshots), and external ids on library items to match them."""
+    for col, typ in (("tvdb_id", "INTEGER"), ("tmdb_id", "INTEGER"), ("imdb_id", "TEXT")):
+        conn.execute(f"ALTER TABLE media_items ADD COLUMN {col} {typ}")
+    ddl = """
+    CREATE INDEX media_items_tvdb ON media_items(tvdb_id);
+    CREATE INDEX media_items_tmdb ON media_items(tmdb_id);
+    CREATE TABLE arr_status (
+        app TEXT PRIMARY KEY,                 -- sonarr | radarr | sabnzbd
+        ok INTEGER NOT NULL DEFAULT 0, error TEXT, version TEXT,
+        last_sync_at INTEGER, info TEXT NOT NULL DEFAULT '{}'   -- JSON: counts, SAB queue
+    );
+    CREATE TABLE sonarr_series (
+        id INTEGER PRIMARY KEY, title TEXT, year INTEGER, tvdb_id INTEGER, imdb_id TEXT,
+        status TEXT, ended INTEGER, monitored INTEGER, size_bytes INTEGER,
+        episode_count INTEGER, episode_file_count INTEGER, total_episode_count INTEGER,
+        seasons TEXT NOT NULL DEFAULT '[]', previous_airing INTEGER, next_airing INTEGER, added_at INTEGER
+    );
+    CREATE INDEX sonarr_series_tvdb ON sonarr_series(tvdb_id);
+    CREATE TABLE sonarr_missing (
+        series_id INTEGER NOT NULL, season INTEGER NOT NULL, episode INTEGER NOT NULL,
+        title TEXT, air_at INTEGER, PRIMARY KEY (series_id, season, episode)
+    );
+    CREATE TABLE sonarr_upcoming (
+        series_id INTEGER NOT NULL, season INTEGER NOT NULL, episode INTEGER NOT NULL,
+        title TEXT, air_at INTEGER, has_file INTEGER, monitored INTEGER, PRIMARY KEY (series_id, season, episode)
+    );
+    CREATE TABLE arr_cutoff (
+        app TEXT NOT NULL, item_id INTEGER NOT NULL, series_id INTEGER, season INTEGER, episode INTEGER,
+        title TEXT, year INTEGER, quality TEXT, PRIMARY KEY (app, item_id)
+    );
+    CREATE TABLE radarr_movies (
+        id INTEGER PRIMARY KEY, title TEXT, year INTEGER, tmdb_id INTEGER, imdb_id TEXT, monitored INTEGER,
+        has_file INTEGER, is_available INTEGER, status TEXT, size_bytes INTEGER, quality TEXT,
+        cutoff_not_met INTEGER, collection_tmdb_id INTEGER, added_at INTEGER, file_added_at INTEGER
+    );
+    CREATE INDEX radarr_movies_tmdb ON radarr_movies(tmdb_id);
+    CREATE TABLE radarr_collections (
+        tmdb_id INTEGER PRIMARY KEY, title TEXT, monitored INTEGER, movies TEXT NOT NULL DEFAULT '[]'
+    );
+    CREATE TABLE sab_daily (day TEXT PRIMARY KEY, bytes INTEGER NOT NULL);
+    CREATE TABLE sab_history (
+        nzo_id TEXT PRIMARY KEY, name TEXT, category TEXT, bytes INTEGER, status TEXT,
+        completed_at INTEGER, fail_message TEXT
+    );
+    """
+    for stmt in ddl.split(";"):            # not executescript: it would commit mid-migration
+        if stmt.strip():
+            conn.execute(stmt)
+
+
+MIGRATIONS = [_m1, _m2, _m3, _m4, _m5, _m6, _m7, _m8]
 LATEST = len(MIGRATIONS)
 
 

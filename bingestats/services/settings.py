@@ -48,6 +48,11 @@ DEFAULTS: dict[str, Any] = {
     "mqtt.base_topic": "bingestats",
     "mqtt.discovery_prefix": "homeassistant",
     "mqtt.tracked_users": [],      # user ids that get a "watching" sensor and a stop button
+    "sonarr.url": "", "sonarr.api_key": "",
+    "radarr.url": "", "radarr.api_key": "",
+    "sabnzbd.url": "", "sabnzbd.api_key": "",
+    "arr.sync_h": 3,
+    "arr.last_sync_at": 0,
     "backup.keep": 7,
     "backup.last_run_at": 0,
     "auth.proxy_header": "",
@@ -59,7 +64,8 @@ DEFAULTS: dict[str, Any] = {
 }
 
 # Keys never shown back in the UI or logged.
-SECRET_KEYS = {"plex.token", "plex.pending_token", "mqtt.password", "wrapped.server_salt"}
+SECRET_KEYS = {"plex.token", "plex.pending_token", "mqtt.password", "wrapped.server_salt",
+               "sonarr.api_key", "radarr.api_key", "sabnzbd.api_key"}
 
 # Bounds for numeric settings edited in the UI.
 BOUNDS: dict[str, tuple[int, int]] = {
@@ -79,6 +85,7 @@ BOUNDS: dict[str, tuple[int, int]] = {
     "abandoned.days": (7, 730),
     "library.stale_months": (1, 60),
     "backup.keep": (1, 60),
+    "arr.sync_h": (1, 48),
 }
 
 

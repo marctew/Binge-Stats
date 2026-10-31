@@ -12,7 +12,7 @@ from functools import wraps
 from flask import Blueprint, current_app, jsonify, request, session
 
 from ..plex.client import PlexError
-from ..services import (activity, alerts, api_tokens, binges, collection, completion, history, insights, libraries,
+from ..services import (activity, alerts, api_tokens, arr, binges, collection, completion, history, insights, libraries,
                         playback, settings, stats)
 
 bp = Blueprint("api", __name__, url_prefix="/api/v1")
@@ -392,3 +392,30 @@ def api_playback():
     return jsonify({"summary": playback.summary(conn, rng),
                     "by": {k: playback.breakdown(conn, rng, k, limit=20) for k in ("user", "device", "place", "decision")},
                     "worst": playback.worst(conn, rng, limit=_int_arg("limit", 25, 1, 200))})
+
+
+@bp.route("/insights/downloads")
+@require("read")
+def api_downloads():
+    return jsonify(arr.downloads(_db()))
+
+
+@bp.route("/insights/downloads/series")
+@require("read")
+def api_downloads_series():
+    return jsonify(arr.downloads_series(_db(), days=_int_arg("days", 90, 0, 3650)))
+
+
+@bp.route("/insights/arr")
+@require("read")
+def api_arr():
+    conn = _db()
+    ready = {a: arr.ready(conn, a) for a in ("sonarr", "radarr")}
+    return jsonify({"apps": [{k: v for k, v in a.items() if k != "has_key"} for a in arr.view(conn)],
+                    "series": arr.series_summary(conn) if ready["sonarr"] else None,
+                    "films": arr.radarr_summary(conn) if ready["radarr"] else None,
+                    "upcoming": arr.upcoming(conn) if ready["sonarr"] else [],
+                    "gaps": arr.sonarr_gaps(conn, limit=_int_arg("limit", 50, 1, 5000)) if ready["sonarr"] else [],
+                    "collections": arr.collections(conn)[:_int_arg("limit", 50, 1, 5000)] if ready["radarr"] else [],
+                    "missing_films": arr.missing_films(conn) if ready["radarr"] else [],
+                    "below_cutoff": arr.below_cutoff(conn)})

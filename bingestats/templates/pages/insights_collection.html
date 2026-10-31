@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "macros/ui.html" import page_header, stat_tile, insights_tabs, tabs, poster %}
+{% from "macros/ui.html" import page_header, stat_tile, insights_tabs, tabs, poster, progress %}
 {% from "macros/charts.html" import bar_list %}
 {% block title %}Collection · Binge Stats{% endblock %}
 {% block content %}
@@ -37,16 +37,47 @@
   {{ bar_list('Audio codec', audio_rows, 'files', 'No films or episodes yet', 1) }}
 </div>
 
+{% if series or films %}
+<div class="mt-4 grid gap-4 md:grid-cols-2">
+  {% if series %}
+  <section class="card p-4 sm:p-5">
+    <h2 class="text-sm font-semibold">Shows <span class="font-normal text-muted">· from Sonarr</span></h2>
+    <div class="mt-3 grid grid-cols-3 gap-3 text-sm">
+      <div><div class="text-2xl font-semibold tabular-nums">{{ '{:,}'.format(series.complete_ended) }}</div><div class="text-muted">complete and ended</div></div>
+      <div><div class="text-2xl font-semibold tabular-nums">{{ '{:,}'.format(series.complete_continuing) }}</div><div class="text-muted">up to date, still airing</div></div>
+      <div><div class="text-2xl font-semibold tabular-nums text-transcode">{{ '{:,}'.format(series.behind) }}</div><div class="text-muted">{{ '{:,}'.format(series.missing_episodes) }} episodes behind</div></div>
+    </div>
+  </section>
+  {% endif %}
+  {% if films %}
+  <section class="card p-4 sm:p-5">
+    <h2 class="text-sm font-semibold">Films <span class="font-normal text-muted">· from Radarr</span></h2>
+    <div class="mt-3 grid grid-cols-3 gap-3 text-sm">
+      <div><div class="text-2xl font-semibold tabular-nums">{{ '{:,}'.format(films.have) }}</div><div class="text-muted">of {{ '{:,}'.format(films.films) }} on disk</div></div>
+      <div><div class="text-2xl font-semibold tabular-nums">{{ films.complete_collections }}</div><div class="text-muted">of {{ films.collections }} collections complete</div></div>
+      <div><div class="text-2xl font-semibold tabular-nums text-transcode">{{ '{:,}'.format(films.missing) }}</div><div class="text-muted">released, not got yet</div></div>
+    </div>
+  </section>
+  {% endif %}
+</div>
+{% endif %}
+
+{% set labels = {'reencode': 'Re-encode for space', 'upgrades': 'Under 1080p', 'cutoff': 'Below your cutoff',
+                 'gaps': 'Gaps in shows' ~ (' · ' ~ '{:,}'.format(gap_count) if gap_count else ''), 'collections': 'Film collections',
+                 'missing_films': 'Missing films'} %}
+{% set tab_items = [] %}{% for x in available %}{% set _ = tab_items.append((url_for('insights.collection_page', list=x, **q), labels[x], lst == x)) %}{% endfor %}
 <div class="mt-8 flex flex-wrap items-center justify-between gap-3">
-  {{ tabs([(url_for('insights.collection_page', list='reencode', **q), 'Re-encode for space', lst == 'reencode'),
-           (url_for('insights.collection_page', list='upgrades', **q), 'Upgrade candidates', lst == 'upgrades'),
-           (url_for('insights.collection_page', list='gaps', **q), 'Gaps in shows' ~ (' · ' ~ gap_count if gap_count else ''), lst == 'gaps')]) }}
+  {{ tabs(tab_items) }}
   <a href="{{ url_for('insights.collection_csv', list=lst, **q) }}" class="btn-ghost mb-6">Download CSV</a>
 </div>
 <p class="-mt-3 mb-4 text-sm text-muted">
   {% if lst == 'reencode' %}Files still in older codecs, biggest saving first. Shows are rolled up. The saving is an estimate: H.264 to HEVC usually lands at about half the size.
   {% elif lst == 'upgrades' %}Films, and seasons of shows, below 1080p. Most watched first, so you upgrade what gets played.
-  {% else %}Missing episodes inside seasons you have, and missing seasons between ones you have, nearly-complete shows first. Episodes after the last one you have don't show here: Plex only knows what's on disk.{% endif %}
+  {% elif lst == 'cutoff' %}Files below the quality cutoff you set in Sonarr and Radarr.
+  {% elif lst == 'collections' %}Film collections from Radarr, nearly-complete first. Complete ones are at the bottom.
+  {% elif lst == 'missing_films' %}Films Radarr is monitoring that have been released, but aren't on disk yet.
+  {% elif sonarr_gaps %}Monitored episodes that have aired but aren't on disk, from Sonarr, nearly-complete shows first.
+  {% else %}Missing episodes inside seasons you have, and missing seasons between ones you have, nearly-complete shows first. Episodes after the last one you have don't show here: Plex only knows what's on disk{% if not ready.sonarr %}. Connect Sonarr in Settings for the full picture{% endif %}.{% endif %}
   {% if total_rows > rows | length %}Showing {{ rows | length }} of {{ '{:,}'.format(total_rows) }}; the CSV has them all.{% endif %}
 </p>
 
@@ -58,14 +89,51 @@
     <li class="flex items-start gap-3 px-4 py-3">
       {{ poster(r.thumb, r.title, 'w-9', 'poster', 150) }}
       <div class="min-w-0 flex-1">
-        <a href="{{ url_for('ui.item_page', rating_key=r.rating_key) }}" class="font-medium hover:text-accent">{{ r.title }}</a>{% if r.year %} <span class="text-sm text-muted">{{ r.year }}</span>{% endif %}
+        {% if r.rating_key %}<a href="{{ url_for('ui.item_page', rating_key=r.rating_key) }}" class="font-medium hover:text-accent">{{ r.title }}</a>{% else %}<span class="font-medium">{{ r.title }}</span>{% endif %}{% if r.year %} <span class="text-sm text-muted">{{ r.year }}</span>{% endif %}
+        {% if r.status %}<span class="{{ 'badge-muted' if r.ended else 'badge-stream' }} ml-1">{{ 'Ended' if r.ended else 'Continuing' }}</span>{% endif %}
         <div class="mt-1 space-y-0.5 text-sm text-muted">
-          {% if r.missing_seasons %}<div><span class="text-transcode">Missing {{ 'season' if r.missing_seasons | length == 1 else 'seasons' }} {{ r.missing_seasons | join(', ') }}</span></div>{% endif %}
-          {% for h in r.holes[:6] %}<div><span class="text-text">S{{ '%02d' % h.season }}</span> · {{ h.have }} of {{ h.of }} · missing {{ h.text }}</div>{% endfor %}
+          {% if r.missing_seasons is defined and r.missing_seasons %}<div><span class="text-transcode">Missing {{ 'season' if r.missing_seasons | length == 1 else 'seasons' }} {{ r.missing_seasons | join(', ') }}</span></div>{% endif %}
+          {% for h in r.holes[:6] %}<div><span class="text-text">S{{ '%02d' % h.season }}</span> · {{ h.have }} of {{ h.of }} · {% if h.whole %}<span class="text-transcode">whole season missing</span>{% else %}missing {{ h.text }}{% endif %}</div>{% endfor %}
           {% if r.holes | length > 6 %}<div class="text-faint">and {{ r.holes | length - 6 }} more seasons</div>{% endif %}
         </div>
       </div>
       <span class="shrink-0 text-right text-sm tabular-nums text-muted"><span class="text-text">{{ r.complete_pct }}%</span> there<br><span class="text-xs">{{ r.missing_episodes | plural('episode') }} missing</span></span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% elif lst == 'cutoff' %}
+  <ul class="divide-y divide-border">
+    {% for r in rows %}
+    <li class="flex items-center gap-3 px-4 py-3">
+      {{ poster(r.thumb, r.title, 'w-8', 'poster', 150) }}
+      <div class="min-w-0 flex-1">
+        <div class="truncate font-medium">{% if r.rating_key %}<a class="hover:text-accent" href="{{ url_for('ui.item_page', rating_key=r.rating_key) }}">{{ r.title }}</a>{% else %}{{ r.title }}{% endif %}{% if r.season is not none %} · Season {{ r.season }}{% elif r.year %} <span class="text-sm font-normal text-muted">{{ r.year }}</span>{% endif %}</div>
+        <div class="truncate text-xs text-muted">{% if r.app == 'sonarr' %}{{ r.count | plural('episode') }}: {{ r.text }} · {% endif %}now {{ r.quality or 'unknown quality' }}</div>
+      </div>
+      <span class="badge-muted shrink-0">{{ 'Sonarr' if r.app == 'sonarr' else 'Radarr' }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% elif lst == 'collections' %}
+  <ul class="divide-y divide-border">
+    {% for r in rows %}
+    <li class="flex items-start gap-3 px-4 py-3">
+      {{ poster(r.thumb, r.title, 'w-9', 'poster', 150) }}
+      <div class="min-w-0 flex-1">
+        <div class="flex items-baseline justify-between gap-3"><span class="truncate font-medium">{{ r.title }}</span>
+          <span class="shrink-0 text-sm tabular-nums {{ 'text-play' if r.have == r.total else 'text-muted' }}">{{ r.have }} of {{ r.total }}</span></div>
+        {{ progress(r.pct, 'mt-1.5') }}
+        {% if r.missing %}<div class="mt-1.5 text-xs text-muted">Missing: {% for f in r.missing[:6] %}{{ f.title }}{% if f.year %} ({{ f.year }}){% endif %}{{ ', ' if not loop.last }}{% endfor %}{% if r.missing | length > 6 %} and {{ r.missing | length - 6 }} more{% endif %}</div>{% endif %}
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% elif lst == 'missing_films' %}
+  <ul class="divide-y divide-border">
+    {% for r in rows %}
+    <li class="flex items-center justify-between gap-3 px-4 py-2.5 text-sm">
+      <span class="min-w-0 truncate"><span class="font-medium">{{ r.title }}</span> <span class="text-muted">{{ r.year or '' }}</span></span>
+      {% if r.imdb_id %}<a href="https://www.imdb.com/title/{{ r.imdb_id }}/" target="_blank" rel="noopener" class="shrink-0 text-xs text-muted hover:text-text">IMDb ↗</a>{% endif %}
     </li>
     {% endfor %}
   </ul>
@@ -100,6 +168,10 @@
 {% else %}
 <div class="card p-6 text-center text-sm text-faint">
   {% if lst == 'gaps' and kind == 'movie' %}Gaps are about shows: pick TV or all.
+  {% elif lst in ('collections', 'missing_films') and kind == 'show' %}That's about films: pick Films or all.
+  {% elif lst == 'collections' %}No film collections from Radarr yet.
+  {% elif lst == 'missing_films' %}Nothing missing: every released film Radarr is watching is on disk.
+  {% elif lst == 'cutoff' %}Everything meets the quality you set.
   {% elif not m.files %}No films or episodes synced yet.
   {% elif lst == 'reencode' %}Everything's already in a modern codec.
   {% elif lst == 'upgrades' %}Everything is 1080p or better.

@@ -50,6 +50,7 @@
   function fmt(v, unit) {
     if (v == null) return "–";
     if (unit === "pct") return Math.round(v) + "%";
+    if (unit === "gb") return v >= 1000 ? (v / 1000).toFixed(1) + " TB" : (v >= 100 ? Math.round(v) : v.toFixed(1)) + " GB";
     if (unit === "hours") {
       if (v < 1) return Math.round(v * 60) + "m";
       return (v >= 100 ? Math.round(v) : v.toFixed(1)).toLocaleString("en-GB") + "h";
@@ -89,9 +90,10 @@
 
   function valAxis(t, unit, extra) {
     return Object.assign({
-      type: "value", minInterval: unit === "hours" ? 0 : 1, max: unit === "pct" ? 100 : null,
+      type: "value", minInterval: unit === "hours" || unit === "gb" ? 0 : 1, max: unit === "pct" ? 100 : null,
       splitLine: { lineStyle: { color: t.border, width: 1, opacity: 0.6 } },
-      axisLabel: { color: t.muted, formatter: (v) => unit === "hours" ? axisNum(v) + "h" : unit === "pct" ? v + "%" : axisNum(v) },
+      axisLabel: { color: t.muted, formatter: (v) => unit === "hours" ? axisNum(v) + "h" : unit === "pct" ? v + "%"
+                   : unit === "gb" ? (v >= 1000 ? (v / 1000).toFixed(v % 1000 ? 1 : 0) + " TB" : axisNum(v) + " GB") : axisNum(v) },
     }, extra || {});
   }
 

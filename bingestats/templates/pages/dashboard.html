@@ -60,6 +60,32 @@
   {{ top_list('Top films · 30 days', top_movies, 'movies', 'plays', 'No films watched yet') }}
 </div>
 
+{% if airing is not none %}
+{{ section_title('Airing this week', 'from Sonarr') }}
+{% if airing %}
+<div class="-mx-1 flex gap-3 overflow-x-auto px-1 pb-1">
+  {% for day in airing %}
+  <section class="card w-64 shrink-0 p-3">
+    <h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">{{ day.label }}</h3>
+    <ul class="space-y-2">
+      {% for e in day.episodes[:6] %}
+      <li class="flex items-center gap-2.5">
+        {{ poster(e.thumb, e.show, 'w-7', 'poster', 150) }}
+        <div class="min-w-0 flex-1">
+          <div class="truncate text-sm font-medium">{{ e.show }}</div>
+          <div class="truncate text-xs text-muted">S{{ '%02d' % e.season }}E{{ '%02d' % e.episode }}{% if e.title and e.title != 'TBA' %} · {{ e.title }}{% endif %}</div>
+        </div>
+        {% if e.has_file %}<span class="text-play" title="Already downloaded">{{ icon('check', 'h-4 w-4') }}</span>{% endif %}
+      </li>
+      {% endfor %}
+      {% if day.episodes | length > 6 %}<li class="text-xs text-faint">and {{ day.episodes | length - 6 }} more</li>{% endif %}
+    </ul>
+  </section>
+  {% endfor %}
+</div>
+{% else %}<div class="card p-6 text-center text-sm text-faint">Nothing you follow airs in the next week.</div>{% endif %}
+{% endif %}
+
 {% if recent %}
 {{ section_title('Recently added') }}
 <div class="grid grid-cols-3 gap-3 sm:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8">

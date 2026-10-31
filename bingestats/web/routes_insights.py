@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from flask import Blueprint, Response, current_app, redirect, render_template, request, url_for
 
-from ..services import binges, collection, insights, playback, stats
+from ..services import arr, binges, collection, insights, playback, stats
 
 bp = Blueprint("insights", __name__, url_prefix="/insights")
 
@@ -78,24 +78,43 @@ def library_health_csv():
 
 # -- collection ------------------------------------------------------------------------
 
-COLLECTION_LISTS = ("reencode", "upgrades", "gaps")
+COLLECTION_LISTS = ("reencode", "upgrades", "cutoff", "gaps", "collections", "missing_films")
+ARR_LISTS = {"cutoff": ("sonarr", "radarr"), "collections": ("radarr",), "missing_films": ("radarr",)}
+
+
+def _collection_rows(conn, lst: str, library_id, kind, sonarr: bool) -> list[dict]:
+    if lst == "gaps":
+        if kind == "movie":
+            return []
+        return arr.sonarr_gaps(conn) if sonarr and library_id is None else collection.gaps(conn, library_id)
+    if lst == "cutoff":
+        rows = arr.below_cutoff(conn)
+        return [r for r in rows if not kind or (r["app"] == "radarr") == (kind == "movie")]
+    if lst == "collections":
+        return arr.collections(conn) if kind != "show" else []
+    if lst == "missing_films":
+        return arr.missing_films(conn) if kind != "show" else []
+    return getattr(collection, lst)(conn, library_id, kind, limit=None)
 
 
 @bp.route("/collection")
 def collection_page():
     conn = _db()
     library_id, kind, _tab = _health_args()
+    ready = {a: arr.ready(conn, a) for a in ("sonarr", "radarr")}
+    available = [x for x in COLLECTION_LISTS if x not in ARR_LISTS or any(ready[a] for a in ARR_LISTS[x])]
     lst = request.args.get("list", "reencode")
-    lst = lst if lst in COLLECTION_LISTS else "reencode"
+    lst = lst if lst in available else "reencode"
     libs = conn.execute("SELECT id, name, type FROM libraries WHERE is_active = 1 AND type IN ('movie', 'show') "
                         "ORDER BY name").fetchall()
-    if lst == "gaps":
-        rows = collection.gaps(conn, library_id) if kind != "movie" else []
-    else:
-        rows = getattr(collection, lst)(conn, library_id, kind, limit=None)
+    rows = _collection_rows(conn, lst, library_id, kind, ready["sonarr"])
+    gap_rows = _collection_rows(conn, "gaps", library_id, kind, ready["sonarr"]) if lst != "gaps" else rows
     return render_template("pages/insights_collection.html", m=collection.makeup(conn, library_id, kind), lst=lst,
                            rows=rows[:100], total_rows=len(rows), libs=libs, library_id=library_id, kind=kind,
-                           gap_count=len(collection.gaps(conn, library_id)) if kind != "movie" else 0)
+                           gap_count=len(gap_rows), available=available, ready=ready,
+                           sonarr_gaps=ready["sonarr"] and library_id is None,
+                           series=arr.series_summary(conn) if ready["sonarr"] else None,
+                           films=arr.radarr_summary(conn) if ready["radarr"] else None)
 
 
 @bp.route("/collection.csv")
@@ -105,9 +124,22 @@ def collection_csv():
     lst = request.args.get("list", "reencode")
     if lst not in COLLECTION_LISTS:
         lst = "reencode"
-    rows = collection.gaps(conn, library_id) if lst == "gaps" else getattr(collection, lst)(conn, library_id, kind, limit=None)
-    return Response(collection.to_csv(lst, rows), mimetype="text/csv",
+    rows = _collection_rows(conn, lst, library_id, kind, arr.ready(conn, "sonarr"))
+    if lst in ARR_LISTS or (lst == "gaps" and rows and "series_id" in rows[0]):
+        body = arr.to_csv(lst, rows)
+    else:
+        body = collection.to_csv(lst, rows)
+    return Response(body, mimetype="text/csv",
                     headers={"Content-Disposition": f'attachment; filename="binge-stats-{lst}.csv"'})
+
+
+# -- downloads ---------------------------------------------------------------------------
+
+@bp.route("/downloads")
+def downloads_page():
+    conn = _db()
+    return render_template("pages/insights_downloads.html", d=arr.downloads(conn),
+                           ready=arr.ready(conn, "sabnzbd"), configured=arr.configured(conn)["sabnzbd"])
 
 
 # -- playback ----------------------------------------------------------------------------

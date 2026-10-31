@@ -109,7 +109,26 @@ def server_state(conn: sqlite3.Connection, active: list, now: float) -> dict:
         "plex_up": bool(srv and srv["is_up"]),
         "plays_today": today["plays"], "watch_hours_today": round(today["watch_time_s"] / 3600, 2),
         "alerts": alerts.unacked_count(conn),
+        **_downloads(conn),
     }
+
+
+def _downloads(conn: sqlite3.Connection) -> dict:
+    row = conn.execute("SELECT info FROM arr_status WHERE app = 'sabnzbd'").fetchone()
+    q = (json.loads(row["info"]) if row else {}).get("queue") or {}
+    return {"download_items": q.get("items", 0), "download_mbps": round((q.get("kbps") or 0) * 8 / 1000, 1),
+            "download_status": q.get("status") or "Idle"}
+
+
+# Shown only when SABnzbd is connected (key, name, extra discovery fields).
+SAB_ENTITIES = [
+    ("download_queue", "Download queue", {"value_template": "{{ value_json.download_items }}",
+                                          "unit_of_measurement": "items", "state_class": "measurement",
+                                          "icon": "mdi:download"}),
+    ("download_speed", "Download speed", {"value_template": "{{ value_json.download_mbps }}",
+                                          "unit_of_measurement": "Mbit/s", "device_class": "data_rate",
+                                          "state_class": "measurement", "suggested_display_precision": 1}),
+]
 
 
 def _session_attrs(a) -> dict:
@@ -132,7 +151,12 @@ def user_state(user_id: int, active: list) -> dict:
 
 # -- discovery ------------------------------------------------------------------------
 
-def discovery(cfg: dict, users: list, server_name: str | None) -> dict[str, str]:
+def sab_topics(cfg: dict) -> list[str]:
+    node = _slug(cfg["mqtt.base_topic"])
+    return [f"{cfg['mqtt.discovery_prefix']}/sensor/{node}/{key}/config" for key, _n, _e in SAB_ENTITIES]
+
+
+def discovery(cfg: dict, users: list, server_name: str | None, sab: bool = False) -> dict[str, str]:
     """Every discovery topic -> config payload for the current settings."""
     base, prefix = cfg["mqtt.base_topic"], cfg["mqtt.discovery_prefix"]
     node = _slug(base)
@@ -145,6 +169,10 @@ def discovery(cfg: dict, users: list, server_name: str | None) -> dict[str, str]
                 "state_topic": f"{base}/state", **common}
         conf.update({k: (v.format(base=base) if isinstance(v, str) and "{base}" in v else v) for k, v in extra.items()})
         out[f"{prefix}/{comp}/{node}/{key}/config"] = json.dumps(conf, sort_keys=True)
+    if sab:
+        for (key, name, extra), topic in zip(SAB_ENTITIES, sab_topics(cfg)):
+            out[topic] = json.dumps({"name": name, "unique_id": f"{node}_{key}", "object_id": f"binge_stats_{key}",
+                                     "state_topic": f"{base}/state", **common, **extra}, sort_keys=True)
     for u in users:
         uid, name = u["id"], user_name(u)
         out[f"{prefix}/sensor/{node}/user_{uid}_watching/config"] = json.dumps({
@@ -295,8 +323,15 @@ class MqttBridge:
             "SELECT id, username, friendly_name FROM users WHERE id IN (%s) ORDER BY id"
             % ",".join("?" * len(tracked)), sorted(tracked)).fetchall() if tracked else []
         srv = self.conn.execute("SELECT name FROM servers ORDER BY id LIMIT 1").fetchone()
-        for topic, payload in discovery(self._cfg, users, srv["name"] if srv else None).items():
+        from ..services import arr as arr_svc
+        sab = arr_svc.configured(self.conn).get("sabnzbd", False)
+        for topic, payload in discovery(self._cfg, users, srv["name"] if srv else None, sab=sab).items():
             self._publish(topic, payload)
+        if not sab:
+            for topic in sab_topics(self._cfg):
+                if self._sent.get(topic):            # was published, SABnzbd since disconnected: remove from HA
+                    self._publish(topic, "", force=True)
+                    self._sent[topic] = ""
         published = set(settings.get(self.conn, "mqtt.published_users"))
         live = {u["id"] for u in users}
         for uid in published - live:

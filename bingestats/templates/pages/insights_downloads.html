@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% from "macros/ui.html" import page_header, stat_tile, insights_tabs %}
+{% from "macros/charts.html" import chart_scripts, chart_card %}
+{% from "macros/media.html" import section_title %}
+{% block title %}Downloads · Binge Stats{% endblock %}
+{% block head %}{{ chart_scripts() }}{% endblock %}
+{% block content %}
+{% call page_header('Insights', 'What SABnzbd has pulled down') %}{% endcall %}
+{{ insights_tabs('downloads') }}
+{% if not configured %}
+<div class="card p-8 text-center">
+  <h2 class="font-semibold">Connect SABnzbd to see your downloads</h2>
+  <p class="mx-auto mt-1 max-w-lg text-sm text-muted">Binge Stats reads SABnzbd's download totals (it keeps a year or more of daily figures), its queue and failed downloads. It only reads.</p>
+  <a href="{{ url_for('ui.settings_page') }}#arr" class="btn-primary mt-4">Set it up in Settings</a>
+</div>
+{% elif not ready %}
+<div class="card p-8 text-center text-sm text-muted">SABnzbd is set up but hasn't been read yet. It happens within a few minutes, or use "Save and read now" in Settings.</div>
+{% else %}
+{% set q = d.queue or {} %}
+<div class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+  {{ stat_tile('Today', d.today | filesize, (q.status or 'Idle') ~ ((' · ' ~ q['items'] ~ ' queued') if q['items'] else ''), 'download', 'accent') }}
+  {{ stat_tile('Last 7 days', d.week | filesize, None, 'history', 'play') }}
+  {{ stat_tile('Last 30 days', d.month | filesize, ('≈ ' ~ (d.per_day_avg | filesize) ~ ' a day on average'), 'chart', 'stream') }}
+  {{ stat_tile('All time', d.all | filesize, ('since ' ~ d.since) if d.since else None, 'stack', 'transcode') }}
+</div>
+
+{% if q['items'] %}
+<section class="card mt-4 p-4 sm:p-5">
+  <div class="flex flex-wrap items-baseline justify-between gap-3">
+    <h2 class="text-sm font-semibold">Downloading now</h2>
+    <span class="text-sm text-muted">{{ '%.1f' % (q.kbps * 8 / 1000) }} Mbit/s · {{ '%.1f' % (q.mb_left / 1000) }} GB left · {{ q.time_left }}</span>
+  </div>
+  <ul class="mt-2 space-y-1 text-sm">{% for n in q.names %}<li class="truncate text-muted">{{ n }}</li>{% endfor %}</ul>
+</section>
+{% endif %}
+
+<div class="mt-4 grid gap-4 lg:grid-cols-5">
+  {{ chart_card('Downloaded per day · last 90 days', 'bars', url_for('api.api_downloads_series', days=90), 'gb', 'h-64', None, 'lg:col-span-3', 'Nothing downloaded in the last 90 days') }}
+  {{ chart_card('Downloaded per month', 'bars', url_for('api.api_downloads_series', days=0), 'gb', 'h-64', 'all of SABnzbd’s history', 'lg:col-span-2') }}
+</div>
+{% if d.busiest %}<p class="mt-3 text-sm text-muted">Biggest day: {{ d.busiest[0] }}, {{ d.busiest[1] | filesize }}.</p>{% endif %}
+
+{{ section_title('Failed downloads', 'kept until you clear SABnzbd’s history') }}
+{% if d.failed %}
+<div class="card divide-y divide-border">
+  {% for f in d.failed %}
+  <div class="px-4 py-3 text-sm"><div class="truncate font-medium">{{ f.name }}</div>
+    <div class="truncate text-xs text-muted">{{ f.completed_at | relative if f.completed_at else '' }}{% if f.category %} · {{ f.category }}{% endif %}{% if f.fail_message %} · {{ f.fail_message }}{% endif %}</div></div>
+  {% endfor %}
+</div>
+{% else %}<div class="card p-6 text-center text-sm text-faint">No failed downloads in SABnzbd's history.</div>{% endif %}
+{% endif %}
+{% endblock %}

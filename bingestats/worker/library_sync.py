@@ -21,7 +21,8 @@ Progress = Callable[[int, str], None]
 ITEM_COLS = ["rating_key", "type", "guid", "parent_rating_key", "grandparent_rating_key", "title", "parent_title",
              "grandparent_title", "season_index", "episode_index", "year", "duration_s", "added_at",
              "originally_available_at", "thumb", "art", "size_bytes", "video_codec", "video_resolution",
-             "video_dynamic_range", "audio_codec", "audio_channels", "container", "bitrate_kbps"]
+             "video_dynamic_range", "audio_codec", "audio_channels", "container", "bitrate_kbps",
+             "tvdb_id", "tmdb_id", "imdb_id"]
 # Things a person adds to a library that are worth announcing.
 ANNOUNCE = {"movie", "episode", "album"}
 

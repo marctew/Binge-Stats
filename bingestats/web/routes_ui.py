@@ -5,7 +5,7 @@ from flask import (Blueprint, Response, current_app, flash, redirect, render_tem
                    send_file, url_for)
 
 from ..plex.client import PlexError
-from ..services import (accounts, activity, alerts, api_tokens, backups, binges, completion, geo, history, homeassistant, jobs,
+from ..services import (accounts, activity, alerts, api_tokens, arr, backups, binges, completion, geo, history, homeassistant, jobs,
                         libraries, plex_setup, settings, stats, wrapped)
 
 bp = Blueprint("ui", __name__)
@@ -89,7 +89,8 @@ def index():
         top_movies=stats.top(conn, month, kind="movies", limit=6)["items"],
         recent=stats.recently_added(conn, 8),
         open_alerts=alerts.list_alerts(conn, limit=5), open_alert_count=alerts.unacked_count(conn),
-        no_history=conn.execute("SELECT 1 FROM plays LIMIT 1").fetchone() is None)
+        no_history=conn.execute("SELECT 1 FROM plays LIMIT 1").fetchone() is None,
+        airing=arr.upcoming(conn) if arr.ready(conn, "sonarr") else None)
 
 
 @bp.route("/dashboard/now")
@@ -258,6 +259,7 @@ EDITABLE = [
     ("ui.public_url", "Public URL for share links (blank: the address you're using)", "text"),
     ("map.tile_url", "Map tiles URL (blank for OpenStreetMap)", "text"),
     ("backup.keep", "Backups to keep", "number"),
+    ("arr.sync_h", "Read Sonarr / Radarr / SABnzbd every (hours)", "number"),
     ("map.tile_attribution", "Map tiles attribution (HTML)", "text"),
 ]
 BINGE_KEYS = ("binge.gap_min", "binge.min_episodes")
@@ -336,7 +338,7 @@ def _render_settings(conn, **extra):
                            recent_jobs=jobs.recent(conn, 8), ha=homeassistant.view(conn),
                            backup_list=backups.list_backups(current_app.config["BS_CONFIG"].data_dir),
                            backup_keep=settings.get(conn, "backup.keep"),
-                           backup_last=settings.get(conn, "backup.last_run_at"))
+                           backup_last=settings.get(conn, "backup.last_run_at"), arr_apps=arr.view(conn))
 
 
 @bp.route("/settings/homeassistant", methods=["POST"])
@@ -403,6 +405,21 @@ def settings_backup_download(name: str):
     if path is None:
         return render_template("pages/not_found.html", what="backup"), 404
     return send_file(path, as_attachment=True, download_name=name, mimetype="application/vnd.sqlite3")
+
+
+@bp.route("/settings/arr", methods=["POST"])
+def settings_arr():
+    conn = _db()
+    try:
+        changed = arr.save(conn, request.form)
+    except ValueError as e:
+        flash(str(e), "error")
+        return redirect(url_for("ui.settings_page") + "#arr")
+    if request.form.get("action") == "sync" or changed:
+        if any(arr.configured(conn).values()):
+            return redirect(url_for("ui.job_page", job_id=jobs.ensure(conn, "arr_sync")))
+    flash("Saved", "ok")
+    return redirect(url_for("ui.settings_page") + "#arr")
 
 
 @bp.route("/settings/sync", methods=["POST"])

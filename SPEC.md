@@ -527,7 +527,7 @@ As built in `services/insights.py`. Counts are per play (resumed parts fold into
   - Specials (season 0) are left out.
   - Date-numbered seasons and episodes (season ≥ 200, episode > 150) are left out.
   - Sorted by how complete the show is (episodes you have ÷ what the gaps imply), so a nearly-complete show with a stray hole comes first and shows you dip into sink.
-  - Plex only knows what's on disk, so episodes after your last one can't be seen. That would need Sonarr, which is v2.
+  - Plex only knows what's on disk, so episodes after your last one can't be seen. With Sonarr connected, gaps come from Sonarr instead (see Sonarr, Radarr and SABnzbd below).
 - Each list shows 100 rows; the CSV (`/insights/collection.csv?list=reencode|upgrades|gaps`) has everything. API: `GET /api/v1/insights/collection?library_id&type&limit`.
 
 **Playback** (`/insights/playback`, `services/playback.py`, default 30 days): buffering and slow transcodes.
@@ -535,6 +535,30 @@ As built in `services/insights.py`. Counts are per play (resumed parts fold into
 - **Shown:** plays that buffered, buffer events, events per 10 hours watched, and slow transcodes (the `transcoder_slow` reason).
 - **Broken down** by person, device, place (Home network, or city from geo) and stream type, plus the worst plays.
 - API: `GET /api/v1/insights/playback?range`.
+
+---
+
+### Sonarr, Radarr and SABnzbd (added after M8)
+
+Optional, set up in **Settings → Sonarr, Radarr and SABnzbd** (URL and API key each; the key is masked, and leaving it blank keeps the saved one). They're strictly read-only: `bingestats/arr/` has GET clients only, and SABnzbd is limited to the `version`, `server_stats`, `history` and `queue` modes.
+
+- **Sync:** the worker's `arr_sync` job runs every `arr.sync_h` (3) hours, and from "Save and read now".
+  - Each app is read on its own and replaces its snapshot tables in one transaction.
+  - A failure is kept in `arr_status` and shown in Settings, and doesn't stop the other apps.
+  - SABnzbd's queue is refreshed every minute by the worker loop.
+- **What's read:**
+  - **Sonarr (v3 API, v4 tested):** `series` (with season statistics), `wanted/missing` (monitored, aired), `wanted/cutoff`, and `calendar` for 8 days.
+  - **Radarr (v3 API, v6 tested):** `movie` (has file, available, cutoff not met, collection) and `collection` (every film in each TMDB collection).
+  - **SABnzbd:** `server_stats` (daily bytes per news server, summed; stored days are kept beyond what SAB keeps), `history` (for failed downloads) and `queue`.
+- **Matching:** library sync now asks Plex for external ids (`includeGuids=1`) and stores `tvdb_id`, `tmdb_id` and `imdb_id` on `media_items` (migration v8). Sonarr series match Plex shows by TVDB id, and Radarr films match by TMDB id, for posters and links.
+- **Where it shows:**
+  - **Collection tab:** a Shows / Films summary (complete and ended, up to date, behind; on disk, collections complete, missing).
+  - **Gaps in shows:** from Sonarr when it's connected and no library filter is set, with whole missing seasons marked. Otherwise the Plex-only gaps.
+  - **Below your cutoff** (Sonarr seasons and Radarr films), **Film collections** (two or more films, nearly-complete first) and **Missing films** (monitored, released, no file). Each has a CSV.
+  - **Dashboard:** "Airing this week" (monitored episodes, by day).
+  - **Insights → Downloads:** today, 7 days, 30 days and all time; GB per day for 90 days and per month for all history; the current queue; failed downloads.
+  - **Home Assistant:** "Download queue" and "Download speed" sensors, only while SABnzbd is connected.
+  - **API:** `GET /api/v1/insights/arr`, `/insights/downloads`, `/insights/downloads/series?days=`.
 
 ---
 

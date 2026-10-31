@@ -75,6 +75,11 @@ def run_job(conn, cfg, job: dict) -> dict:
             result = binges.rebuild(conn, progress)
             wrapped.clear(conn)   # longest binges may have changed
         return result
+    if kind == "arr_sync":
+        from . import arr_sync
+        result = arr_sync.run(conn, progress)
+        settings.set(conn, "arr.last_sync_at", int(time.time()))
+        return result
     if kind == "backup":
         result = backups.create(cfg.db_path, cfg.data_dir, int(settings.get(conn, "backup.keep")))
         settings.set(conn, "backup.last_run_at", int(time.time()))
@@ -116,6 +121,11 @@ def schedule_due(conn, now: float | None = None) -> list[int]:
     # Backups: nightly at 03:30 local, Plex or not.
     if backups.nightly_due(conn, now):
         queued.append(jobs.ensure(conn, "backup"))
+    # Sonarr / Radarr / SABnzbd snapshots, if any are set up. They don't need Plex.
+    from ..services import arr as arr_svc
+    if any(arr_svc.configured(conn).values()) and \
+            now - (settings.get(conn, "arr.last_sync_at") or 0) >= int(settings.get(conn, "arr.sync_h")) * 3600:
+        queued.append(jobs.ensure(conn, "arr_sync"))
     if not settings.plex_configured(conn):
         return queued
     if conn.execute("SELECT 1 FROM servers LIMIT 1").fetchone() is None:

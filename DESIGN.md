@@ -14,6 +14,7 @@ This document records decisions that are already made. Build to it. `SPEC.md` ho
 | History import | **Tautulli import is a v1 feature**, not an afterthought. Years of history must carry over. |
 | Stack | Python 3.12, Flask, Jinja, HTMX, Alpine.js, Tailwind, ECharts. |
 | Deployment | Docker Compose on an Ubuntu LXC. One image, two services (`web`, `worker`), one `/data` volume. |
+| Sonarr / Radarr / SABnzbd | **Optional and strictly read-only** (Marc, 2026-10-31). The worker snapshots them every 3 h for real gaps in shows, film collections, below-cutoff lists, what's airing this week and download history. The clients have no write methods, so nothing in them can be deleted, unmonitored or changed. Shows and films are matched to Plex by TVDB / TMDB id, not by title. |
 | Repo | `github.com/marctew/Binge-Stats` |
 
 ## 2. Environment
@@ -93,7 +94,7 @@ v1 scope. Section numbers match the milestones in `SPEC.md`.
 ## 7. Not in v1 (don't build, don't block)
 
 - A newsletter (emailed "what's new" page).
-- Sonarr / Radarr / Overseerr links (requester on history rows, "downloaded but never watched").
+- Overseerr (requester on history rows). Sonarr, Radarr and SABnzbd *are* built, read-only (Marc, 2026-10-31); see section 1.
 - Multiple Plex servers in the UI. The schema carries `server_id` from day one, so adding this later is UI work only.
 - Plex OAuth sign-in for users. Viewer logins exist (password set by the admin, own data only). Signing in with a Plex account, and viewers seeing anything beyond their own data, are still v2.
 - Exports (CSV is in v1 for history. Anything more is v2).
