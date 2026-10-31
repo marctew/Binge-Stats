@@ -14,17 +14,29 @@ as_root() {
   if [ "$(id -u)" = 0 ]; then "$@"; else sudo -- "$@"; fi
 }
 
-before=$(as_owner git rev-parse --short HEAD)
+# Compare with what's actually running, not with HEAD before the pull, so a
+# build that failed half-way (pulled but not deployed) is retried next time.
+running=$(as_root docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' binge-stats-web-1 2>/dev/null \
+          | sed -n 's/^GIT_SHA=//p')
 as_owner git pull --ff-only --quiet
 sha=$(as_owner git rev-parse --short HEAD)
-if [ "$before" = "$sha" ] && [ "${1:-}" != "--force" ]; then
+if [ "$running" = "$sha" ] && [ "${1:-}" != "--force" ]; then
   echo "Already up to date ($sha). Use --force to rebuild anyway."
   exit 0
 fi
-echo "Updating $before -> $sha"
-as_owner git log --oneline "$before..$sha" | sed 's/^/  /' || true
+echo "Updating ${running:-unknown} -> $sha"
+if [ -n "$running" ] && as_owner git cat-file -e "$running" 2>/dev/null; then
+  as_owner git log --oneline "$running..$sha" | sed 's/^/  /' || true
+fi
 # sudo on Ubuntu 26.04 ignores -E, so pass the variable through env.
-as_root env GIT_SHA="$sha" docker compose up -d --build
+# Docker Hub and the CDNs occasionally drop a connection: retry the build.
+for attempt in 1 2 3; do
+  if as_root env GIT_SHA="$sha" docker compose build; then break; fi
+  [ "$attempt" = 3 ] && { echo "Build failed three times; nothing was changed." >&2; exit 1; }
+  echo "Build failed (attempt $attempt), retrying in 10s..." >&2
+  sleep 10
+done
+as_root env GIT_SHA="$sha" docker compose up -d
 for _ in $(seq 1 20); do
   if curl -fsS http://127.0.0.1:8181/api/v1/health >/dev/null 2>&1; then
     echo "Binge Stats $sha is up."
