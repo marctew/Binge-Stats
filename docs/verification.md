@@ -80,3 +80,19 @@ Checked 2026-10-31 against Tautulli **v2.18.2**, `/opt/Tautulli/tautulli.db` on 
   - 90 distinct IPs in history. 61 are private: LAN, plus Tailscale's 100.64/10 range, which shows as "Private network or VPN". The other 29 all resolved.
   - Most plays come from the home network (3,757). After that come VPN (431) and a handful of UK towns.
 - **DNS on LXC 406 is intermittent.** `cdn.jsdelivr.net` and GitHub release hosts failed to resolve a few times today, with 192.168.4.1 as the resolver. Builds survive it because `fetch-assets.sh` retries five times, but the resolver is worth a look.
+
+## Limits and Home Assistant (M5), 2026-10-31
+
+- **Migration v3 on the live database:** ran cleanly. Schema is now 3, and the two limit rules were added, disabled.
+- **Broker:** Mosquitto on the `mqtt` LXC (192.168.4.121:1883), `allow_anonymous false`. A `bingestats` user was added with `mosquitto_passwd` and the broker reloaded. A backup of the old password file sits next to it as `passwd.bak-*`.
+  - Mosquitto warns that `/etc/mosquitto/passwd` is owned by `mosquitto`, not root, and that future versions will refuse to load it. This was the case before Binge Stats.
+- **Discovery:** HA created one "Binge Stats" device with 13 entities: 11 server-wide plus the tracked user's sensor and button. Entity ids are `sensor.binge_stats_*`, `binary_sensor.binge_stats_plex_server` and `button.binge_stats_stop_<name>_s_streams`.
+- **Live values matched Binge Stats:**
+  - 2 active streams, both direct play;
+  - 14.8 Mbit/s total, made up of 4.1 LAN and 10.7 WAN;
+  - Plex up;
+  - 8 plays and 5.01 h today;
+  - 2 unacknowledged alerts.
+- **Attributes:** the Active streams attributes list each session (user, title, player, progress).
+- **Stop button:** pressed in HA for an idle user. The worker logged the command within a second ("stopped 0 stream(s)"), so the command path works end to end. It wasn't tested against someone else's real stream.
+- **Not yet seen live:** a stream limit or sharing alert firing on real traffic. Both are covered by tests with real session fixtures.
