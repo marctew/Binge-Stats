@@ -39,14 +39,19 @@ Binge-Stats/
   docs/
     verification.md
   docker/
-    Dockerfile  docker-compose.yml  entrypoint.sh
-  scripts/build-css.sh
+    Dockerfile  entrypoint.sh
+  docker-compose.yml
+  scripts/fetch-assets.sh  scripts/build-css.sh
   config.example.toml
   requirements.txt  requirements-dev.txt
   CLAUDE.md  DESIGN.md  SPEC.md  README.md
 ```
 
-Dependencies (pin exact versions in `requirements.txt`): `flask`, `gunicorn`, `requests`, `websocket-client`, `apprise`, `paho-mqtt`, `maxminddb`, `pillow`, `tomli-w`. Dev: `pytest`, `responses`, `freezegun`.
+Dependencies, with exact versions pinned in `requirements.txt`. Add each one in the milestone that first needs it:
+- M1: `flask`, `gunicorn`, `requests`, `websocket-client`.
+- Later: `apprise` (M4), `paho-mqtt` (M5), `maxminddb` (M3).
+- Dev: `pytest`, `responses`, `pyflakes`.
+- No Pillow: Plex's photo transcoder does the resizing.
 
 ---
 
@@ -361,7 +366,7 @@ Plex's sessions API reports the decisions but not the reason, so we infer one. N
 | `audio_codec` | audio transcode and source codec ≠ target codec |
 | `audio_channels` | audio transcode and fewer target channels |
 | `container` | direct stream, container differs |
-| `throttled_bandwidth` | `TranscodeSession.throttled` absent and speed < 1.0 (the transcoder can't keep up). Flag only, not a cause |
+| `transcoder_slow` | video transcode, `TranscodeSession.speed` < 1.0 and not `throttled` (the transcoder can't keep up). A flag, not a cause |
 
 - `hw_decode` / `hw_encode` come from `transcodeHwDecoding` / `transcodeHwEncoding` (or `transcodeHwFullPipeline`). **Verify against live** which fields a current PMS sets.
 
@@ -562,7 +567,10 @@ Every page is a Jinja template that extends `base.html`. Pages refresh their par
 
 **Worker heartbeat:** the worker writes `worker.heartbeat_at` to settings every poll. If it is older than 60 s, the UI shows a banner saying the worker isn't running.
 
-**Images:** `/img/<kind>/<rating_key>?w=` (kind is `thumb`, `art` or `user`). It resolves the Plex path from `media_items` or `plays`, fetches through the Plex photo transcoder, stores a WebP in `/data/cache/img/` keyed by path and width, and serves it with `Cache-Control: max-age=604800`. Widths are snapped to 150, 300, 600 and 1200 px.
+**Images:**
+- `/img/plex?path=<plex artwork path>&w=&shape=poster|art|square` takes a Plex artwork path. Only `/library/metadata/<n>/(thumb|art|…)/<n>` is accepted, and anything else is a 404.
+- `/img/user/<id>` serves a user avatar, fetched from plex.tv (other hosts are refused).
+- The image is fetched through the Plex photo transcoder at a width snapped to 150, 300, 600 or 1200 px, cached as JPEG in `/data/cache/img/` and served with a week-long private cache.
 
 ---
 
@@ -596,10 +604,10 @@ Document it in `docs/API.md`, with an example per endpoint.
 ## 17. Deployment
 
 **`docker/Dockerfile`** (multi-stage):
-1. Stage `css`: download the pinned Tailwind standalone CLI, then build `static/css/input.css` → `static/css/app.css`, scanning `templates/**/*.html` and `static/js/**/*.js`.
+1. Stage `assets`: `scripts/fetch-assets.sh` downloads htmx, Alpine and the Tailwind standalone CLI at the versions and sha256s in `bingestats/static/vendor/VERSIONS`. `scripts/build-css.sh` then builds `static/css/app.css`. The downloaded files are gitignored, and nothing loads from a CDN at runtime.
 2. Stage `app`: `python:3.12-slim`, install the requirements, copy the app and the built CSS, run as a non-root user with UID/GID from `PUID`/`PGID` (default 1000).
 
-**`docker/docker-compose.yml`:**
+**`docker-compose.yml`** (repo root, builds the image locally. GHCR comes in M8):
 
 ```yaml
 services:
@@ -628,7 +636,7 @@ services:
 - **Backups:** nightly at 03:30 local, using the SQLite backup API → `/data/backups/bingestats-YYYYMMDD.db`, keeping `backup.keep`. Settings has a "Backup now" button and lists the backups.
 - **CI** (GitHub Actions): pytest on push. On a tag, build and push the image to GHCR.
 
-**Development without Docker:** `python -m bingestats web --dev` (Flask debug server on 8181) and `python -m bingestats worker` in another shell, with `DATA_DIR=./data`. Run `scripts/build-css.sh` once after cloning; it downloads the pinned Tailwind CLI into `.cache/` and builds the CSS. `--watch` rebuilds on template changes. The built CSS is gitignored.
+**Development without Docker:** `python -m bingestats web --dev` (Flask debug server on 8181) and `python -m bingestats worker` in another shell, with `DATA_DIR=./data`. Run `scripts/build-css.sh` once after cloning. It fetches the vendored JS and the pinned Tailwind CLI (into `.cache/`) and builds the CSS. `--watch` rebuilds on template changes. The built CSS and fetched JS are gitignored.
 
 ---
 

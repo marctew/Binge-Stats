@@ -1,0 +1,70 @@
+{# Shared components. Pages build from these; no page-specific one-offs. #}
+{% from "macros/icons.html" import icon %}
+
+{% macro poster(path, alt='', cls='w-24', shape='poster', w=300) -%}
+{%- set aspect = 'aspect-square' if shape == 'square' else ('aspect-video' if shape == 'art' else 'aspect-[2/3]') -%}
+<div class="{{ cls }} {{ aspect }} shrink-0 overflow-hidden rounded-lg bg-surface-2 shadow-poster ring-1 ring-white/5">
+  {%- if path %}<img src="{{ url_for('img.plex_image', path=path, w=w, shape=shape) }}" alt="{{ alt }}" loading="lazy" class="h-full w-full object-cover">
+  {%- else %}<div class="flex h-full w-full items-center justify-center text-faint">{{ icon('tv', 'h-6 w-6') }}</div>{% endif -%}
+</div>
+{%- endmacro %}
+
+{% macro avatar(user_id, name, cls='h-6 w-6') -%}
+<span class="{{ cls }} relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-accent/60 to-accent-2/60 text-[10px] font-semibold uppercase text-white">
+  <span>{{ (name or '?')[:1] }}</span>
+  <img src="{{ url_for('img.user_avatar', user_id=user_id) }}" alt="" loading="lazy" class="absolute inset-0 h-full w-full object-cover" onerror="this.remove()">
+</span>
+{%- endmacro %}
+
+{% macro decision_badge(decision, hw=False) -%}
+{%- set cls = {'direct_play': 'badge-play', 'direct_stream': 'badge-stream', 'transcode': 'badge-transcode'}.get(decision, 'badge-muted') -%}
+<span class="{{ cls }}">{{ decision | decision_label }}{% if decision == 'transcode' and hw %} <span class="opacity-80">· HW</span>{% endif %}</span>
+{%- endmacro %}
+
+{% macro stat_tile(label, value, sub=None, icon_name=None, tone='accent') -%}
+<div class="card relative overflow-hidden p-4 sm:p-5">
+  <div class="flex items-start justify-between gap-3">
+    <div class="min-w-0">
+      <div class="text-xs font-medium uppercase tracking-wide text-muted">{{ label }}</div>
+      <div class="mt-1.5 text-2xl font-semibold tabular-nums sm:text-3xl">{{ value }}</div>
+      {% if sub %}<div class="mt-1 truncate text-xs text-muted">{{ sub }}</div>{% endif %}
+    </div>
+    {% if icon_name %}<div class="rounded-xl bg-{{ tone }}/15 p-2 text-{{ tone }}">{{ icon(icon_name, 'h-5 w-5') }}</div>{% endif %}
+  </div>
+</div>
+{%- endmacro %}
+
+{% macro empty_state(title, body, icon_name='tv') -%}
+<div class="card flex flex-col items-center justify-center px-6 py-16 text-center">
+  <div class="mb-4 rounded-2xl bg-surface-2 p-4 text-faint">{{ icon(icon_name, 'h-8 w-8') }}</div>
+  <h3 class="text-base font-semibold">{{ title }}</h3>
+  <p class="mt-1 max-w-sm text-sm text-muted">{{ body }}</p>
+</div>
+{%- endmacro %}
+
+{% macro page_header(title, subtitle=None) -%}
+<div class="mb-6 flex flex-wrap items-end justify-between gap-3">
+  <div>
+    <h1 class="text-2xl font-semibold tracking-tight sm:text-3xl">{{ title }}</h1>
+    {% if subtitle %}<p class="mt-1 text-sm text-muted">{{ subtitle }}</p>{% endif %}
+  </div>
+  {{ caller() if caller }}
+</div>
+{%- endmacro %}
+
+{% macro progress(pct, cls='') -%}
+<div class="progress-track {{ cls }}"><div class="progress-fill" style="width: {{ '%.1f' % (pct or 0) }}%"></div></div>
+{%- endmacro %}
+
+{% macro quality_line(st) -%}
+{%- set src_v = (st.src.resolution | resolution) ~ (' ' ~ (st.src.video_codec | codec) if st.src.video_codec else '') -%}
+{%- set dst_v = (st.dst_resolution | resolution) ~ (' ' ~ (st.dst_video_codec | codec) if st.dst_video_codec else '') -%}
+{%- if st.video_decision -%}
+  {{ src_v or '?' }}{% if st.video_decision == 'transcode' %} <span class="text-transcode">→ {{ dst_v or '?' }}</span>{% endif %}
+  {%- if st.src.dynamic_range and st.src.dynamic_range != 'SDR' %} <span class="text-faint">{{ st.src.dynamic_range }}</span>{% endif %}
+{%- endif -%}
+{%- if st.audio_decision -%}
+  <span class="text-faint"> · </span>{{ st.src.audio_codec | codec }} {{ st.src.audio_channels | channels }}
+  {%- if st.audio_decision == 'transcode' %} <span class="text-transcode">→ {{ st.dst_audio_codec | codec }} {{ st.dst_audio_channels | channels }}</span>{% endif %}
+{%- endif -%}
+{%- endmacro %}

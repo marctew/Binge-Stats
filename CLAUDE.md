@@ -19,7 +19,7 @@ Self-hosted Plex monitoring and stats, a modern Tautulli replacement. Read DESIG
 - Long work runs as a row in `jobs`, picked up by the worker. Never do it in a request.
 - Settings live in the `settings` table, read only through `services/settings.py`.
 - Reuse the Jinja component macros and the shared ECharts theme; no page-specific one-offs. Every chart and list needs an empty state. Pages must work at phone width.
-- Static assets are vendored with pinned versions in `bingestats/static/vendor/VERSIONS`. No CDNs at runtime.
+- Front-end assets are pinned (version + sha256) in `bingestats/static/vendor/VERSIONS` and fetched at build time by `scripts/fetch-assets.sh`. No CDNs at runtime.
 - Runtime data (`/data`, `*.db`, caches, config with secrets) stays out of the tracked tree.
 - v2 items in DESIGN.md section 7 are not to be built yet, but must not be blocked.
 - Anything marked "Verify against live" gets its findings written to `docs/verification.md`.

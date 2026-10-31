@@ -1,0 +1,94 @@
+{% from "macros/ui.html" import poster, avatar, decision_badge, stat_tile, empty_state, quality_line %}
+{% from "macros/icons.html" import icon %}
+<div data-server-now="{{ now() }}">
+<div class="mb-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+  {{ stat_tile('Streams', totals.streams, ('%d direct play · %d direct stream' % (totals.direct_play, totals.direct_stream)) if totals.streams else 'Nothing playing', 'activity', 'accent') }}
+  {{ stat_tile('Transcoding', totals.transcode, 'of %d stream%s' % (totals.streams, '' if totals.streams == 1 else 's') if totals.streams else '–', 'bolt', 'transcode') }}
+  {{ stat_tile('LAN', totals.lan_kbps | bandwidth, None, 'lan', 'play') }}
+  {{ stat_tile('Remote', totals.wan_kbps | bandwidth, 'Total ' ~ (totals.bandwidth_kbps | bandwidth), 'wan', 'stream') }}
+</div>
+
+{% if not sessions %}
+  {{ empty_state('Nothing playing right now', 'Streams show up here within a few seconds of starting.', 'tv') }}
+{% else %}
+<div class="grid grid-cols-1 gap-4 xl:grid-cols-2">
+  {% for a in sessions %}
+  {% set s = a.session %}{% set st = s.stream %}
+  <article class="card relative overflow-hidden"
+           x-data="progress({{ a.view_offset_s }}, {{ a.duration_s or 0 }}, '{{ a.state }}', {{ a.observed_at }})">
+    {% if s.art %}
+    <img src="{{ url_for('img.plex_image', path=s.art, w=600, shape='art') }}" alt="" aria-hidden="true"
+         class="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover opacity-25 blur-2xl">
+    {% endif %}
+    <div class="pointer-events-none absolute inset-0 bg-gradient-to-r from-surface via-surface/90 to-surface/60"></div>
+
+    <div class="relative flex gap-4 p-4 sm:p-5">
+      {{ poster(s.poster, s.title, 'w-20 sm:w-28', 'square' if s.media_type == 'track' else 'poster') }}
+      <div class="flex min-w-0 flex-1 flex-col">
+        <div class="flex items-start justify-between gap-2">
+          <div class="min-w-0">
+            <h2 class="truncate text-base font-semibold sm:text-lg">{{ s | media_title }}</h2>
+            <p class="truncate text-sm text-muted">{{ s | media_subtitle }}</p>
+          </div>
+          <div x-data="{ open: false }" class="relative shrink-0">
+            <button type="button" class="btn-icon" title="Stop stream"
+                    @click="open = true; document.body.dataset.hold = '1'">{{ icon('stop', 'h-4 w-4') }}</button>
+            <div x-cloak x-show="open" x-transition @click.outside="open = false; delete document.body.dataset.hold"
+                 class="absolute right-0 top-10 z-20 w-72 rounded-2xl border border-border bg-surface p-4 shadow-2xl">
+              <form hx-post="{{ url_for('ui.activity_stop', session_id=s.session_id) }}" hx-target="#toasts" hx-swap="beforeend"
+                    @htmx:after-request="open = false; delete document.body.dataset.hold">
+                <label class="label">Message to {{ a.user_name }}</label>
+                <input name="message" class="input" maxlength="200" placeholder="Your stream was stopped by the server admin.">
+                <div class="mt-3 flex justify-end gap-2">
+                  <button type="button" class="btn-ghost" @click="open = false; delete document.body.dataset.hold">Cancel</button>
+                  <button class="btn-danger">Stop stream</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-3 flex min-w-0 items-center gap-2 text-sm">
+          {{ avatar(a.user_id, a.user_name) }}
+          <span class="truncate font-medium">{{ a.user_name }}</span>
+          <span class="text-faint">·</span>
+          <span class="truncate text-muted">{{ s.player_title or s.product }}{% if s.product and s.player_title %} <span class="text-faint">({{ s.product }})</span>{% endif %}</span>
+        </div>
+
+        <div class="mt-3 flex flex-wrap items-center gap-1.5">
+          {{ decision_badge(st.decision, st.hw_decode or st.hw_encode) }}
+          {% if s.is_local %}
+          <span class="badge-muted">{{ icon('lan', 'h-3 w-3') }} LAN</span>
+          {% else %}
+          <span class="badge-muted">{{ icon('wan', 'h-3 w-3') }} {{ 'Relay' if s.is_relayed else 'Remote' }}</span>
+          {% endif %}
+          {% if s.bandwidth_kbps %}<span class="badge-muted tabular-nums">{{ s.bandwidth_kbps | bandwidth }}</span>{% endif %}
+        </div>
+
+        <div class="mt-2 truncate text-xs text-muted">{{ quality_line(st) }}</div>
+        {% if st.transcode_reasons %}
+        <div class="mt-1 truncate text-xs text-transcode/90" title="Inferred from the source file and the stream Plex is sending">
+          {% for r in st.transcode_reasons %}{{ r | reason_label }}{{ ' · ' if not loop.last }}{% endfor %}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="relative px-4 pb-4 sm:px-5">
+      <div class="progress-track"><div class="progress-fill" :style="`width: ${pct}%`" style="width: {{ '%.1f' % a.progress_pct }}%"></div></div>
+      <div class="mt-2 flex items-center justify-between text-xs text-muted">
+        <span class="flex items-center gap-1.5">
+          {% if a.state == 'paused' %}<span class="text-transcode">{{ icon('pause', 'h-3.5 w-3.5') }}</span> Paused
+          {% elif a.state == 'buffering' %}<span class="animate-spin text-stream">{{ icon('buffer', 'h-3.5 w-3.5') }}</span> Buffering
+          {% else %}<span class="text-play">{{ icon('play', 'h-3.5 w-3.5') }}</span> Playing{% endif %}
+          <span class="text-faint">· started {{ a.started_at | localtime('%H:%M') }}</span>
+          {% if s.ip_address %}<span class="hidden text-faint sm:inline">· {{ s.ip_address }}</span>{% endif %}
+        </span>
+        <span class="tabular-nums"><span x-text="label">{{ a.view_offset_s | clock }}</span> / {{ a.duration_s | clock }}</span>
+      </div>
+    </div>
+  </article>
+  {% endfor %}
+</div>
+{% endif %}
+</div>

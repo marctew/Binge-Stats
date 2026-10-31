@@ -1,0 +1,14 @@
+{% extends "auth_base.html" %}
+{% block title %}Set up · Binge Stats{% endblock %}
+{% block card %}
+<h1 class="text-xl font-semibold">Create your admin login</h1>
+<p class="mt-1 text-sm text-muted">This is the only account. It's for you, not your Plex users.</p>
+{% if error %}<div class="mt-4 rounded-xl border border-danger/30 bg-danger/10 px-3 py-2 text-sm">{{ error }}</div>{% endif %}
+<form method="post" class="mt-6 space-y-4">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div><label class="label" for="username">Username</label><input id="username" name="username" class="input" value="{{ request.form.username or '' }}" autocomplete="username" autofocus required></div>
+  <div><label class="label" for="password">Password</label><input id="password" name="password" type="password" minlength="8" class="input" autocomplete="new-password" required></div>
+  <div><label class="label" for="password2">Password again</label><input id="password2" name="password2" type="password" minlength="8" class="input" autocomplete="new-password" required></div>
+  <button class="btn-primary w-full">Continue</button>
+</form>
+{% endblock %}

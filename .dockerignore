@@ -1,0 +1,9 @@
+.git
+.venv
+.cache
+data
+**/__pycache__
+**/*.pyc
+tests
+docs
+bingestats/static/css/app.css

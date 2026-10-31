@@ -1,0 +1,4 @@
+-r requirements.txt
+pytest==9.2.0
+responses==0.26.3
+pyflakes==4.1.0

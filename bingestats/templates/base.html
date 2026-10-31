@@ -1,0 +1,83 @@
+{% from "macros/icons.html" import icon %}
+<!doctype html>
+<html lang="en-GB" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#090b11">
+  <title>{% block title %}Binge Stats{% endblock %}</title>
+  <link rel="icon" href="{{ url_for('static', filename='img/icon.svg') }}" type="image/svg+xml">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v={{ app_sha or app_version }}">
+  <script src="{{ url_for('static', filename='vendor/htmx.min.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/app.js') }}?v={{ app_sha or app_version }}" defer></script>
+  <script src="{{ url_for('static', filename='vendor/alpine.min.js') }}" defer></script>
+</head>
+<body class="min-h-screen" hx-headers='{"X-CSRF-Token": "{{ csrf_token() }}"}'>
+{% block body %}
+{% set nav = [('ui.activity', 'Activity', 'activity'), ('ui.history_page', 'History', 'history'), ('ui.settings_page', 'Settings', 'settings')] %}
+<div class="lg:pl-64">
+  {# Sidebar (desktop) #}
+  <aside class="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-border bg-surface/60 px-4 py-6 backdrop-blur lg:flex">
+    <a href="{{ url_for('ui.activity') }}" class="mb-8 flex items-center gap-2.5 px-2">
+      <img src="{{ url_for('static', filename='img/icon.svg') }}" class="h-8 w-8" alt="">
+      <span class="text-lg font-semibold tracking-tight">Binge <span class="brand-gradient">Stats</span></span>
+    </a>
+    <nav class="flex flex-1 flex-col gap-1">
+      {% for ep, label, ic in nav %}
+      <a href="{{ url_for(ep) }}" class="nav-link {{ 'active' if request.endpoint == ep }}">{{ icon(ic) }}{{ label }}</a>
+      {% endfor %}
+    </nav>
+    <div class="mt-6 border-t border-border pt-4">
+      <form method="post" action="{{ url_for('auth.logout') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="nav-link w-full">{{ icon('logout') }}Sign out</button>
+      </form>
+      <div class="mt-3 px-3 text-xs text-faint">v{{ app_version }}{% if app_sha %} · {{ app_sha }}{% endif %}</div>
+    </div>
+  </aside>
+
+  {# Top bar (mobile) #}
+  <header class="sticky top-0 z-30 flex items-center justify-between border-b border-border bg-bg/80 px-4 py-3 backdrop-blur lg:hidden">
+    <a href="{{ url_for('ui.activity') }}" class="flex items-center gap-2">
+      <img src="{{ url_for('static', filename='img/icon.svg') }}" class="h-7 w-7" alt="">
+      <span class="font-semibold">Binge <span class="brand-gradient">Stats</span></span>
+    </a>
+    <form method="post" action="{{ url_for('auth.logout') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn-icon" title="Sign out">{{ icon('logout') }}</button>
+    </form>
+  </header>
+
+  <main class="mx-auto max-w-7xl px-4 pb-28 pt-6 sm:px-6 lg:px-8 lg:pb-12 lg:pt-10">
+    {% if not worker.alive %}
+    <div class="mb-6 flex items-start gap-3 rounded-2xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm">
+      <span class="mt-0.5 text-danger">{{ icon('alert', 'h-5 w-5') }}</span>
+      <div><div class="font-medium">The worker isn't running</div>
+        <div class="text-muted">Nothing new is being recorded. Check the <code class="text-text">worker</code> container.</div></div>
+    </div>
+    {% elif worker.error %}
+    <div class="mb-6 flex items-start gap-3 rounded-2xl border border-transcode/30 bg-transcode/10 px-4 py-3 text-sm">
+      <span class="mt-0.5 text-transcode">{{ icon('alert', 'h-5 w-5') }}</span>
+      <div><div class="font-medium">{{ worker.error }}</div>
+        <div class="text-muted">The worker will keep retrying. <a class="underline" href="{{ url_for('ui.settings_page') }}">Check Plex settings</a></div></div>
+    </div>
+    {% endif %}
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for kind, msg in messages %}
+    <div class="mb-4 rounded-2xl border px-4 py-3 text-sm {{ 'border-danger/30 bg-danger/10' if kind == 'error' else 'border-play/30 bg-play/10' }}">{{ msg }}</div>
+    {% endfor %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+  </main>
+
+  {# Bottom nav (mobile) #}
+  <nav class="fixed inset-x-0 bottom-0 z-30 grid grid-cols-3 border-t border-border bg-surface/90 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden">
+    {% for ep, label, ic in nav %}
+    <a href="{{ url_for(ep) }}" class="flex flex-col items-center gap-1 py-2.5 text-[11px] font-medium {{ 'text-accent' if request.endpoint == ep else 'text-muted' }}">{{ icon(ic) }}{{ label }}</a>
+    {% endfor %}
+  </nav>
+</div>
+<div id="toasts" class="pointer-events-none fixed inset-x-0 bottom-20 z-50 flex flex-col items-center gap-2 px-4 lg:bottom-6 lg:items-end lg:pr-6"></div>
+{% endblock %}
+</body>
+</html>

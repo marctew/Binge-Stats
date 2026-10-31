@@ -1,0 +1,38 @@
+# Binge Stats. `docker compose up -d --build` from the repo root.
+services:
+  web:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        GIT_SHA: ${GIT_SHA:-}
+    image: binge-stats:local
+    command: web
+    ports: ["8181:8181"]
+    volumes: ["./data:/data"]
+    environment:
+      TZ: Europe/London
+      PUID: "1000"
+      PGID: "1000"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8181/api/v1/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  worker:
+    image: binge-stats:local
+    command: worker
+    volumes:
+      - ./data:/data
+      # For the Tautulli import (milestone 2): mount Tautulli's data folder read-only.
+      # - /path/to/tautulli:/import:ro
+    environment:
+      TZ: Europe/London
+      PUID: "1000"
+      PGID: "1000"
+    restart: unless-stopped
+    depends_on:
+      web:
+        condition: service_started

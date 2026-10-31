@@ -1,0 +1,117 @@
+{
+ "MediaContainer": {
+  "size": 1,
+  "Metadata": [
+   {
+    "art": "/library/metadata/5001/art/1700000000",
+    "duration": 8400000,
+    "guid": "plex://movie/5d7768ba96b655001fdc0408",
+    "librarySectionID": "4",
+    "librarySectionTitle": "Films",
+    "ratingKey": "5001",
+    "sessionKey": "21",
+    "thumb": "/library/metadata/5001/thumb/1700000000",
+    "title": "Dune: Part Two",
+    "type": "movie",
+    "viewOffset": 600000,
+    "year": 2024,
+    "Media": [
+     {
+      "audioChannels": 2,
+      "audioCodec": "aac",
+      "bitrate": 8000,
+      "container": "mpegts",
+      "duration": 8400000,
+      "height": 1080,
+      "id": "7001",
+      "videoCodec": "h264",
+      "videoResolution": "1080",
+      "width": 1920,
+      "selected": true,
+      "Part": [
+       {
+        "container": "mpegts",
+        "duration": 8400000,
+        "id": "8001",
+        "decision": "transcode",
+        "selected": true,
+        "Stream": [
+         {
+          "codec": "h264",
+          "height": 1080,
+          "width": 1920,
+          "streamType": 1,
+          "decision": "transcode",
+          "location": "segments-video"
+         },
+         {
+          "codec": "aac",
+          "channels": 2,
+          "streamType": 2,
+          "selected": true,
+          "decision": "transcode",
+          "location": "segments-audio"
+         },
+         {
+          "codec": "pgs",
+          "streamType": 3,
+          "selected": true,
+          "decision": "burn",
+          "location": "segments-video"
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "User": {
+     "id": "2002",
+     "thumb": "https://plex.tv/users/def/avatar",
+     "title": "bob"
+    },
+    "Player": {
+     "address": "203.0.113.20",
+     "machineIdentifier": "machine-def456",
+     "platform": "Android",
+     "product": "Plex for Android (TV)",
+     "state": "playing",
+     "title": "SHIELD",
+     "local": false,
+     "relayed": false,
+     "secure": true,
+     "userID": 2002
+    },
+    "Session": {
+     "id": "transcodesession0001",
+     "bandwidth": 9200,
+     "location": "wan"
+    },
+    "TranscodeSession": {
+     "key": "/transcode/sessions/abc",
+     "throttled": false,
+     "complete": false,
+     "progress": 12.5,
+     "speed": 2.4,
+     "duration": 8400000,
+     "context": "streaming",
+     "sourceVideoCodec": "hevc",
+     "sourceAudioCodec": "truehd",
+     "videoDecision": "transcode",
+     "audioDecision": "transcode",
+     "subtitleDecision": "burn",
+     "protocol": "hls",
+     "container": "mpegts",
+     "videoCodec": "h264",
+     "audioCodec": "aac",
+     "audioChannels": 2,
+     "width": 1920,
+     "height": 1080,
+     "transcodeHwRequested": true,
+     "transcodeHwDecoding": "vaapi",
+     "transcodeHwEncoding": "vaapi",
+     "transcodeHwFullPipeline": true
+    }
+   }
+  ]
+ }
+}

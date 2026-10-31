@@ -1,0 +1,53 @@
+{
+ "MediaContainer": {
+  "size": 1,
+  "Metadata": [
+   {
+    "ratingKey": "5001",
+    "type": "movie",
+    "title": "Dune: Part Two",
+    "Media": [
+     {
+      "id": "7001",
+      "audioChannels": 8,
+      "audioCodec": "truehd",
+      "bitrate": 62000,
+      "container": "mkv",
+      "height": 2160,
+      "width": 3840,
+      "videoCodec": "hevc",
+      "videoResolution": "4k",
+      "Part": [
+       {
+        "id": "8001",
+        "container": "mkv",
+        "size": 65000000000,
+        "Stream": [
+         {
+          "codec": "hevc",
+          "streamType": 1,
+          "colorTrc": "smpte2084",
+          "bitDepth": 10,
+          "height": 2160,
+          "width": 3840
+         },
+         {
+          "codec": "truehd",
+          "channels": 8,
+          "streamType": 2,
+          "selected": true
+         },
+         {
+          "codec": "pgs",
+          "streamType": 3,
+          "selected": true
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% from "macros/ui.html" import page_header %}
+{% from "macros/icons.html" import icon %}
+{% block title %}Settings · Binge Stats{% endblock %}
+{% block content %}
+{% call page_header('Settings') %}{% endcall %}
+<div class="grid gap-6 lg:grid-cols-3">
+  <section class="card p-5 lg:col-span-1">
+    <h2 class="flex items-center gap-2 font-semibold">{{ icon('plex', 'h-4 w-4 text-[#e5a00d]') }} Plex server</h2>
+    <dl class="mt-4 space-y-3 text-sm">
+      <div><dt class="label">Server</dt><dd>{{ server.name if server and server.name else '–' }}</dd></div>
+      <div><dt class="label">Version</dt><dd>{{ server.version if server and server.version else '–' }}</dd></div>
+      <div><dt class="label">URL</dt><dd class="break-all font-mono text-xs">{{ plex_url or 'Not connected' }}</dd></div>
+      <div><dt class="label">Status</dt><dd>
+        {% if server and server.is_up %}<span class="badge-play">Up</span>{% elif server %}<span class="badge-transcode">Unreachable</span>{% else %}<span class="badge-muted">Waiting for first poll</span>{% endif %}
+        {% if server and server.last_seen_at %}<span class="ml-2 text-xs text-muted">seen {{ server.last_seen_at | relative }}</span>{% endif %}
+      </dd></div>
+    </dl>
+    <a href="{{ url_for('ui.setup_plex') }}" class="btn-ghost mt-5 w-full">Change connection</a>
+  </section>
+
+  <section class="card p-5 lg:col-span-2">
+    <h2 class="font-semibold">Recording</h2>
+    <p class="mt-1 text-sm text-muted">Changes apply on the worker's next poll.</p>
+    <form method="post" class="mt-5 grid gap-4 sm:grid-cols-2">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      {% for key, label, kind in fields %}
+      {% if kind == 'bool' %}
+      <label class="flex items-center gap-3 rounded-xl border border-border bg-surface-2/40 px-3 py-2.5 text-sm sm:col-span-2">
+        <input type="checkbox" name="{{ key }}" {{ 'checked' if values[key] }} class="rounded"> {{ label }}
+      </label>
+      {% else %}
+      <div><label class="label" for="{{ key }}">{{ label }}</label>
+        <input id="{{ key }}" name="{{ key }}" type="{{ kind }}" value="{{ values[key] }}" class="input"></div>
+      {% endif %}
+      {% endfor %}
+      <div class="sm:col-span-2"><button class="btn-primary">Save</button></div>
+    </form>
+  </section>
+</div>
+{% endblock %}

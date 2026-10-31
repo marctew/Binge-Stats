@@ -1,0 +1,12 @@
+{% extends "auth_base.html" %}
+{% block title %}Sign in · Binge Stats{% endblock %}
+{% block card %}
+<h1 class="text-xl font-semibold">Welcome back</h1>
+<p class="mt-1 text-sm text-muted">Sign in to see what's playing.</p>
+<form method="post" class="mt-6 space-y-4">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div><label class="label" for="username">Username</label><input id="username" name="username" class="input" autocomplete="username" autofocus required></div>
+  <div><label class="label" for="password">Password</label><input id="password" name="password" type="password" class="input" autocomplete="current-password" required></div>
+  <button class="btn-primary w-full">Sign in</button>
+</form>
+{% endblock %}

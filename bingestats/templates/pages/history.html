@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% from "macros/ui.html" import page_header, empty_state %}
+{% from "macros/icons.html" import icon %}
+{% block title %}History · Binge Stats{% endblock %}
+{% block content %}
+{% call page_header('History', 'Every play, newest first. Resumed plays are grouped into one row.') %}
+<a href="{{ url_for('ui.history_csv', **f.query_args()) }}" class="btn-ghost">{{ icon('download', 'h-4 w-4') }} CSV</a>
+{% endcall %}
+
+<form method="get" action="{{ url_for('ui.history_page') }}"
+      class="card mb-5 grid grid-cols-2 gap-3 p-4 md:grid-cols-3 xl:grid-cols-6"
+      hx-get="{{ url_for('ui.history_page') }}" hx-target="body" hx-push-url="true"
+      hx-trigger="change, keyup changed delay:400ms from:input[name=q]">
+  <div class="col-span-2 md:col-span-3 xl:col-span-2">
+    <label class="label" for="q">Search</label>
+    <div class="relative">
+      <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-faint">{{ icon('search', 'h-4 w-4') }}</span>
+      <input id="q" name="q" value="{{ f.q or '' }}" class="input pl-9" placeholder="Title, show or album" autocomplete="off">
+    </div>
+  </div>
+  <div>
+    <label class="label" for="user">User</label>
+    <select id="user" name="user" class="input">
+      <option value="">Everyone</option>
+      {% for u in users %}<option value="{{ u.id }}" {{ 'selected' if f.user_id == u.id }}>{{ u.name }}</option>{% endfor %}
+    </select>
+  </div>
+  <div>
+    <label class="label" for="type">Type</label>
+    <select id="type" name="type" class="input">
+      <option value="">All</option>
+      {% for t in media_types %}<option value="{{ t }}" {{ 'selected' if f.media_type == t }}>{{ {'movie': 'Movies', 'episode': 'Episodes', 'track': 'Music'}[t] }}</option>{% endfor %}
+    </select>
+  </div>
+  <div>
+    <label class="label" for="decision">Stream</label>
+    <select id="decision" name="decision" class="input">
+      <option value="">Any</option>
+      {% for d in decisions %}<option value="{{ d }}" {{ 'selected' if f.decision == d }}>{{ d | decision_label }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="grid grid-cols-2 gap-2">
+    <div><label class="label" for="from">From</label><input id="from" type="date" name="from" value="{{ f.date_from or '' }}" class="input px-2"></div>
+    <div><label class="label" for="to">To</label><input id="to" type="date" name="to" value="{{ f.date_to or '' }}" class="input px-2"></div>
+  </div>
+  <noscript><button class="btn-primary">Filter</button></noscript>
+</form>
+
+{% if not rows %}
+  {% if f.active %}
+  {{ empty_state('No plays match', 'Try widening the filters.', 'search') }}
+  {% else %}
+  {{ empty_state('No history yet', 'Finished plays land here. Anything shorter than the minimum play length is ignored.', 'history') }}
+  {% endif %}
+{% else %}
+<div class="card overflow-hidden">
+  <table class="w-full">
+    <thead class="border-b border-border bg-surface-2/40">
+      <tr>
+        <th class="table-head">Title</th>
+        <th class="table-head hidden md:table-cell">User</th>
+        <th class="table-head hidden lg:table-cell">Device</th>
+        <th class="table-head hidden sm:table-cell">When</th>
+        <th class="table-head text-right">Watched</th>
+        <th class="table-head hidden md:table-cell">Stream</th>
+      </tr>
+    </thead>
+    {% include "partials/history_rows.html" %}
+  </table>
+</div>
+{% endif %}
+{% endblock %}

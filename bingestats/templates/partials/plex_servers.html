@@ -1,0 +1,25 @@
+{% from "macros/icons.html" import icon %}
+<div class="mb-4 flex items-center gap-2 rounded-xl border border-play/30 bg-play/10 px-3 py-2 text-sm">{{ icon('check', 'h-4 w-4 text-play') }} Signed in to Plex</div>
+<form hx-post="{{ url_for('ui.setup_plex_save') }}" hx-target="#toasts" hx-swap="beforeend" class="space-y-4" x-data="{ url: '{{ (servers[0].urls[0] if servers and servers[0].urls else '') }}' }">
+  {% if servers %}
+  <div>
+    <span class="label">Choose a connection</span>
+    <div class="space-y-3">
+      {% for s in servers %}
+      <div class="rounded-xl border border-border bg-surface-2/50 p-3">
+        <div class="mb-2 text-sm font-medium">{{ s.name }}{% if not s.owned %} <span class="text-xs text-muted">(shared with you; stats need the owner's account)</span>{% endif %}</div>
+        {% for u in s.urls[:6] %}
+        <label class="flex cursor-pointer items-center gap-2 py-1 text-sm">
+          <input type="radio" name="pick" value="{{ u }}" @change="url = $el.value" {{ 'checked' if loop.first and loop.index0 == 0 and s == servers[0] }}>
+          <span class="truncate font-mono text-xs">{{ u }}</span>
+        </label>
+        {% endfor %}
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+  <div><label class="label" for="url">Server URL</label><input id="url" name="url" class="input font-mono text-xs" x-model="url" placeholder="http://192.168.1.10:32400" required></div>
+  <p class="text-xs text-muted">Use the LAN address if this box is on the same network as Plex.</p>
+  <button class="btn-primary w-full">Test and save</button>
+</form>

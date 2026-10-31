@@ -1,0 +1,9 @@
+# Front-end assets, pinned. Fetched and checksum-verified by the Docker build
+# and scripts/build-css.sh into this folder (the files themselves are
+# gitignored). No CDN is used at runtime.
+# name            version   sha256                                                            url
+htmx.min.js       2.0.4     e209dda5c8235479f3166defc7750e1dbcd5a5c1808b7792fc2e6733768fb447  https://cdn.jsdelivr.net/npm/htmx.org@2.0.4/dist/htmx.min.js
+alpine.min.js     3.14.8    b600e363d99d95444db54acbfb2deffec9ae792aa99a09229bcda078e5b55643  https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js
+# Build tool, not served
+tailwindcss-linux-x64    3.4.17  7d24f7fa191d2193b78cd5f5a42a6093e14409521908529f42d80b11fde1f1d4  https://github.com/tailwindlabs/tailwindcss/releases/download/v3.4.17/tailwindcss-linux-x64
+tailwindcss-linux-arm64  3.4.17  69b1378b8133192d7d2feb12a116fa12d035594f58db3eff215879e4ad8cf39b  https://github.com/tailwindlabs/tailwindcss/releases/download/v3.4.17/tailwindcss-linux-arm64

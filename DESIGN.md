@@ -73,7 +73,7 @@ v1 scope. Section numbers match the milestones in `SPEC.md`.
 - **One component vocabulary:** stat tile, media card, session card, chart card, data table, filter bar, badge. Build these as Jinja macros and reuse them. No page-specific one-offs.
 - **Charts are ECharts with one shared theme** (palette, fonts, tooltip style) in `static/js/charts.js`. Every chart has a loading state and an empty state.
 - **Every list page has filters in the URL query string**, so views can be bookmarked and shared.
-- **Static assets are vendored**, with exact versions in `bingestats/static/vendor/VERSIONS`. No CDN at runtime.
+- **Static assets are pinned** by version and sha256 in `bingestats/static/vendor/VERSIONS`, and fetched at build time into the image. No CDN at runtime.
 
 ## 6. Security
 

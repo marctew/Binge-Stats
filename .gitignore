@@ -12,3 +12,4 @@ config.toml
 
 # Built CSS (made by scripts/build-css.sh or the Docker build)
 bingestats/static/css/app.css
+bingestats/static/vendor/*.js

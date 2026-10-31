@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% from "macros/ui.html" import page_header %}
+{% block title %}Activity · Binge Stats{% endblock %}
+{% block content %}
+{% call page_header('Activity') %}
+<div class="flex items-center gap-2 text-xs text-muted">
+  <span class="relative flex h-2 w-2"><span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-play opacity-60"></span><span class="relative inline-flex h-2 w-2 rounded-full bg-play"></span></span>
+  Live
+</div>
+{% endcall %}
+<div id="activity"
+     hx-get="{{ url_for('ui.activity_partial') }}"
+     hx-trigger="every 3s [!document.body.dataset.hold]"
+     hx-swap="innerHTML">
+  {% include "partials/activity_body.html" %}
+</div>
+{% endblock %}

@@ -1,0 +1,31 @@
+{% extends "auth_base.html" %}
+{% from "macros/icons.html" import icon %}
+{% block title %}Connect Plex · Binge Stats{% endblock %}
+{% block card %}
+<h1 class="text-xl font-semibold">{{ 'Reconnect' if configured else 'Connect' }} your Plex server</h1>
+<p class="mt-1 text-sm text-muted">Sign in with the Plex account that owns the server. Binge Stats stores the token on this box and never sends it to your browser.</p>
+
+<div id="pin-area" class="mt-6">
+  <button class="btn w-full bg-[#e5a00d] text-black hover:bg-[#f0b330]"
+          hx-post="{{ url_for('ui.setup_plex_pin') }}" hx-target="#pin-area" hx-swap="innerHTML">
+    {{ icon('plex', 'h-4 w-4') }} Sign in with Plex
+  </button>
+</div>
+
+<div x-data="{ manual: false }" class="mt-6 border-t border-border pt-5">
+  <button type="button" class="flex w-full items-center justify-between text-sm text-muted hover:text-text" @click="manual = !manual">
+    <span>Or enter a URL and token yourself</span>
+    <span :class="manual && 'rotate-180'" class="transition">{{ icon('chevron-down', 'h-4 w-4') }}</span>
+  </button>
+  <form x-cloak x-show="manual" method="post" action="{{ url_for('ui.setup_plex_save') }}" class="mt-4 space-y-4">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div><label class="label" for="url">Server URL</label><input id="url" name="url" class="input" placeholder="http://192.168.1.10:32400" value="{{ current_url }}" required></div>
+    <div><label class="label" for="token">Plex token</label><input id="token" name="token" type="password" class="input" autocomplete="off" required></div>
+    <label class="flex items-center gap-2 text-sm text-muted"><input type="checkbox" name="verify_tls" value="1" checked class="rounded"> Verify TLS certificate (https only)</label>
+    <button class="btn-primary w-full">Test and save</button>
+  </form>
+</div>
+{% endblock %}
+{% block after %}
+{% if configured %}<a href="{{ url_for('ui.settings_page') }}" class="mt-4 text-center text-sm text-muted hover:text-text">Back to settings</a>{% endif %}
+{% endblock %}

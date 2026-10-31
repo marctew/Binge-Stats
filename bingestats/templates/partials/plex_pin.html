@@ -1,0 +1,15 @@
+{% from "macros/icons.html" import icon %}
+{% if error %}
+<div class="rounded-xl border border-danger/30 bg-danger/10 px-3 py-2 text-sm">{{ error }}</div>
+<button class="btn-ghost mt-3 w-full" hx-post="{{ url_for('ui.setup_plex_pin') }}" hx-target="#pin-area">Try again</button>
+{% else %}
+<div hx-get="{{ url_for('ui.setup_plex_pin_check', pin_id=pin.id) }}" hx-trigger="{{ 'every 2s' }}" hx-target="#pin-area" hx-swap="innerHTML">
+  {% if not waiting %}
+  <a href="{{ pin.url }}" target="_blank" rel="noopener" class="btn w-full bg-[#e5a00d] text-black hover:bg-[#f0b330]">{{ icon('plex', 'h-4 w-4') }} Open Plex to approve</a>
+  {% endif %}
+  <div class="mt-3 flex items-center justify-center gap-2 text-sm text-muted">
+    <span class="animate-spin">{{ icon('buffer', 'h-4 w-4') }}</span> Waiting for you to approve in the Plex tab…
+  </div>
+  {% if waiting %}<p class="mt-2 text-center text-xs text-faint">Closed the tab? <button class="underline" hx-post="{{ url_for('ui.setup_plex_pin') }}" hx-target="#pin-area">Start again</button></p>{% endif %}
+</div>
+{% endif %}

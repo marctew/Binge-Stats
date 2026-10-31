@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en-GB" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#090b11">
+  <title>{% block title %}Binge Stats{% endblock %}</title>
+  <link rel="icon" href="{{ url_for('static', filename='img/icon.svg') }}" type="image/svg+xml">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v={{ app_sha or app_version }}">
+  <script src="{{ url_for('static', filename='vendor/htmx.min.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/app.js') }}?v={{ app_sha or app_version }}" defer></script>
+  <script src="{{ url_for('static', filename='vendor/alpine.min.js') }}" defer></script>
+</head>
+<body class="min-h-screen" hx-headers='{"X-CSRF-Token": "{{ csrf_token() }}"}'>
+  <div class="pointer-events-none fixed inset-0 overflow-hidden">
+    <div class="absolute -left-40 -top-40 h-[32rem] w-[32rem] rounded-full bg-accent/20 blur-3xl"></div>
+    <div class="absolute -bottom-40 -right-40 h-[32rem] w-[32rem] rounded-full bg-accent-2/15 blur-3xl"></div>
+  </div>
+  <div class="relative mx-auto flex min-h-screen max-w-lg flex-col justify-center px-4 py-10">
+    <div class="mb-8 flex items-center justify-center gap-3">
+      <img src="{{ url_for('static', filename='img/icon.svg') }}" class="h-10 w-10" alt="">
+      <span class="text-2xl font-semibold tracking-tight">Binge <span class="brand-gradient">Stats</span></span>
+    </div>
+    {% if step %}
+    <ol class="mb-6 flex items-center justify-center gap-2 text-xs text-muted">
+      {% for n, label in [(1, 'Admin account'), (2, 'Connect Plex')] %}
+      <li class="flex items-center gap-2">
+        <span class="flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-semibold {{ 'bg-accent text-white' if n == step else ('bg-play/20 text-play' if n < step else 'bg-surface-2') }}">{{ '✓' if n < step else n }}</span>
+        <span class="{{ 'text-text' if n == step }}">{{ label }}</span>
+        {% if not loop.last %}<span class="mx-1 h-px w-8 bg-border"></span>{% endif %}
+      </li>
+      {% endfor %}
+    </ol>
+    {% endif %}
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for kind, msg in messages %}
+    <div class="mb-4 rounded-2xl border px-4 py-3 text-sm {{ 'border-danger/30 bg-danger/10' if kind == 'error' else 'border-play/30 bg-play/10' }}">{{ msg }}</div>
+    {% endfor %}
+    {% endwith %}
+    <div class="card p-6 shadow-2xl sm:p-8">{% block card %}{% endblock %}</div>
+    {% block after %}{% endblock %}
+  </div>
+  <div id="toasts" class="pointer-events-none fixed inset-x-0 bottom-6 z-50 flex flex-col items-center gap-2 px-4"></div>
+</body>
+</html>

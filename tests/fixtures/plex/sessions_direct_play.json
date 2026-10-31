@@ -1,0 +1,121 @@
+{
+ "MediaContainer": {
+  "size": 1,
+  "Metadata": [
+   {
+    "addedAt": 1788394528,
+    "art": "/library/metadata/62949/art/1788494594",
+    "duration": 2805040,
+    "grandparentArt": "/library/metadata/62949/art/1788494594",
+    "grandparentGuid": "plex://show/65d5016b51888eee58a94019",
+    "grandparentKey": "/library/metadata/62949",
+    "grandparentRatingKey": "62949",
+    "grandparentThumb": "/library/metadata/62949/thumb/1788494594",
+    "grandparentTitle": "The Jury: Murder Trial",
+    "guid": "plex://episode/6a86de1bbae974b8711b0a12",
+    "index": 2,
+    "key": "/library/metadata/111232",
+    "librarySectionID": "5",
+    "librarySectionTitle": "TV Programmes",
+    "parentGuid": "plex://season/6a8584003b0c5f06cd13db1e",
+    "parentIndex": 3,
+    "parentRatingKey": "111215",
+    "parentThumb": "/library/metadata/111215/thumb/1788577516",
+    "parentTitle": "Season 3",
+    "ratingKey": "111232",
+    "sessionKey": "11",
+    "thumb": "/library/metadata/111232/thumb/1789698129",
+    "title": "The Boy",
+    "type": "episode",
+    "viewOffset": 2702000,
+    "year": 2026,
+    "Media": [
+     {
+      "aspectRatio": "1.78",
+      "audioChannels": 2,
+      "audioCodec": "ac3",
+      "bitrate": 5268,
+      "container": "mkv",
+      "duration": 2805040,
+      "height": 1080,
+      "id": "150993",
+      "videoCodec": "h264",
+      "videoFrameRate": "PAL",
+      "videoProfile": "high",
+      "videoResolution": "1080",
+      "width": 1920,
+      "selected": true,
+      "Part": [
+       {
+        "container": "mkv",
+        "duration": 2805040,
+        "file": "/media/TV/The Jury/S03E02.mkv",
+        "id": "151004",
+        "key": "/library/parts/151004/1788390817/file.mkv",
+        "size": 1847197088,
+        "decision": "directplay",
+        "selected": true,
+        "Stream": [
+         {
+          "bitDepth": 8,
+          "bitrate": 4884,
+          "codec": "h264",
+          "colorPrimaries": "bt709",
+          "colorTrc": "bt709",
+          "default": true,
+          "displayTitle": "1080i (H.264)",
+          "height": 1080,
+          "id": "646035",
+          "index": 0,
+          "streamType": 1,
+          "width": 1920,
+          "location": "direct"
+         },
+         {
+          "audioChannelLayout": "stereo",
+          "bitrate": 384,
+          "channels": 2,
+          "codec": "ac3",
+          "default": true,
+          "id": "646036",
+          "index": 1,
+          "selected": true,
+          "streamType": 2,
+          "location": "direct"
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "User": {
+     "id": "1001",
+     "thumb": "https://plex.tv/users/abc/avatar",
+     "title": "alice"
+    },
+    "Player": {
+     "address": "192.168.1.50",
+     "machineIdentifier": "machine-abc123",
+     "model": "standalone",
+     "platform": "windows",
+     "platformVersion": "10.0.26200",
+     "product": "Plex for Windows",
+     "profile": "Plex Desktop",
+     "remotePublicAddress": "203.0.113.7",
+     "state": "playing",
+     "title": "Living Room PC",
+     "version": "1.115.0.426",
+     "local": true,
+     "relayed": false,
+     "secure": true,
+     "userID": 1001
+    },
+    "Session": {
+     "id": "ugzpro0u9qbnnc0he8th2aw7",
+     "bandwidth": 5539,
+     "location": "lan"
+    }
+   }
+  ]
+ }
+}
