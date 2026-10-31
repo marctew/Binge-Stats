@@ -5,7 +5,9 @@
 {% block head %}{{ chart_scripts() }}{% endblock %}
 {% block title %}{{ lib.name }} · Binge Stats{% endblock %}
 {% block content %}
-{% call page_header(lib.name, ('Synced ' ~ (lib.synced_at | relative)) if lib.synced_at else 'Not synced yet') %}{% endcall %}
+{% call page_header(lib.name, ('Synced ' ~ (lib.synced_at | relative)) if lib.synced_at else 'Not synced yet') %}
+{% if lib.type in ('movie', 'show') %}<a href="{{ url_for('insights.library_health_page', library=lib.id) }}" class="btn-ghost">Library health</a>{% endif %}
+{% endcall %}
 {% set top = {'movie': 'Films', 'show': 'Shows', 'artist': 'Artists'}.get(lib.type, 'Items') %}
 <div class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
   {{ stat_tile(top, '{:,}'.format(lib.item_count or 0), ('{:,} '.format(lib.child_count) ~ ('episodes' if lib.type == 'show' else 'tracks')) if lib.child_count else None, 'stack', 'accent') }}

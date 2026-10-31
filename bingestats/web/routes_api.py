@@ -12,7 +12,7 @@ from functools import wraps
 from flask import Blueprint, current_app, jsonify, request, session
 
 from ..plex.client import PlexError
-from ..services import activity, alerts, api_tokens, history, libraries, settings, stats
+from ..services import activity, alerts, api_tokens, binges, completion, history, insights, libraries, settings, stats
 
 bp = Blueprint("api", __name__, url_prefix="/api/v1")
 
@@ -307,3 +307,65 @@ def api_concurrent():
 def api_resolution():
     conn = _db()
     return jsonify(stats.resolution_flow(conn, stats.range_from_args(conn, request.args)))
+
+
+# -- insights ------------------------------------------------------------------------
+
+def _health_args() -> dict:
+    kind = request.args.get("type")
+    return {"library_id": _int_arg("library_id"), "kind": kind if kind in ("movie", "show") else None}
+
+
+@bp.route("/insights/transcodes")
+@require("read")
+def api_insights_transcodes():
+    conn = _db()
+    rng = stats.range_from_args(conn, request.args)
+    return jsonify({"summary": insights.transcode_summary(conn, rng),
+                    "reasons": insights.reasons(conn, rng)["items"],
+                    "by": {f: insights.transcode_by(conn, rng, f, limit=20) for f in insights.BY_FIELDS},
+                    "reencode_candidates": insights.reencode_candidates(conn, None, limit=_int_arg("limit", 50, 1, 500))})
+
+
+@bp.route("/insights/transcodes/share")
+@require("read")
+def api_transcode_share():
+    conn = _db()
+    return jsonify(insights.decision_share(conn, stats.range_from_args(conn, request.args)))
+
+
+@bp.route("/insights/transcodes/reasons")
+@require("read")
+def api_transcode_reasons():
+    conn = _db()
+    return jsonify(insights.reasons(conn, stats.range_from_args(conn, request.args)))
+
+
+@bp.route("/insights/library-health")
+@require("read")
+def api_library_health():
+    data = insights.library_health(_db(), **_health_args())
+    limit = _int_arg("limit", 200, 1, 5000)
+    return jsonify({"months": data["months"], "totals": data["totals"],
+                    **{tab: data[tab][:limit] for tab in insights.TABS}})
+
+
+@bp.route("/insights/binges")
+@require("read")
+def api_binges():
+    conn = _db()
+    rng = stats.range_from_args(conn, request.args)
+    span = {"start": rng.start, "end": rng.end}
+    user_id = _int_arg("user_id")
+    return jsonify({"totals": binges.totals(conn, **span, user_id=user_id),
+                    "longest": binges.longest(conn, **span, user_id=user_id, limit=_int_arg("limit", 20, 1, 200)),
+                    "by_show": binges.by_show(conn, **span), "leaderboard": binges.leaderboard(conn, **span)})
+
+
+@bp.route("/users/<int:user_id>/completion")
+@require("read")
+def api_user_completion(user_id: int):
+    conn = _db()
+    if libraries.get_user(conn, user_id) is None:
+        return _err("not_found", "No such user", 404)
+    return jsonify(completion.summary(conn, user_id))

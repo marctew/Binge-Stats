@@ -68,3 +68,20 @@
   {%- if st.audio_decision == 'transcode' %} <span class="text-transcode">→ {{ st.dst_audio_codec | codec }} {{ st.dst_audio_channels | channels }}</span>{% endif %}
 {%- endif -%}
 {%- endmacro %}
+
+{# Tab strip of links. items: [(href, label, active)] #}
+{% macro tabs(items) -%}
+<div class="-mx-4 mb-6 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+  <div class="inline-flex gap-1 rounded-xl border border-border bg-surface p-1 text-sm">
+    {% for href, label, active in items %}
+    <a href="{{ href }}" class="whitespace-nowrap rounded-lg px-3.5 py-1.5 transition {{ 'bg-accent/20 text-text' if active else 'text-muted hover:text-text' }}">{{ label }}</a>
+    {% endfor %}
+  </div>
+</div>
+{%- endmacro %}
+
+{% macro insights_tabs(active) -%}
+{{ tabs([(url_for('insights.binges_page'), 'Binges', active == 'binges'),
+         (url_for('insights.transcodes_page'), 'Transcodes', active == 'transcodes'),
+         (url_for('insights.library_health_page'), 'Library health', active == 'health')]) }}
+{%- endmacro %}

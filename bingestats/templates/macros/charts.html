@@ -20,11 +20,11 @@
 {# Presets + metric toggle as plain links, so every view is bookmarkable. #}
 {% macro range_picker(endpoint, current, metric=None, extra={}) -%}
 {% set presets = [('7d', '7 days'), ('30d', '30 days'), ('90d', '90 days'), ('1y', '12 months'), ('all', 'All time')] %}
-<div class="flex flex-wrap items-center gap-2">
-  <div class="inline-flex rounded-xl border border-border bg-surface p-1 text-sm">
+<div class="flex max-w-full flex-wrap items-center gap-2">
+  <div class="inline-flex max-w-full overflow-x-auto rounded-xl border border-border bg-surface p-1 text-sm">
     {% for key, label in presets %}
     <a href="{{ url_for(endpoint, range=key, metric=metric, **extra) }}"
-       class="rounded-lg px-3 py-1.5 transition {{ 'bg-accent/20 text-text' if current == key else 'text-muted hover:text-text' }}">{{ label }}</a>
+       class="whitespace-nowrap rounded-lg px-3 py-1.5 transition {{ 'bg-accent/20 text-text' if current == key else 'text-muted hover:text-text' }}">{{ label }}</a>
     {% endfor %}
   </div>
   {% if metric %}
@@ -108,6 +108,28 @@
     </ul>
   </div>
   <p class="border-t border-border px-4 py-2 text-[11px] text-faint sm:px-5">{% if geo_enabled %}IP geolocation by <a href="https://db-ip.com" class="underline">DB-IP</a>, so it's approximate: often the ISP's city, not the street.{% else %}Location lookups are turned off.{% endif %}</p>
+  {% endif %}
+</section>
+{%- endmacro %}
+
+{# "Who/what transcodes": each row's bar is its transcoded share. rows: [{name, plays, transcodes, pct}] #}
+{% macro share_list(title, rows, empty='No transcodes in this range') -%}
+<section class="card p-4 sm:p-5">
+  <h2 class="mb-3 text-sm font-semibold">{{ title }}</h2>
+  {% if rows %}
+  <ol class="space-y-2.5">
+    {% for r in rows %}
+    <li>
+      <div class="flex items-baseline justify-between gap-3 text-sm">
+        <span class="min-w-0 truncate">{{ r.name }}</span>
+        <span class="shrink-0 tabular-nums text-muted"><span class="text-text">{{ r.pct }}%</span> · {{ r.transcodes }} of {{ '{:,}'.format(r.plays) }}</span>
+      </div>
+      <div class="mt-1 h-1.5 overflow-hidden rounded-full bg-surface-2"><div class="h-full rounded-full bg-[#d95926]" style="width: {{ r.pct }}%"></div></div>
+    </li>
+    {% endfor %}
+  </ol>
+  {% else %}
+  <p class="py-6 text-center text-sm text-faint">{{ empty }}</p>
   {% endif %}
 </section>
 {%- endmacro %}

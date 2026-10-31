@@ -5,8 +5,8 @@ from flask import (Blueprint, Response, current_app, flash, redirect, render_tem
                    url_for)
 
 from ..plex.client import PlexError
-from ..services import (activity, alerts, api_tokens, geo, history, homeassistant, jobs, libraries, plex_setup,
-                        settings, stats)
+from ..services import (activity, alerts, api_tokens, binges, completion, geo, history, homeassistant, jobs,
+                        libraries, plex_setup, settings, stats)
 
 bp = Blueprint("ui", __name__)
 
@@ -389,7 +389,10 @@ def user_page(user_id: int):
                            f=history.HistoryFilter(user_id=user_id), more=bool(cursor),
                            locations=geo.locations(conn, user_id=user_id),
                            geo_enabled=settings.get(conn, "geo.enabled"),
-                           user_alerts=alerts.list_alerts(conn, include_acked=True, user_id=user_id, limit=10))
+                           user_alerts=alerts.list_alerts(conn, include_acked=True, user_id=user_id, limit=10),
+                           user_binges=binges.longest(conn, user_id=user_id, limit=5),
+                           binge_totals=binges.totals(conn, user_id=user_id), shows=completion.summary(conn, user_id),
+                           abandoned_days=settings.get(conn, "abandoned.days"))
 
 
 @bp.route("/users/<int:user_id>/stop", methods=["POST"])

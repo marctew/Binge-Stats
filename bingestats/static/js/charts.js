@@ -1,7 +1,7 @@
 // Binge Stats charts: one shared ECharts theme and a tiny component.
 //
 //   <div data-chart="bars|line|hbar|heatmap|flow" data-src="/api/v1/stats/..."
-//        data-unit="plays|hours|streams"></div>
+//        data-unit="plays|hours|streams|pct"></div>
 //
 // The element fetches its data (session cookie auth), renders, and shows an
 // empty state when there's nothing to plot. Rules follow the dataviz guidance:
@@ -49,6 +49,7 @@
 
   function fmt(v, unit) {
     if (v == null) return "–";
+    if (unit === "pct") return Math.round(v) + "%";
     if (unit === "hours") {
       if (v < 1) return Math.round(v * 60) + "m";
       return (v >= 100 ? Math.round(v) : v.toFixed(1)).toLocaleString("en-GB") + "h";
@@ -88,9 +89,9 @@
 
   function valAxis(t, unit, extra) {
     return Object.assign({
-      type: "value", minInterval: unit === "hours" ? 0 : 1,
+      type: "value", minInterval: unit === "hours" ? 0 : 1, max: unit === "pct" ? 100 : null,
       splitLine: { lineStyle: { color: t.border, width: 1, opacity: 0.6 } },
-      axisLabel: { color: t.muted, formatter: (v) => unit === "hours" ? axisNum(v) + "h" : axisNum(v) },
+      axisLabel: { color: t.muted, formatter: (v) => unit === "hours" ? axisNum(v) + "h" : unit === "pct" ? v + "%" : axisNum(v) },
     }, extra || {});
   }
 
@@ -102,7 +103,7 @@
          <span>${p.marker}${p.seriesName === "Plays" || p.seriesName === "value" ? "" : p.seriesName}</span>
          <b style="font-variant-numeric:tabular-nums">${fmt(Array.isArray(p.value) ? p.value[2] : p.value, unit)}</b></div>`).join("");
     const total = list.reduce((a, p) => a + (Number(p.value) || 0), 0);
-    const foot = list.filter((p) => p.value).length > 1
+    const foot = unit !== "pct" && list.filter((p) => p.value).length > 1
       ? `<div style="margin-top:4px;border-top:1px solid rgba(127,127,127,.25);padding-top:4px;display:flex;justify-content:space-between"><span>Total</span><b>${fmt(Math.round(total * 10) / 10, unit)}</b></div>` : "";
     return head + (rows || "<div>Nothing</div>") + foot;
   }

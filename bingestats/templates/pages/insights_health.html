@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% from "macros/ui.html" import page_header, stat_tile, insights_tabs, tabs, poster %}
+{% from "macros/media.html" import section_title %}
+{% block title %}Library health · Binge Stats{% endblock %}
+{% block content %}
+{% set q = {'library': library_id or '', 'type': kind or ''} %}
+{% call page_header('Insights', 'What nobody watches, and what it costs in disk') %}
+<form method="get" class="flex flex-wrap items-center gap-2">
+  <input type="hidden" name="tab" value="{{ tab }}">
+  <select name="library" class="input w-auto" onchange="this.form.submit()">
+    <option value="">All libraries</option>
+    {% for l in libs %}<option value="{{ l.id }}" {{ 'selected' if l.id == library_id }}>{{ l.name }}</option>{% endfor %}
+  </select>
+  <select name="type" class="input w-auto" onchange="this.form.submit()">
+    <option value="">Films and shows</option>
+    <option value="movie" {{ 'selected' if kind == 'movie' }}>Films</option>
+    <option value="show" {{ 'selected' if kind == 'show' }}>Shows</option>
+  </select>
+  <noscript><button class="btn-ghost">Filter</button></noscript>
+</form>
+{% endcall %}
+{{ insights_tabs('health') }}
+
+{% set t = data.totals %}
+<div class="card mb-6 flex flex-wrap items-center gap-x-6 gap-y-2 border-transcode/30 bg-transcode/5 p-4 sm:p-5">
+  <div class="text-lg font-semibold sm:text-xl">{{ t.stale_bytes | filesize }} in stale content across {{ '{:,}'.format(t.stale_items) }} {{ 'item' if t.stale_items == 1 else 'items' }}</div>
+  <div class="text-sm text-muted">Nothing played in {{ data.months }} months · {{ (t.stale_bytes / t.bytes * 100) | round | int if t.bytes else 0 }}% of {{ t.bytes | filesize }}</div>
+</div>
+
+<div class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+  {{ stat_tile('Stale', '{:,}'.format(t.stale_items), t.stale_bytes | filesize, 'history', 'transcode') }}
+  {{ stat_tile('Never watched', '{:,}'.format(t.never_items), t.never_bytes | filesize, 'x', 'accent') }}
+  {{ stat_tile('In the library', '{:,}'.format(t.item_count), t.bytes | filesize, 'stack', 'stream') }}
+  {{ stat_tile('Stale share', ((t.stale_bytes / t.bytes * 100) | round | int if t.bytes else 0) ~ '%', 'of the space', 'chip', 'play') }}
+</div>
+
+<div class="mt-6 flex flex-wrap items-center justify-between gap-3">
+  {{ tabs([(url_for('insights.library_health_page', tab='stale', **q), 'Stale', tab == 'stale'),
+           (url_for('insights.library_health_page', tab='never', **q), 'Never watched', tab == 'never'),
+           (url_for('insights.library_health_page', tab='cost', **q), 'GB per hour watched', tab == 'cost')]) }}
+  <a href="{{ url_for('insights.library_health_csv', tab=tab, **q) }}" class="btn-ghost mb-6">Download CSV</a>
+</div>
+<p class="-mt-3 mb-4 text-sm text-muted">
+  {% if tab == 'stale' %}Added more than {{ data.months }} months ago and not played since. Biggest first.
+  {% elif tab == 'never' %}Added more than {{ data.never_days }} days ago and never played. Biggest first.
+  {% else %}Size ÷ hours watched, all time, worst first. Never-watched items are ∞ and come first.{% endif %}
+  {% if total_rows > rows | length %}Showing {{ rows | length }} of {{ '{:,}'.format(total_rows) }}; the CSV has them all.{% endif %}
+</p>
+
+{% if rows %}
+<div class="card overflow-hidden">
+  <table class="w-full">
+    <thead class="border-b border-border bg-surface-2/40"><tr>
+      <th class="th">Title</th><th class="th text-right">Size</th>
+      <th class="th hidden sm:table-cell">Added</th>
+      <th class="th hidden md:table-cell">{{ 'Watched' if tab == 'cost' else 'Last played' }}</th>
+      {% if tab == 'cost' %}<th class="th text-right">GB per hour</th>{% endif %}
+    </tr></thead>
+    <tbody class="divide-y divide-border">
+      {% for r in rows %}
+      <tr>
+        <td class="td">
+          <a href="{{ url_for('ui.item_page', rating_key=r.rating_key) }}" class="flex items-center gap-3 hover:text-accent">
+            {{ poster(r.thumb, r.title, 'w-8', 'poster', 150) }}
+            <span class="min-w-0">
+              <span class="block truncate font-medium">{{ r.title }}</span>
+              <span class="block truncate text-xs text-muted">{{ r.year or '' }}{% if r.year %} · {% endif %}{{ r.library_name }}{% if r.type == 'show' %} · {{ r.episodes | plural('episode') }}{% endif %}</span>
+            </span>
+          </a>
+        </td>
+        <td class="td text-right tabular-nums">{{ (r.size_bytes or 0) | filesize }}</td>
+        <td class="td hidden text-sm text-muted sm:table-cell">{{ (r.newest_added or r.added_at) | localtime('%b %Y') if (r.newest_added or r.added_at) else '–' }}</td>
+        <td class="td hidden text-sm md:table-cell">
+          {% if tab == 'cost' %}{{ r.play_s | duration(True) if r.play_s else 'Never' }}
+          {% elif r.last_played %}{{ r.last_played | localtime('%d %b %Y') }} <span class="text-muted">· {{ r.last_user }}</span>
+          {% else %}<span class="text-muted">Never</span>{% endif %}
+        </td>
+        {% if tab == 'cost' %}<td class="td text-right tabular-nums">{{ '∞' if r.gb_per_hour is none else r.gb_per_hour }}</td>{% endif %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card p-6 text-center text-sm text-faint">{{ 'Nothing stale. Everything gets watched.' if tab == 'stale' else ('Everything has been watched at least once.' if tab == 'never' else 'No sizes yet: run a library sync.') }}</div>
+{% endif %}
+{% endblock %}

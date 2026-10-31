@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% from "macros/ui.html" import avatar, stat_tile, empty_state %}
-{% from "macros/media.html" import poster_card, section_title %}
+{% from "macros/media.html" import poster_card, section_title, binge_list, completion_list %}
 {% from "macros/icons.html" import icon %}
 {% from "macros/charts.html" import chart_scripts, map_scripts, chart_card, locations_card %}
 {% block head %}{{ chart_scripts() }}{{ map_scripts() }}{% endblock %}
@@ -69,6 +69,23 @@
 {{ section_title('Most watched films') }}
 <div class="grid grid-cols-3 gap-3 sm:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8">
   {% for m in user.top_movies %}{{ poster_card(m.title, m.rating_key, m.thumb, (m.year or '') ~ (' · ' if m.year else '') ~ (m.play_s | duration(True))) }}{% endfor %}
+</div>
+{% endif %}
+
+{% if user_binges or shows.in_progress or shows.finished or shows.abandoned %}
+<div class="mt-2 grid gap-6 lg:grid-cols-3">
+  <div class="lg:col-span-2">
+    {{ section_title('Longest binges', (binge_totals.binges | plural('binge')) ~ ' · ' ~ (binge_totals.episodes | plural('episode'))) }}
+    {{ binge_list(user_binges, False, 'No binges yet: ' ~ user.name ~ ' watches one episode at a time.') }}
+  </div>
+  <div>
+    {{ section_title('Watching', shows.finished | length ~ ' finished') }}
+    {{ completion_list(shows.in_progress[:6], 'Nothing on the go.') }}
+    {% if shows.abandoned %}
+    {{ section_title('Gave up on', 'no play in ' ~ abandoned_days ~ ' days') }}
+    {{ completion_list(shows.abandoned[:6]) }}
+    {% endif %}
+  </div>
 </div>
 {% endif %}
 

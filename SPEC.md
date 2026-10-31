@@ -480,30 +480,38 @@ Checked when a session starts:
 
 ## 11. Binges, completion, abandoned
 
+As built in `services/binges.py` and `services/completion.py`.
+
+- **Show identity:** a play's `grandparent_guid`, else the guid of the show with its `grandparent_rating_key` in `media_items`, else `rk:<grandparent_rating_key>`. About a quarter of the imported episode plays have no `grandparent_guid`, so the fallback matters.
 - **Binge (materialised in `binges`):**
-  - After an episode play is finalised, look at the user's previous episode play.
-  - If it is the same show (`grandparent_guid`, falling back to `grandparent_rating_key`) and `started_at - previous.stopped_at <= binge.gap_min`, extend the binge that ended with the previous play, or start a new candidate run.
-  - A run counts as a binge once it reaches `binge.min_episodes`. Grouped resumes count as one episode.
-  - `rebuild_binges` recomputes the whole table from `plays` with the same function, which has a test.
-- **Completion:** per user per show, distinct watched episodes (by guid) ÷ episodes present in `media_items` for that show. Computed on query and cached for 10 min.
-- **Abandoned:** at least one watched episode, completion below 100 %, no play of the show for `abandoned.days`, and the show still present in the library.
+  - A run is a user's episode plays in start order where each is the same show as the one before and starts within `binge.gap_min` (30) of it stopping. Movies in between don't break a run; another show's episode does.
+  - A run is a binge once it has `binge.min_episodes` (3) **distinct** episodes, so resumed parts and rewatches count once. `play_s` is the sum over the run.
+  - Incremental: when the poller records an episode play it walks back from it and replaces the binge that ended inside that run.
+  - `rebuild_binges` recomputes the table from `plays` in one transaction. It is queued after a Tautulli import, when the binge settings change in Settings, and by migration v4 on a database that already has history. A test builds 300 random plays one at a time and checks the result equals a rebuild.
+- **Completion:** per user per show still in the library: distinct watched episodes (by guid) ÷ episodes present. Specials (season 0) are left out of both sides, and only episodes still in the library count as watched, so it can't pass 100 %. Computed on query and cached for 10 min per process.
+- **Abandoned:** at least one watched episode, completion below 100 %, no play of the show for `abandoned.days`, and the show still in the library.
+- **Where it shows:** `/insights/binges` (totals, longest binges, who binges, most-binged shows; range picker, default 12 months); the user page (longest binges, shows in progress, finished count, "gave up on"); `GET /api/v1/insights/binges` and `GET /api/v1/users/{id}/completion`.
 
 ---
 
 ## 12. Insights
 
-**Transcodes page:**
-- share of plays by decision over time;
-- reasons ranked;
-- by user, by platform/product (so you can see which client causes it), by source codec/resolution;
-- **re-encode candidates:** items with ≥ 3 plays where ≥ 50 % transcoded for a file reason (`video_codec`, `hdr_tonemap`, `audio_codec`, `subtitle_burn`, `container`), ranked by transcoded play count, showing the file's codecs.
+As built in `services/insights.py`. Counts are per play (resumed parts fold into their first part).
 
-**Library health page**, with filters for library and type:
-- **Stale:** present items with no play (by guid) in `library.stale_months`, and added before that window. Shows size, added date, last played and by whom.
+**Transcodes page** (`/insights/transcodes`, default 90 days):
+- tiles: transcoded share, share of transcodes caused by the file, people affected, re-encode candidates;
+- share of plays by decision per period, stacked to 100 % (`unit = pct` in the chart component);
+- reasons ranked (a play can have several; imported plays without reasons show as "Not recorded");
+- transcoded share by person, app, device, source video codec, source audio codec and source resolution, ranked by number of transcodes;
+- **re-encode candidates** (all time): items with ≥ 3 plays where ≥ 50 % transcoded for a file reason (`video_codec`, `hdr_tonemap`, `audio_codec`, `subtitle_burn`, `container`), ranked by those transcodes, showing the file's codecs and size from `media_items` (or the last play's source details if it's gone from the library).
+
+**Library health page** (`/insights/library-health`), with filters for library and type (films, shows):
+- **Stale:** films and shows in the library with no play in `library.stale_months` and added before that window. A show counts from its newest episode, so a show with a new season isn't stale. Biggest first, with size, added date, last played and by whom.
 - **Never watched:** added more than 90 days ago with no plays ever.
-- **Storage per watched hour:** for each show (summed over episodes) and movie, `size_gb / total_play_hours`, ranked highest first. Items with no plays show "∞" and sort to the top.
-- **Totals banner:** "X TB in stale content across N items".
-- Export to CSV.
+- **GB per hour watched:** size ÷ total hours watched, all time, worst first. Never-watched items are ∞ and come first (biggest first).
+- **Totals banner:** "X TB in stale content across N items", plus its share of the library.
+- Pages show the first 100 rows; **CSV** (`/insights/library-health.csv?tab=&library=&type=`) has them all.
+- Library pages link to their health view.
 
 ---
 
@@ -615,7 +623,9 @@ Every page is a Jinja template that extends `base.html`. Pages refresh their par
 | GET | `/stats/timeseries?metric=plays\|watch_time&group=day\|week\|month&split=media_type\|user\|decision&from&to` | read |
 | GET | `/stats/top?kind=users\|shows\|movies\|platforms&from&to&limit` | read |
 | GET | `/stats/heatmap?user_id&from&to` | read |
-| GET | `/insights/transcodes`, `/insights/library-health`, `/insights/binges` | read |
+| GET | `/insights/transcodes?range`, `/insights/transcodes/share`, `/insights/transcodes/reasons` | read |
+| GET | `/insights/library-health?library_id&type&limit`, `/insights/binges?range&user_id&limit` | read |
+| GET | `/users/{id}/completion` → `{in_progress, finished, abandoned}` | read |
 | GET | `/alerts?all&user_id&limit` → `{items, unacknowledged}` | read |
 | POST | `/alerts/{id}/ack`, `/alerts/ack` (all) | write |
 | GET | `/wrapped/{user_id}/{year}` | read |

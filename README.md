@@ -4,7 +4,7 @@ Self-hosted Plex monitoring and statistics. A modern take on Tautulli: live acti
 
 See [DESIGN.md](DESIGN.md) for the decisions, [SPEC.md](SPEC.md) for the build spec, and [docs/verification.md](docs/verification.md) for what's been checked against a real server.
 
-**Status:** milestone 5 (Home Assistant over MQTT, per-user stream and transcode limits, account-sharing alerts, on top of notifications, the dashboard, graphs, locations, REST API, live ingest, history, users, libraries and the Tautulli import). Milestone 6, insights (binges, completion, transcodes, library health), is next.
+**Status:** milestone 6 (insights: binges, series completion, abandoned shows, transcode analysis with re-encode candidates, library health with CSV; on top of Home Assistant over MQTT, stream limits, account-sharing alerts, notifications, the dashboard, graphs, locations, REST API, live ingest, history, users, libraries and the Tautulli import). Milestone 7, Wrapped (a shareable year in review), is next.
 
 ## Run it
 

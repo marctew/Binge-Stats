@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% from "macros/ui.html" import page_header, stat_tile, insights_tabs, poster %}
+{% from "macros/charts.html" import chart_scripts, chart_card, range_picker, share_list %}
+{% from "macros/media.html" import section_title %}
+{% block title %}Transcodes · Binge Stats{% endblock %}
+{% block head %}{{ chart_scripts() }}{% endblock %}
+{% block content %}
+{% call page_header('Insights', rng.label) %}{{ range_picker('insights.transcodes_page', preset) }}{% endcall %}
+{{ insights_tabs('transcodes') }}
+
+<div class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+  {{ stat_tile('Transcoded', summary.pct ~ '%', '{:,} of {:,} plays'.format(summary.transcodes, summary.plays), 'bolt', 'transcode') }}
+  {{ stat_tile('Because of the file', summary.file_pct ~ '%', 'of transcodes: codec, HDR, subs', 'film', 'accent') }}
+  {{ stat_tile('People', summary.people, 'had something transcoded', 'users', 'stream') }}
+  {{ stat_tile('Re-encode candidates', candidates | length, 'all time', 'refresh', 'play') }}
+</div>
+
+<div class="mt-6 grid gap-4 lg:grid-cols-5">
+  {{ chart_card('How plays were delivered', 'bars', url_for('api.api_transcode_share', range=preset), 'pct', 'h-64', 'share of plays', 'lg:col-span-3') }}
+  {{ chart_card('Why things transcoded', 'hbar', url_for('api.api_transcode_reasons', range=preset), 'plays', 'h-64', 'a play can have several', 'lg:col-span-2', 'No transcodes in this range') }}
+</div>
+
+<div class="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+  {% for f in ('user', 'product', 'player', 'src_video_codec', 'src_audio_codec', 'src_resolution') %}
+  {{ share_list(labels[f], by[f]) }}
+  {% endfor %}
+</div>
+
+{{ section_title('Re-encode candidates', '3+ plays, at least half transcoded because of the file · all time') }}
+{% if candidates %}
+<div class="card overflow-hidden">
+  <table class="w-full">
+    <thead class="border-b border-border bg-surface-2/40"><tr>
+      <th class="th">Title</th><th class="th hidden md:table-cell">File</th>
+      <th class="th hidden lg:table-cell">Why</th><th class="th text-right">Transcoded</th>
+    </tr></thead>
+    <tbody class="divide-y divide-border">
+      {% for c in candidates %}
+      <tr>
+        <td class="td">
+          <div class="flex items-center gap-3">
+            {{ poster(c.thumb, c.title, 'w-8', 'poster', 150) }}
+            <div class="min-w-0">
+              {% if c.rating_key %}<a href="{{ url_for('ui.item_page', rating_key=c.rating_key) }}" class="block truncate font-medium hover:text-accent">{{ c.title }}</a>
+              {% else %}<div class="truncate font-medium">{{ c.title }}</div>{% endif %}
+              <div class="truncate text-xs text-muted md:hidden">{{ c.video_codec | codec }} · {{ c.audio_codec | codec }}</div>
+              {% if not c.in_library %}<div class="text-xs text-faint">no longer in the library</div>{% endif %}
+            </div>
+          </div>
+        </td>
+        <td class="td hidden text-sm md:table-cell">
+          {{ c.resolution | resolution }} {{ c.video_codec | codec }}{% if c.dynamic_range and c.dynamic_range != 'SDR' %} <span class="text-faint">{{ c.dynamic_range }}</span>{% endif %}
+          <span class="text-faint">·</span> {{ c.audio_codec | codec }} {{ c.audio_channels | channels }}
+          {% if c.container %}<span class="text-faint">· {{ c.container | upper }}</span>{% endif %}
+          {% if c.size_bytes %}<div class="text-xs text-muted">{{ c.size_bytes | filesize }}</div>{% endif %}
+        </td>
+        <td class="td hidden text-xs text-muted lg:table-cell">{{ c.reasons | join(', ') }}</td>
+        <td class="td text-right tabular-nums"><div>{{ c.file_transcodes }} of {{ c.plays }}</div><div class="text-xs text-muted">{{ c.people | plural('person', 'people') }}</div></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card p-6 text-center text-sm text-faint">Nothing keeps transcoding because of the file. Nice.</div>
+{% endif %}
+{% endblock %}

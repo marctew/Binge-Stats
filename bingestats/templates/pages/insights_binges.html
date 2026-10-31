@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% from "macros/ui.html" import page_header, stat_tile, insights_tabs, avatar, poster %}
+{% from "macros/charts.html" import range_picker %}
+{% from "macros/media.html" import binge_list, section_title %}
+{% block title %}Binges · Binge Stats{% endblock %}
+{% block content %}
+{% call page_header('Insights', rng.label) %}{{ range_picker('insights.binges_page', preset) }}{% endcall %}
+{{ insights_tabs('binges') }}
+
+<div class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+  {{ stat_tile('Binges', '{:,}'.format(totals.binges), totals.shows | plural('show'), 'tv', 'accent') }}
+  {{ stat_tile('Episodes', '{:,}'.format(totals.episodes), 'watched back to back', 'play', 'play') }}
+  {{ stat_tile('Binge time', totals.play_s | duration(True), None, 'history', 'stream') }}
+  {{ stat_tile('Longest', totals.longest | plural('episode'), 'in one sitting', 'bolt', 'transcode') }}
+</div>
+
+<div class="mt-2 grid gap-6 lg:grid-cols-3">
+  <div class="lg:col-span-2">
+    {{ section_title('Longest binges') }}
+    {{ binge_list(longest, True, 'No binges in this range.') }}
+  </div>
+  <div>
+    {{ section_title('Who binges') }}
+    {% if people %}
+    <div class="card divide-y divide-border">
+      {% for p in people %}
+      <a href="{{ url_for('ui.user_page', user_id=p.user_id) }}" class="flex items-center gap-3 px-4 py-3 transition hover:bg-surface-2/40">
+        <span class="w-4 text-right text-xs tabular-nums text-faint">{{ loop.index }}</span>
+        {{ avatar(p.user_id, p.user_name, 'h-8 w-8') }}
+        <div class="min-w-0 flex-1">
+          <div class="truncate text-sm font-medium">{{ p.user_name }}</div>
+          <div class="text-xs text-muted">{{ p.episodes }} episodes · longest {{ p.longest }}</div>
+        </div>
+        <div class="text-right"><div class="text-sm font-semibold tabular-nums">{{ p.binges }}</div><div class="text-xs text-muted">{{ p.play_s | duration(True) }}</div></div>
+      </a>
+      {% endfor %}
+    </div>
+    {% else %}<div class="card p-6 text-center text-sm text-faint">Nobody yet.</div>{% endif %}
+
+    {{ section_title('Most binged shows') }}
+    {% if shows %}
+    <div class="card divide-y divide-border">
+      {% for s in shows %}
+      {% set inner %}
+        {{ poster(s.show_thumb, s.show_title, 'w-9', 'poster', 150) }}
+        <div class="min-w-0 flex-1">
+          <div class="truncate text-sm font-medium">{{ s.show_title or 'Unknown show' }}</div>
+          <div class="text-xs text-muted">{{ s.episodes }} episodes · {{ s.people | plural('person', 'people') }}</div>
+        </div>
+        <div class="text-right"><div class="text-sm font-semibold tabular-nums">{{ s.binges }}</div><div class="text-xs text-muted">{{ 'binge' if s.binges == 1 else 'binges' }}</div></div>
+      {% endset %}
+      {% if s.show_rating_key %}<a href="{{ url_for('ui.item_page', rating_key=s.show_rating_key) }}" class="flex items-center gap-3 px-4 py-3 transition hover:bg-surface-2/40">{{ inner }}</a>
+      {% else %}<div class="flex items-center gap-3 px-4 py-3">{{ inner }}</div>{% endif %}
+      {% endfor %}
+    </div>
+    {% else %}<div class="card p-6 text-center text-sm text-faint">Nothing yet.</div>{% endif %}
+  </div>
+</div>
+{% endblock %}
