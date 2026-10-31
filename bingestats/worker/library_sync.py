@@ -10,7 +10,7 @@ from .. import db
 from ..plex.client import PlexClient, PlexError
 from ..plex.parse import (LIBRARY_TYPES, TYPE_NUMBERS, parse_home_users, parse_owner, parse_page,
                           parse_sections, parse_shared_users)
-from ..services import settings
+from ..services import jobs, settings
 from ..services.libraries import backfill_play_guids
 
 log = logging.getLogger(__name__)
@@ -73,6 +73,8 @@ def sync_libraries(conn: sqlite3.Connection, client: PlexClient, server_id: int,
 
     progress(95, "Matching history to library items")
     result["plays_matched"] = backfill_play_guids(conn)
+    if result["plays_matched"]:
+        jobs.ensure(conn, "rebuild_binges")   # show identities changed
     settings.set(conn, "library.last_sync_at", started)
     return result
 

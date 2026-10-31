@@ -250,7 +250,21 @@ def _m4(conn: sqlite3.Connection) -> None:
                      "VALUES ('rebuild_binges', '{}', 'queued', 0, strftime('%s','now'))")
 
 
-MIGRATIONS = [_m1, _m2, _m3, _m4]
+def _queue_rebuild(conn: sqlite3.Connection) -> None:
+    if not conn.execute("SELECT 1 FROM jobs WHERE kind = 'rebuild_binges' AND status = 'queued'").fetchone():
+        conn.execute("INSERT INTO jobs (kind, params, status, progress, created_at) "
+                     "VALUES ('rebuild_binges', '{}', 'queued', 0, strftime('%s','now'))")
+
+
+def _m5(conn: sqlite3.Connection) -> None:
+    """Show guids for episode plays of shows that were re-added to Plex (new
+    rating keys), found through the episode's guid. Then recount binges."""
+    from .services.libraries import backfill_play_guids
+    if backfill_play_guids(conn):
+        _queue_rebuild(conn)
+
+
+MIGRATIONS = [_m1, _m2, _m3, _m4, _m5]
 LATEST = len(MIGRATIONS)
 
 

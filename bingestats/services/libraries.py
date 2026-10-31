@@ -9,7 +9,9 @@ from . import history
 
 def backfill_play_guids(conn: sqlite3.Connection) -> int:
     """Fill gaps in plays from the library:
-    - show guid for episodes (Tautulli doesn't store it),
+    - show guid for episodes (Tautulli doesn't store it), from the show's
+      rating key, or failing that from the episode's guid: when a show is
+      re-added to Plex its rating keys change but the episode guids don't,
     - a modern plex:// guid where the play has a legacy agent guid but the
       item is still in the library under the same rating key.
     Returns the number of plays changed."""
@@ -19,6 +21,13 @@ def backfill_play_guids(conn: sqlite3.Connection) -> int:
         "WHERE grandparent_guid IS NULL AND grandparent_rating_key IS NOT NULL "
         "AND EXISTS (SELECT 1 FROM media_items mi WHERE mi.rating_key = plays.grandparent_rating_key "
         "  AND mi.guid IS NOT NULL)").rowcount
+    n += conn.execute(
+        "UPDATE plays SET grandparent_guid = (SELECT s.guid FROM media_items e "
+        "  JOIN media_items s ON s.rating_key = e.grandparent_rating_key AND s.guid IS NOT NULL "
+        "  WHERE e.guid = plays.guid AND e.type = 'episode' LIMIT 1) "
+        "WHERE media_type = 'episode' AND grandparent_guid IS NULL AND guid IS NOT NULL "
+        "AND EXISTS (SELECT 1 FROM media_items e JOIN media_items s ON s.rating_key = e.grandparent_rating_key "
+        "  AND s.guid IS NOT NULL WHERE e.guid = plays.guid AND e.type = 'episode')").rowcount
     n += conn.execute(
         "UPDATE plays SET guid = (SELECT mi.guid FROM media_items mi WHERE mi.rating_key = plays.rating_key) "
         "WHERE (guid IS NULL OR guid NOT LIKE 'plex://%') AND rating_key IS NOT NULL "

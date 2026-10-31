@@ -226,3 +226,37 @@ def test_completion_ignores_episodes_gone_from_library_and_cache(conn):
     play(conn, 1, "A", 2, T0 + 4000)
     assert completion.for_user(conn, 1, T0 + 60)[0]["watched"] == 1          # cached
     assert completion.for_user(conn, 1, T0 + completion.CACHE_S + 1)[0]["watched"] == 2
+
+
+def test_readded_show_found_through_episode_guid(conn):
+    """A show re-added to Plex gets new rating keys; plays imported before
+    that still point at the old ones. The episode guid links them back."""
+    from bingestats.services.libraries import backfill_play_guids
+    setup_users(conn, 1)
+    library(conn, "A", episodes=3)                       # show now has rating key 10
+    for i, ep in enumerate((1, 2, 3)):
+        conn.execute("INSERT INTO plays (server_id, user_id, started_at, stopped_at, play_s, media_type, guid, "
+                     "grandparent_rating_key, grandparent_title, watched) VALUES (1, 1, ?, ?, 1800, 'episode', ?, "
+                     "31543, 'Show A', 1)", (T0 + i * 2000, T0 + i * 2000 + 1800, f"plex://show/a/e{ep}"))
+    assert completion.for_user(conn, 1, T0) == []      # old rating key: can't place it
+    assert backfill_play_guids(conn) == 3
+    assert {r[0] for r in conn.execute("SELECT grandparent_guid FROM plays")} == {"plex://show/a"}
+    completion.clear_cache()
+    assert completion.for_user(conn, 1, T0)[0]["pct"] == 100
+    binges.rebuild(conn)
+    assert rows(conn)[0][1] == "plex://show/a"
+
+
+def test_migration_5_backfills_and_queues_rebuild(tmp_path, monkeypatch):
+    c = db.connect(tmp_path / "v4.db")
+    monkeypatch.setattr(db, "MIGRATIONS", db.MIGRATIONS[:4])
+    monkeypatch.setattr(db, "LATEST", 4)
+    db.migrate(c)
+    setup_users(c, 1)
+    library(c, "A", episodes=1)
+    c.execute("INSERT INTO plays (server_id, user_id, started_at, stopped_at, play_s, media_type, guid, "
+              "grandparent_rating_key) VALUES (1, 1, 1, 2, 1, 'episode', 'plex://show/a/e1', 999)")
+    monkeypatch.undo()
+    assert db.migrate(c) == db.LATEST
+    assert c.execute("SELECT grandparent_guid FROM plays").fetchone()[0] == "plex://show/a"
+    assert c.execute("SELECT COUNT(*) FROM jobs WHERE kind = 'rebuild_binges'").fetchone()[0] == 1
