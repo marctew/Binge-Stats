@@ -213,11 +213,16 @@ def gaps(conn: sqlite3.Connection, library_id: int | None = None, limit: int | N
         if not holes and not missing_seasons:
             continue
         info = shows.get(show_rk)
+        have = sum(len(seasons[s]) for s in real)
+        missing = sum(len(h["missing"]) for h in holes)
+        # How much of what you've started collecting is there. Nearly-complete shows
+        # with a stray hole come first; shows you dip into sink to the bottom.
+        complete = have / (have + missing + len(missing_seasons) * max(1, have // len(real)))
         out.append({"rating_key": show_rk, "title": info["title"] if info else f"Show {show_rk}",
                     "year": info["year"] if info else None, "thumb": info["thumb"] if info else None,
-                    "missing_seasons": missing_seasons, "holes": holes,
-                    "missing_episodes": sum(len(h["missing"]) for h in holes)})
-    out.sort(key=lambda x: (-(len(x["missing_seasons"]) * 10 + x["missing_episodes"]), x["title"] or ""))
+                    "missing_seasons": missing_seasons, "holes": holes, "missing_episodes": missing,
+                    "have_episodes": have, "complete_pct": round(complete * 100)})
+    out.sort(key=lambda x: (-x["complete_pct"], -x["have_episodes"], x["title"] or ""))
     return out[:limit] if limit else out
 
 
@@ -225,10 +230,10 @@ def to_csv(kind: str, rows: list[dict]) -> str:
     out = io.StringIO()
     w = csv.writer(out)
     if kind == "gaps":
-        w.writerow(["show", "year", "missing_seasons", "missing_episodes", "detail"])
+        w.writerow(["show", "year", "complete_pct", "missing_seasons", "missing_episodes", "detail"])
         for r in rows:
             detail = "; ".join(f"S{h['season']:02d}: {h['text']}" for h in r["holes"])
-            w.writerow([r["title"], r["year"] or "", " ".join(str(s) for s in r["missing_seasons"]),
+            w.writerow([r["title"], r["year"] or "", r["complete_pct"], " ".join(str(s) for s in r["missing_seasons"]),
                         r["missing_episodes"], detail])
         return out.getvalue()
     w.writerow(["title", "year", "type", "season", "library", "resolution", "codec", "files", "size_gb",

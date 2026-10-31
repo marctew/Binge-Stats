@@ -150,3 +150,13 @@ def test_show_titles_come_from_the_show(lib):
     lib.execute("UPDATE media_items SET grandparent_title = NULL WHERE type = 'episode'")
     assert "Holey Show" in [x["title"] for x in collection.reencode(lib)]
     assert any(x["title"] == "Holey Show" for x in collection.upgrades(lib) if x["type"] == "season")
+
+
+def test_gaps_nearly_complete_first(lib):
+    # a show you dip into: one episode each of S01 and S05
+    item(lib, 700, "show", "Dip In", library=5, size=None)
+    for s in (1, 5):
+        item(lib, 7000 + s, "episode", "E", library=5, parent=700, season=s, ep=10)
+    order = [g["title"] for g in collection.gaps(lib)]
+    assert order == ["Holey Show", "Dip In"]
+    assert collection.gaps(lib)[0]["complete_pct"] > collection.gaps(lib)[1]["complete_pct"]

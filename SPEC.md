@@ -526,6 +526,7 @@ As built in `services/insights.py`. Counts are per play (resumed parts fold into
 - **Gaps in shows:** missing episode numbers inside a season you have (1 up to the highest you have), and missing seasons between your lowest and highest.
   - Specials (season 0) are left out.
   - Date-numbered seasons and episodes (season ≥ 200, episode > 150) are left out.
+  - Sorted by how complete the show is (episodes you have ÷ what the gaps imply), so a nearly-complete show with a stray hole comes first and shows you dip into sink.
   - Plex only knows what's on disk, so episodes after your last one can't be seen. That would need Sonarr, which is v2.
 - Each list shows 100 rows; the CSV (`/insights/collection.csv?list=reencode|upgrades|gaps`) has everything. API: `GET /api/v1/insights/collection?library_id&type&limit`.
 

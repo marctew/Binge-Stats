@@ -46,7 +46,7 @@
 <p class="-mt-3 mb-4 text-sm text-muted">
   {% if lst == 'reencode' %}Files still in older codecs, biggest saving first. Shows are rolled up. The saving is an estimate: H.264 to HEVC usually lands at about half the size.
   {% elif lst == 'upgrades' %}Films, and seasons of shows, below 1080p. Most watched first, so you upgrade what gets played.
-  {% else %}Missing episodes inside seasons you have, and missing seasons between ones you have. Episodes after the last one you have don't show here: Plex only knows what's on disk.{% endif %}
+  {% else %}Missing episodes inside seasons you have, and missing seasons between ones you have, nearly-complete shows first. Episodes after the last one you have don't show here: Plex only knows what's on disk.{% endif %}
   {% if total_rows > rows | length %}Showing {{ rows | length }} of {{ '{:,}'.format(total_rows) }}; the CSV has them all.{% endif %}
 </p>
 
@@ -65,7 +65,7 @@
           {% if r.holes | length > 6 %}<div class="text-faint">and {{ r.holes | length - 6 }} more seasons</div>{% endif %}
         </div>
       </div>
-      <span class="shrink-0 text-sm tabular-nums text-muted">{{ r.missing_episodes | plural('episode') }}</span>
+      <span class="shrink-0 text-right text-sm tabular-nums text-muted"><span class="text-text">{{ r.complete_pct }}%</span> there<br><span class="text-xs">{{ r.missing_episodes | plural('episode') }} missing</span></span>
     </li>
     {% endfor %}
   </ul>
