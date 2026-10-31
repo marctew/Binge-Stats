@@ -160,3 +160,15 @@ Tested on the live site through `https://binge.marctew.co.uk` with a temporary l
 - **History:** `/me/history?user=<someone else>` still shows only the viewer's own plays.
 - **API and actions:** `/api/v1/history` returns 401. POST `/users/<someone else>/stop` returns 403.
 - **Removal:** after the login was removed, the same session's next request went to the login page.
+
+## Collection and Playback, 2026-10-31
+
+- **Data available:** codec, resolution, audio codec, container and size are filled for all 44,158 films and episodes in the library. HDR (`video_dynamic_range`) is never filled, because Plex's library listing doesn't carry it, so the page doesn't show HDR.
+- **Make-up:** 122.8 TB in total, of which 109.0 TB is in older codecs (H.264, MPEG-2, VC-1). The estimated saving from re-encoding is 54.6 TB. 836 files are below 1080p.
+  - The biggest re-encode wins are On Patrol: Live (366 files, about 973 GB), NCIS (about 633 GB) and Made in Chelsea (about 428 GB).
+  - Each list computes in 0.05–0.3 s.
+- **Upgrade candidates:** 163 rows, led by seasons of The Bill in 720p/576p/SD, which are also the most played.
+- **Gaps:** 270 shows with 1,528 missing episodes and 177 missing seasons.
+  - Sorted by raw count, the top was shows Marc dips into: Beat Bobby Flay, Buzzcocks, The Daily Show. Sorting by how complete the show is fixed that.
+  - The top is now one-episode holes: Scrubs S08 E18, Ghosts (US) S01 E06, Numb3rs S03 E02, Property Brothers S10 E01.
+- **Playback (last 30 days):** 8 live plays, 4 of which buffered (10 stalls), so 20.7 per 10 hours. That's a small sample; Tautulli's imported history has no buffering data.
