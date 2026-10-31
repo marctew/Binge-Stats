@@ -18,7 +18,7 @@
            x-data="progress({{ a.view_offset_s }}, {{ a.duration_s or 0 }}, '{{ a.state }}', {{ a.observed_at }})">
     {% if s.art %}
     <img src="{{ url_for('img.plex_image', path=s.art, w=600, shape='art') }}" alt="" aria-hidden="true"
-         class="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover opacity-25 blur-2xl">
+         class="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover opacity-25 blur-2xl" onerror="this.remove()">
     {% endif %}
     <div class="pointer-events-none absolute inset-0 bg-gradient-to-r from-surface via-surface/90 to-surface/60"></div>
 
@@ -50,9 +50,9 @@
 
         <div class="mt-3 flex min-w-0 items-center gap-2 text-sm">
           {{ avatar(a.user_id, a.user_name) }}
-          <span class="truncate font-medium">{{ a.user_name }}</span>
+          <span class="shrink-0 font-medium">{{ a.user_name }}</span>
           <span class="text-faint">·</span>
-          <span class="truncate text-muted">{{ s.player_title or s.product }}{% if s.product and s.player_title %} <span class="text-faint">({{ s.product }})</span>{% endif %}</span>
+          <span class="truncate text-muted">{{ s.player_title or s.product }}{% if s.product and s.player_title %} <span class="hidden text-faint sm:inline">({{ s.product }})</span>{% endif %}</span>
         </div>
 
         <div class="mt-3 flex flex-wrap items-center gap-1.5">

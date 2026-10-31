@@ -8,7 +8,7 @@
 {% endcall %}
 
 <form method="get" action="{{ url_for('ui.history_page') }}"
-      class="card mb-5 grid grid-cols-2 gap-3 p-4 md:grid-cols-3 xl:grid-cols-6"
+      class="card mb-5 grid grid-cols-2 gap-3 p-4 md:grid-cols-3 xl:grid-cols-7"
       hx-get="{{ url_for('ui.history_page') }}" hx-target="body" hx-push-url="true"
       hx-trigger="change, keyup changed delay:400ms from:input[name=q]">
   <div class="col-span-2 md:col-span-3 xl:col-span-2">
@@ -39,7 +39,7 @@
       {% for d in decisions %}<option value="{{ d }}" {{ 'selected' if f.decision == d }}>{{ d | decision_label }}</option>{% endfor %}
     </select>
   </div>
-  <div class="grid grid-cols-2 gap-2">
+  <div class="col-span-2 grid grid-cols-2 gap-2 md:col-span-3 xl:col-span-2">
     <div><label class="label" for="from">From</label><input id="from" type="date" name="from" value="{{ f.date_from or '' }}" class="input px-2"></div>
     <div><label class="label" for="to">To</label><input id="to" type="date" name="to" value="{{ f.date_to or '' }}" class="input px-2"></div>
   </div>
@@ -57,12 +57,12 @@
   <table class="w-full">
     <thead class="border-b border-border bg-surface-2/40">
       <tr>
-        <th class="table-head">Title</th>
-        <th class="table-head hidden md:table-cell">User</th>
-        <th class="table-head hidden lg:table-cell">Device</th>
-        <th class="table-head hidden sm:table-cell">When</th>
-        <th class="table-head text-right">Watched</th>
-        <th class="table-head hidden md:table-cell">Stream</th>
+        <th class="th">Title</th>
+        <th class="th hidden md:table-cell">User</th>
+        <th class="th hidden lg:table-cell">Device</th>
+        <th class="th hidden sm:table-cell">When</th>
+        <th class="th text-right">Watched</th>
+        <th class="th hidden md:table-cell">Stream</th>
       </tr>
     </thead>
     {% include "partials/history_rows.html" %}

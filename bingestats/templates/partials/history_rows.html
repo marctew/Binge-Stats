@@ -2,7 +2,7 @@
 {% for r in rows %}{% set p = r.play %}
 <tbody class="border-t border-border first:border-t-0" x-data="{ open: false }">
 <tr class="transition hover:bg-surface-2/40">
-  <td class="table-cell">
+  <td class="td">
     <div class="flex items-center gap-3">
       {{ poster(p.thumb, p.title, 'w-9', 'square' if p.media_type == 'track' else 'poster', 150) }}
       <div class="min-w-0">
@@ -17,25 +17,25 @@
       {% endif %}
     </div>
   </td>
-  <td class="table-cell hidden md:table-cell">
+  <td class="td hidden md:table-cell">
     <div class="flex items-center gap-2">{{ avatar(p.user_id, r.user_name) }}<span class="truncate">{{ r.user_name }}</span></div>
   </td>
-  <td class="table-cell hidden lg:table-cell">
+  <td class="td hidden lg:table-cell">
     <div class="truncate">{{ p.player_title or '–' }}</div>
     <div class="truncate text-xs text-muted">{{ p.product or p.platform or '' }}{% if p.is_local == 0 %} · remote{% endif %}</div>
   </td>
-  <td class="table-cell hidden whitespace-nowrap sm:table-cell">
+  <td class="td hidden whitespace-nowrap sm:table-cell">
     <div title="{{ p.started_at | localtime }}">{{ p.started_at | relative }}</div>
     <div class="text-xs text-muted">{{ p.started_at | localtime('%a %d %b, %H:%M') }}</div>
   </td>
-  <td class="table-cell w-32 text-right">
+  <td class="td w-32 text-right">
     <div class="tabular-nums">{{ r.total_play_s | duration(True) }}</div>
     <div class="mt-1.5 flex items-center justify-end gap-2">
       {{ progress(p.last_pct, 'w-16') }}
       <span class="w-8 text-right text-xs tabular-nums {{ 'text-play' if p.any_watched else 'text-muted' }}">{{ p.last_pct if p.last_pct is not none else '–' }}%</span>
     </div>
   </td>
-  <td class="table-cell hidden md:table-cell" title="{% for x in r.reasons %}{{ x | reason_label }}{{ ', ' if not loop.last }}{% endfor %}">
+  <td class="td hidden md:table-cell" title="{% for x in r.reasons %}{{ x | reason_label }}{{ ', ' if not loop.last }}{% endfor %}">
     {{ decision_badge(p.decision, p.hw_decode or p.hw_encode) }}
   </td>
 </tr>

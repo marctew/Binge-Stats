@@ -3,9 +3,9 @@
 
 {% macro poster(path, alt='', cls='w-24', shape='poster', w=300) -%}
 {%- set aspect = 'aspect-square' if shape == 'square' else ('aspect-video' if shape == 'art' else 'aspect-[2/3]') -%}
-<div class="{{ cls }} {{ aspect }} shrink-0 overflow-hidden rounded-lg bg-surface-2 shadow-poster ring-1 ring-white/5">
-  {%- if path %}<img src="{{ url_for('img.plex_image', path=path, w=w, shape=shape) }}" alt="{{ alt }}" loading="lazy" class="h-full w-full object-cover">
-  {%- else %}<div class="flex h-full w-full items-center justify-center text-faint">{{ icon('tv', 'h-6 w-6') }}</div>{% endif -%}
+<div class="{{ cls }} {{ aspect }} relative shrink-0 overflow-hidden rounded-lg bg-surface-2 shadow-poster ring-1 ring-white/5">
+  <div class="flex h-full w-full items-center justify-center text-faint">{{ icon('tv', 'h-1/4 w-1/4 max-h-6 max-w-6') }}</div>
+  {%- if path %}<img src="{{ url_for('img.plex_image', path=path, w=w, shape=shape) }}" alt="{{ alt }}" loading="lazy" class="absolute inset-0 h-full w-full object-cover" onerror="this.remove()">{% endif -%}
 </div>
 {%- endmacro %}
 
@@ -26,7 +26,7 @@
   <div class="flex items-start justify-between gap-3">
     <div class="min-w-0">
       <div class="text-xs font-medium uppercase tracking-wide text-muted">{{ label }}</div>
-      <div class="mt-1.5 text-2xl font-semibold tabular-nums sm:text-3xl">{{ value }}</div>
+      <div class="mt-1.5 whitespace-nowrap text-xl font-semibold tabular-nums sm:text-3xl">{{ value }}</div>
       {% if sub %}<div class="mt-1 truncate text-xs text-muted">{{ sub }}</div>{% endif %}
     </div>
     {% if icon_name %}<div class="rounded-xl bg-{{ tone }}/15 p-2 text-{{ tone }}">{{ icon(icon_name, 'h-5 w-5') }}</div>{% endif %}
