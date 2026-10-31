@@ -46,12 +46,15 @@ def download(data_dir: Path, now: float | None = None, session: requests.Session
     prev_y, prev_m = (t.tm_year, t.tm_mon - 1) if t.tm_mon > 1 else (t.tm_year - 1, 12)
     months.append(f"{prev_y}-{prev_m:02d}")
     last_err = None
-    for month in months:
+    attempts = [m for m in months for _ in range(2)]   # one retry each: the CDN occasionally drops a TLS session
+    for month in attempts:
         url = DBIP_URL.format(month=month)
         try:
             with http.get(url, stream=True, timeout=120) as r:
                 if r.status_code == 404:
                     last_err = f"{month} not published yet"
+                    if month == attempts[0]:
+                        attempts.remove(month)   # no point retrying a 404
                     continue
                 r.raise_for_status()
                 gz = target.with_suffix(".mmdb.gz.part")

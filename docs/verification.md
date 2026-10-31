@@ -65,3 +65,18 @@ Checked 2026-10-31 against Tautulli **v2.18.2**, `/opt/Tautulli/tautulli.db` on 
 - 3,822 plays had a show guid or a modern `plex://` guid filled in from the library.
 - 1,375 episode plays still have no show guid. Those shows are no longer in Plex (Desperate Housewives, Pretty Little Liars, Suits and others), or came from a library (section 2) that no longer exists. They group by show title instead.
 - 235 plays keep legacy `com.plexapp.agents.*` guids and about 230 have `local://` guids (Sport and YouTube libraries with no agent). Those match by rating key only.
+
+## Stats and geo on real data (M3), 2026-10-31
+
+- **Stats against hand SQL:**
+  - all-time plays: 4,456 group heads, matching `SUM(group_id IS NULL)`;
+  - watch time: 11,037,591 s, matching `SUM(play_s)`;
+  - the 30-day daily series sums to the 30-day summary (266);
+  - the heatmap's hours sum to total watch time (3,066 h).
+- **DB-IP Lite City:**
+  - The `.mmdb.gz` is about 60 MB and unpacks to about 127 MB. It is published monthly at `download.db-ip.com/free/dbip-city-lite-YYYY-MM.mmdb.gz`.
+  - The first download hit a one-off TLS "record layer failure" and fell back to the previous month's file. Downloads now retry once per month before falling back.
+- **Locations:**
+  - 90 distinct IPs in history. 61 are private: LAN, plus Tailscale's 100.64/10 range, which shows as "Private network or VPN". The other 29 all resolved.
+  - Most plays come from the home network (3,757). After that come VPN (431) and a handful of UK towns.
+- **DNS on LXC 406 is intermittent.** `cdn.jsdelivr.net` and GitHub release hosts failed to resolve a few times today, with 192.168.4.1 as the resolver. Builds survive it because `fetch-assets.sh` retries five times, but the resolver is worth a look.
