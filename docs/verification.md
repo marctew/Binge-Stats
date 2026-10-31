@@ -150,3 +150,13 @@ Checked 2026-10-31 against Tautulli **v2.18.2**, `/opt/Tautulli/tautulli.db` on 
   - the dashboard and the new "Get started" step both point to the Tautulli import;
   - library health and Wrapped explain themselves when there's nothing yet.
 - **Light theme:** every page checked against the same data; there are no dark-only overlays.
+
+## Viewer logins, 2026-10-31
+
+Tested on the live site through `https://binge.marctew.co.uk` with a temporary login for the owner's own Plex account (`mltew`), removed straight after.
+
+- **Sign-in:** the uppercase username `MLTEW` signed in and landed on `/me` ("Hi Marc Tew"). Nobody else's name appears on the page.
+- **Admin pages:** `/`, `/history`, `/users`, another person's user page, `/settings`, `/insights/library-health` and another person's Wrapped all redirect to `/me`.
+- **History:** `/me/history?user=<someone else>` still shows only the viewer's own plays.
+- **API and actions:** `/api/v1/history` returns 401. POST `/users/<someone else>/stop` returns 403.
+- **Removal:** after the login was removed, the same session's next request went to the login page.
