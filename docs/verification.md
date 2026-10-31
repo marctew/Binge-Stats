@@ -172,3 +172,24 @@ Tested on the live site through `https://binge.marctew.co.uk` with a temporary l
   - Sorted by raw count, the top was shows Marc dips into: Beat Bobby Flay, Buzzcocks, The Daily Show. Sorting by how complete the show is fixed that.
   - The top is now one-episode holes: Scrubs S08 E18, Ghosts (US) S01 E06, Numb3rs S03 E02, Property Brothers S10 E01.
 - **Playback (last 30 days):** 8 live plays, 4 of which buffered (10 stalls), so 20.7 per 10 hours. That's a small sample; Tautulli's imported history has no buffering data.
+
+## Sonarr, Radarr and SABnzbd, 2026-10-31
+
+API shapes were checked against the live apps before building: Sonarr 4.0.19, Radarr 6.3.0, SABnzbd 5.1.3. Connected with each app's own API key.
+
+- **First sync, no errors:**
+  - Sonarr: 2,142 series, 13,014 monitored aired episodes missing, 94 below cutoff, 109 airing in the next 8 days.
+  - Radarr: 3,833 films, 472 monitored and released but missing, 371 collections.
+  - SABnzbd: 439 days of daily totals (80.7 TB in all, since 7 Aug 2025). Its history is empty because it gets cleared, and its queue was idle.
+- **Plex external ids** after a library sync: 1,822 of 1,872 shows have a TVDB id, and 3,536 of 3,689 films have a TMDB id.
+- **Matching:**
+  - 1,808 of the 1,870 Sonarr series that have files match a Plex show by TVDB id (97 %).
+  - 3,256 of the 3,359 Radarr films that have files match a Plex film by TMDB id (97 %).
+  - The rest are mostly items whose Plex agent has no TVDB/TMDB id.
+- **Shows:** 1,009 complete and ended, 483 up to date and still airing, 623 behind.
+  - Gaps from Sonarr, nearly-complete first: Great British Railway Journeys S16 E15, Property Brothers S10 E01, Numb3rs S03 E02.
+- **Films:**
+  - 186 of 371 collections are complete. Nearly there: Hannah Swensen Mysteries 14/15, Beethoven 7/8, Jurassic Park 7/8, Scream 7/8.
+  - 45 files are below the quality cutoff.
+- **Downloads:** 3.89 TB in the last 30 days. Biggest day was 27 Sep 2026, at 2.78 TB.
+- **Speed:** each query computes in under 0.1 s. The sync takes about 20 s.
