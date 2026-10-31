@@ -49,12 +49,17 @@ def _serve(path: Path):
 
 @bp.route("/plex")
 def plex_image():
-    src = request.args.get("path", "")
-    if not PLEX_PATH.match(src):
+    return plex_image_response(request.args.get("path", ""), request.args.get("shape", "poster"),
+                               request.args.get("w"))
+
+
+def plex_image_response(src: str, shape: str, width: str | None):
+    """Resized library artwork from the disk cache or Plex. Also used by the
+    Wrapped share route, which checks the path against its own allow-list first."""
+    if not PLEX_PATH.match(src or ""):
         abort(404)
-    shape = request.args.get("shape", "poster")
     ratio = SHAPES.get(shape, 1.5)
-    w = _snap_width(request.args.get("w"))
+    w = _snap_width(width)
     h = int(w * ratio)
     cached = _cache_path(f"plex|{src}|{w}|{h}")
     if cached.exists():

@@ -9,7 +9,7 @@ import time
 from .. import db
 from ..importers import tautulli
 from ..plex.client import PlexError
-from ..services import activity, binges, geo, jobs, settings
+from ..services import activity, binges, geo, jobs, settings, wrapped
 from .library_sync import sync_libraries, sync_users
 
 log = logging.getLogger(__name__)
@@ -66,12 +66,20 @@ def run_job(conn, cfg, job: dict) -> dict:
         if settings.get(conn, "geo.enabled"):
             jobs.ensure(conn, "geo")
         jobs.ensure(conn, "rebuild_binges")
+        wrapped.clear(conn)
         return result
     if kind == "geo":
         return run_geo(conn, cfg, progress)
     if kind == "rebuild_binges":
         with db.transaction(conn):
-            return binges.rebuild(conn, progress)
+            result = binges.rebuild(conn, progress)
+            wrapped.clear(conn)   # longest binges may have changed
+        return result
+    if kind == "wrapped":
+        with db.transaction(conn):
+            result = wrapped.refresh(conn, params.get("year"), progress)
+            settings.set(conn, "wrapped.last_run_at", int(time.time()))
+        return result
 
     client = activity.plex_client(conn)
     if client is None:
@@ -116,4 +124,8 @@ def schedule_due(conn, now: float | None = None) -> list[int]:
         data_dir = Path(conn.execute("PRAGMA database_list").fetchone()[2]).parent
         if geo.pending(conn) or geo.needs_download(data_dir, now):
             queued.append(jobs.ensure(conn, "geo"))
+    # Wrapped: this year's pages, rebuilt daily.
+    if now - (settings.get(conn, "wrapped.last_run_at") or 0) >= 86400 and \
+            conn.execute("SELECT 1 FROM plays LIMIT 1").fetchone():
+        queued.append(jobs.ensure(conn, "wrapped"))
     return queued

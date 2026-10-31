@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% from "macros/ui.html" import page_header, insights_tabs, avatar, tabs %}
+{% block title %}Wrapped · Binge Stats{% endblock %}
+{% block content %}
+{% call page_header('Insights', 'A year in review for each person, ready to share') %}{% endcall %}
+{{ insights_tabs('wrapped') }}
+{% if years | length > 1 %}{% set ys = [] %}{% for y in years %}{% set _ = ys.append((url_for('wrapped.index', year=y), y, y == year)) %}{% endfor %}{{ tabs(ys) }}{% endif %}
+
+{% if people %}
+<a href="{{ url_for('wrapped.page', year=year, user_id=0) }}" class="card group relative mb-6 block overflow-hidden p-6 sm:p-8">
+  <div class="absolute inset-0 bg-gradient-to-br from-accent/30 via-transparent to-accent-2/25 opacity-80 transition group-hover:opacity-100"></div>
+  <div class="relative">
+    <div class="text-xs font-semibold uppercase tracking-[0.25em] text-accent-2">{{ year }} · Wrapped</div>
+    <div class="mt-2 text-2xl font-bold sm:text-3xl">The whole server</div>
+    <div class="mt-1 text-muted">{{ total | duration(True) }} across {{ people | length | plural('person', 'people') }} →</div>
+  </div>
+</a>
+<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+  {% for p in people %}
+  <a href="{{ url_for('wrapped.page', year=year, user_id=p.user_id) }}" class="card flex items-center gap-4 p-4 transition hover:ring-1 hover:ring-accent/50">
+    {{ avatar(p.user_id, p.name, 'h-11 w-11') }}
+    <div class="min-w-0 flex-1">
+      <div class="truncate font-semibold">{{ p.name }}</div>
+      <div class="text-sm text-muted">{{ p.play_s | duration(True) }} · {{ p.plays | plural('play') }}</div>
+    </div>
+    <span class="text-muted">→</span>
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card p-10 text-center text-muted">No plays in {{ year }} yet.</div>
+{% endif %}
+{% endblock %}

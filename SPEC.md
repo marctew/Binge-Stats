@@ -517,29 +517,33 @@ As built in `services/insights.py`. Counts are per play (resumed parts fold into
 
 ## 13. Wrapped
 
-Per user and per year, plus server-wide (`user_id = 0`). Computed by `services/wrapped.py`, cached in `wrapped_cache`, and recomputed if older than 1 day while the year is still running.
+Per user and per year, plus server-wide (`user_id = 0`). As built in `services/wrapped.py`, `web/routes_wrapped.py` and `templates/pages/wrapped.html`.
+
+**Cache:** `wrapped_cache` holds one row per user and year. The worker refreshes the running year daily (`wrapped` job, for everyone with plays that year plus the server). A past year never goes stale. Rows with an older `VERSION` of the data shape are ignored. The cache is cleared after a Tautulli import and a binge rebuild. On a miss the web process computes on the spot (well under a second) and doesn't write, so it never writes derived data.
 
 **Contents:**
-- total watch time, with a fun comparison ("that's 3.2 trips London → Sydney");
-- plays, distinct titles;
-- top 5 shows and top 5 movies with posters;
-- longest binge (show, episodes, date);
+- total watch time, with a comparison: trips London → Sydney (22 h), runs through the extended Lord of the Rings trilogy (11.4 h), or football matches;
+- plays, distinct titles, episodes, films, days with something on, and the % of plays that direct played;
+- top 5 shows and top 5 films by watch time, with posters;
+- longest binge (show, episodes, date, hours);
 - busiest day;
-- viewing heatmap (hour × weekday);
-- month-by-month bars;
-- favourite device;
-- the % of plays that direct played;
-- first and last play of the year;
-- a "you finished N shows" list (completion reached 100 % that year);
-- percentile among server users ("top 10 % of viewers on this server").
+- month-by-month bars and a weekday × hour heatmap, server-rendered as HTML and CSS so the public page needs no API or chart library;
+- favourite screen (most watch time), first and last play of the year;
+- shows finished that year: the day the last missing episode (by guid, specials left out) was first watched falls in the year;
+- rank among people with plays that year: "#2 of 3" under 10 people, "Top N %" from 10 up. The server version lists the top 5 people instead.
 
-**Page:**
-- full-bleed, scrolling sections with big type and poster backdrops;
-- works on a phone;
-- no app chrome on the public share version;
-- a print stylesheet that gives a tidy one-page summary.
+**Pages:**
+- `/wrapped`: the Wrapped tab under Insights, with a year picker, a server card and a card per person. The user page links to their latest year.
+- `/wrapped/<year>/<user_id>`: the full page with a toolbar (year switcher, copy share link, print, revoke).
+- The page is standalone: full-bleed scrolling sections with big type and poster backdrops, built for a phone.
+- The print stylesheet turns it into a light, one-page A4 summary.
 
-**Share link:** `/wrapped/s/<token>`, where the token is `itsdangerous.URLSafeSerializer(secret_key, salt=user.share_salt)` over `{"u": user_id, "y": year}`. "Revoke links" on the user page rotates `share_salt`. The public route serves only that page, plus images through a proxy that is scoped to the token.
+**Share link:** `/wrapped/s/<token>`.
+- The token is `itsdangerous.URLSafeSerializer(secret_key, salt="wrapped:" + share_salt)` over `{"u": user_id, "y": year}`. The server-wide link uses the `wrapped.server_salt` setting.
+- The link uses `ui.public_url` when it's set (e.g. the Cloudflare Tunnel hostname), else the address the admin is using.
+- The public route needs no login. It sends `noindex` and `no-referrer`, and shows no app chrome or CSRF token.
+- Images go through `/wrapped/s/<token>/img`, which serves only artwork that appears on that page.
+- **Revoke:** "Revoke links" (on the page, and "Revoke Wrapped share links" on the user page) rotates the salt. Every old link and its images then return 404, and a new link is ready straight away. Rotating a salt is an admin write from the web process, like settings.
 
 ---
 

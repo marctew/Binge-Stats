@@ -6,7 +6,7 @@ from flask import (Blueprint, Response, current_app, flash, redirect, render_tem
 
 from ..plex.client import PlexError
 from ..services import (activity, alerts, api_tokens, binges, completion, geo, history, homeassistant, jobs,
-                        libraries, plex_setup, settings, stats)
+                        libraries, plex_setup, settings, stats, wrapped)
 
 bp = Blueprint("ui", __name__)
 
@@ -223,6 +223,7 @@ EDITABLE = [
     ("binge.min_episodes", "Binge: episodes in a row to count", "number"),
     ("abandoned.days", "Show counts as abandoned after (days)", "number"),
     ("library.stale_months", "Library health: stale after (months)", "number"),
+    ("ui.public_url", "Public URL for share links (blank: the address you're using)", "text"),
     ("map.tile_url", "Map tiles URL (blank for OpenStreetMap)", "text"),
     ("map.tile_attribution", "Map tiles attribution (HTML)", "text"),
 ]
@@ -259,6 +260,11 @@ def settings_page():
                 value = request.form.get(key) == "on"
             else:
                 value = request.form.get(key, "")
+            if key == "ui.public_url" and value.strip():
+                value = value.strip().rstrip("/")
+                if not value.startswith(("http://", "https://")):
+                    errors.append(f"{label}: start it with https://")
+                    continue
             if key == "map.tile_url" and value.strip():
                 value = value.strip()
                 if not value.startswith("https://") or not all(p in value for p in ("{z}", "{x}", "{y}")):
@@ -392,7 +398,8 @@ def user_page(user_id: int):
                            user_alerts=alerts.list_alerts(conn, include_acked=True, user_id=user_id, limit=10),
                            user_binges=binges.longest(conn, user_id=user_id, limit=5),
                            binge_totals=binges.totals(conn, user_id=user_id), shows=completion.summary(conn, user_id),
-                           abandoned_days=settings.get(conn, "abandoned.days"))
+                           abandoned_days=settings.get(conn, "abandoned.days"),
+                           wrapped_year=(wrapped.years(conn, user_id) or [None])[0])
 
 
 @bp.route("/users/<int:user_id>/stop", methods=["POST"])

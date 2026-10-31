@@ -13,7 +13,7 @@ from ..services import auth as auth_svc
 bp = Blueprint("auth", __name__)
 
 # Endpoints reachable without logging in.
-PUBLIC = {"auth.login", "auth.setup_admin", "static"}
+PUBLIC = {"auth.login", "auth.setup_admin", "static", "wrapped.public_page", "wrapped.public_image"}
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 
 

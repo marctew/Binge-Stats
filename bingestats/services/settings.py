@@ -32,10 +32,13 @@ DEFAULTS: dict[str, Any] = {
     "users.last_sync_at": 0,
     "geo.enabled": True,
     "geo.last_run_at": 0,
+    "wrapped.server_salt": "",     # rotated to revoke the server-wide Wrapped links
+    "wrapped.last_run_at": 0,
     "map.tile_url": "",            # blank = OpenStreetMap's standard tiles (no key needed)
     "map.tile_attribution": "",
     "ui.timezone": "Europe/London",
     "ui.theme": "dark",
+    "ui.public_url": "",           # e.g. https://binge.example.com; share links use it when set
     "mqtt.enabled": False,
     "mqtt.host": "",
     "mqtt.port": 1883,
@@ -55,7 +58,7 @@ DEFAULTS: dict[str, Any] = {
 }
 
 # Keys never shown back in the UI or logged.
-SECRET_KEYS = {"plex.token", "plex.pending_token", "mqtt.password"}
+SECRET_KEYS = {"plex.token", "plex.pending_token", "mqtt.password", "wrapped.server_salt"}
 
 # Bounds for numeric settings edited in the UI.
 BOUNDS: dict[str, tuple[int, int]] = {

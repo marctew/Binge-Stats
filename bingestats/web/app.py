@@ -67,6 +67,7 @@ def build_app(data_dir: str | None = None, *, testing: bool = False) -> Flask:
     from .routes_api import bp as api_bp
     from .routes_img import bp as img_bp
     from .routes_insights import bp as insights_bp
+    from .routes_wrapped import bp as wrapped_bp
     from .routes_notify import bp as notify_bp
     from .routes_ui import bp as ui_bp
 
@@ -77,4 +78,5 @@ def build_app(data_dir: str | None = None, *, testing: bool = False) -> Flask:
     app.register_blueprint(api_bp)
     app.register_blueprint(notify_bp)
     app.register_blueprint(insights_bp)
+    app.register_blueprint(wrapped_bp)
     return app

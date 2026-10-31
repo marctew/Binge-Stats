@@ -83,5 +83,6 @@
 {% macro insights_tabs(active) -%}
 {{ tabs([(url_for('insights.binges_page'), 'Binges', active == 'binges'),
          (url_for('insights.transcodes_page'), 'Transcodes', active == 'transcodes'),
-         (url_for('insights.library_health_page'), 'Library health', active == 'health')]) }}
+         (url_for('insights.library_health_page'), 'Library health', active == 'health'),
+         (url_for('wrapped.index'), 'Wrapped', active == 'wrapped')]) }}
 {%- endmacro %}

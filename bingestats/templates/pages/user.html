@@ -18,7 +18,8 @@
       {% if st.first_play %} · watching since {{ st.first_play | localtime('%b %Y') }}{% endif %}
     </p>
   </div>
-  <div x-data="{ open: false }" class="relative">
+  <div x-data="{ open: false }" class="relative flex gap-2">
+    {% if wrapped_year %}<a href="{{ url_for('wrapped.page', year=wrapped_year, user_id=user.id) }}" class="btn-ghost">{{ icon('bulb', 'h-4 w-4') }} {{ wrapped_year }} Wrapped</a>{% endif %}
     <button class="btn-ghost" @click="open = !open">{{ icon('settings', 'h-4 w-4') }} Edit</button>
     <form x-cloak x-show="open" @click.outside="open = false" method="post"
           class="absolute right-0 top-12 z-20 w-80 space-y-3 rounded-2xl border border-border bg-surface p-4 shadow-2xl">
@@ -43,6 +44,10 @@
         <input id="limit_message" name="limit_message" class="input" maxlength="200" value="{{ user.limit_message or '' }}" placeholder="You've reached the stream limit on this server.">
       </div>
       <button class="btn-primary w-full">Save</button>
+      <button form="revoke-wrapped" class="btn-ghost w-full text-danger" onclick="return confirm('Stop every Wrapped share link for {{ user.name }} working?')">Revoke Wrapped share links</button>
+    </form>
+    <form id="revoke-wrapped" method="post" action="{{ url_for('wrapped.revoke', user_id=user.id) }}" class="hidden">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     </form>
   </div>
 </div>

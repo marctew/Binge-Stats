@@ -17,6 +17,7 @@ KINDS = {
     "user_sync": "Sync users",
     "geo": "Look up locations",
     "rebuild_binges": "Rebuild binges",
+    "wrapped": "Build Wrapped",
 }
 
 
