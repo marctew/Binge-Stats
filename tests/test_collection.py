@@ -160,3 +160,13 @@ def test_gaps_nearly_complete_first(lib):
     order = [g["title"] for g in collection.gaps(lib)]
     assert order == ["Holey Show", "Dip In"]
     assert collection.gaps(lib)[0]["complete_pct"] > collection.gaps(lib)[1]["complete_pct"]
+
+
+def test_one_hole_in_a_big_show_isnt_100(lib):
+    item(lib, 800, "show", "Long Show", library=5, size=None)
+    for s in range(1, 5):                         # 4 seasons x 100 episodes, one missing: 99.75 %
+        for e in range(1, 101):
+            if (s, e) != (2, 7):
+                item(lib, 80000 + s * 1000 + e, "episode", "E", library=5, parent=800, season=s, ep=e)
+    g = next(x for x in collection.gaps(lib) if x["title"] == "Long Show")
+    assert g["complete_pct"] == 99

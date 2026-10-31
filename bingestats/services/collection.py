@@ -221,7 +221,7 @@ def gaps(conn: sqlite3.Connection, library_id: int | None = None, limit: int | N
         out.append({"rating_key": show_rk, "title": info["title"] if info else f"Show {show_rk}",
                     "year": info["year"] if info else None, "thumb": info["thumb"] if info else None,
                     "missing_seasons": missing_seasons, "holes": holes, "missing_episodes": missing,
-                    "have_episodes": have, "complete_pct": round(complete * 100)})
+                    "have_episodes": have, "complete_pct": min(99, int(complete * 100))})   # never "100%" with a hole
     out.sort(key=lambda x: (-x["complete_pct"], -x["have_episodes"], x["title"] or ""))
     return out[:limit] if limit else out
 
