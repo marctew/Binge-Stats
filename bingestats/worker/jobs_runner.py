@@ -9,7 +9,7 @@ import time
 from .. import db
 from ..importers import tautulli
 from ..plex.client import PlexError
-from ..services import activity, geo, jobs, settings
+from ..services import activity, binges, geo, jobs, settings
 from .library_sync import sync_libraries, sync_users
 
 log = logging.getLogger(__name__)
@@ -65,9 +65,13 @@ def run_job(conn, cfg, job: dict) -> dict:
         result = tautulli.run(conn, params["path"], cfg.data_dir / "tmp", progress)
         if settings.get(conn, "geo.enabled"):
             jobs.ensure(conn, "geo")
+        jobs.ensure(conn, "rebuild_binges")
         return result
     if kind == "geo":
         return run_geo(conn, cfg, progress)
+    if kind == "rebuild_binges":
+        with db.transaction(conn):
+            return binges.rebuild(conn, progress)
 
     client = activity.plex_client(conn)
     if client is None:

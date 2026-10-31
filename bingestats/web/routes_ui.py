@@ -38,6 +38,25 @@ def _layout_context():
             "app_sha": current_app.config["BS_SHA"]}
 
 
+OSM_TILES = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+OSM_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+
+
+@bp.record_once
+def _register_globals(state):
+    # a global rather than a context variable, so imported macros can call it
+    state.app.jinja_env.globals["map_tiles"] = _map_tiles
+
+
+def _map_tiles() -> dict:
+    """Basemap for the location map: OpenStreetMap unless Settings names another tile URL."""
+    conn = _db()
+    url = settings.get(conn, "map.tile_url")
+    if not url:
+        return {"url": OSM_TILES, "attribution": OSM_ATTRIBUTION, "osm": True}
+    return {"url": url, "attribution": settings.get(conn, "map.tile_attribution") or OSM_ATTRIBUTION, "osm": False}
+
+
 @bp.route("/")
 def index():
     conn = _db()
@@ -200,7 +219,14 @@ EDITABLE = [
     ("ingest.watched_pct.track", "Track counts as played at (%)", "number"),
     ("ingest.group_resume_h", "Group resumed plays within (hours)", "number"),
     ("library.sync_h", "Sync libraries and users every (hours)", "number"),
+    ("binge.gap_min", "Binge: longest gap between episodes (minutes)", "number"),
+    ("binge.min_episodes", "Binge: episodes in a row to count", "number"),
+    ("abandoned.days", "Show counts as abandoned after (days)", "number"),
+    ("library.stale_months", "Library health: stale after (months)", "number"),
+    ("map.tile_url", "Map tiles URL (blank for OpenStreetMap)", "text"),
+    ("map.tile_attribution", "Map tiles attribution (HTML)", "text"),
 ]
+BINGE_KEYS = ("binge.gap_min", "binge.min_episodes")
 
 
 @bp.route("/settings/tokens", methods=["POST"])
@@ -227,11 +253,17 @@ def settings_page():
     conn = _db()
     if request.method == "POST":
         errors = []
+        before = {k: settings.get(conn, k) for k in BINGE_KEYS}
         for key, label, kind in EDITABLE:
             if kind == "bool":
                 value = request.form.get(key) == "on"
             else:
                 value = request.form.get(key, "")
+            if key == "map.tile_url" and value.strip():
+                value = value.strip()
+                if not value.startswith("https://") or not all(p in value for p in ("{z}", "{x}", "{y}")):
+                    errors.append(f"{label}: needs https:// and {{z}}, {{x}} and {{y}} placeholders")
+                    continue
             if key == "ui.timezone":
                 from zoneinfo import ZoneInfo
                 try:
@@ -243,6 +275,8 @@ def settings_page():
                 settings.set(conn, key, value)
             except (ValueError, TypeError) as e:
                 errors.append(f"{label}: {e}")
+        if any(settings.get(conn, k) != v for k, v in before.items()):
+            jobs.ensure(conn, "rebuild_binges")   # the definition changed, so recount every binge
         if errors:
             for e in errors:
                 flash(e, "error")

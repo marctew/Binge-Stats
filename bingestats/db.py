@@ -239,7 +239,18 @@ def _m3(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS alerts_open ON alerts(acknowledged, created_at)")
 
 
-MIGRATIONS = [_m1, _m2, _m3]
+def _m4(conn: sqlite3.Connection) -> None:
+    """Insights (M6): fill the binges table from existing history."""
+    conn.execute("CREATE INDEX IF NOT EXISTS binges_show ON binges(grandparent_guid)")
+    conn.execute("CREATE INDEX IF NOT EXISTS plays_user_type ON plays(user_id, media_type, started_at)")
+    has_history = conn.execute("SELECT 1 FROM plays WHERE media_type = 'episode' LIMIT 1").fetchone()
+    pending = conn.execute("SELECT 1 FROM jobs WHERE kind = 'rebuild_binges' AND status IN ('queued','running')").fetchone()
+    if has_history and not pending:
+        conn.execute("INSERT INTO jobs (kind, params, status, progress, created_at) "
+                     "VALUES ('rebuild_binges', '{}', 'queued', 0, strftime('%s','now'))")
+
+
+MIGRATIONS = [_m1, _m2, _m3, _m4]
 LATEST = len(MIGRATIONS)
 
 

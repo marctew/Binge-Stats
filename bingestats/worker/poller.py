@@ -24,7 +24,7 @@ from . import guard
 from ..plex.client import PlexClient, PlexError
 from ..plex.models import PlexSession
 from ..plex.parse import build_stream, parse_identity, parse_sessions, parse_source_media
-from ..services import settings
+from ..services import binges, settings
 
 log = logging.getLogger(__name__)
 
@@ -347,6 +347,8 @@ class Poller:
              st.dst_audio_channels, st.dst_bitrate_kbps, st.subtitle_codec, s.bandwidth_kbps, None),
         )
         play_id = cur.lastrowid
+        if s.media_type == "episode":
+            binges.on_play(self.conn, play_id)
         events.append(("play_stop", {"session": s.to_dict(), "play_id": play_id, "play_s": play_s,
                                      "percent_complete": pct, "watched": bool(watched)}))
         return play_id

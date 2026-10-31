@@ -32,6 +32,8 @@ DEFAULTS: dict[str, Any] = {
     "users.last_sync_at": 0,
     "geo.enabled": True,
     "geo.last_run_at": 0,
+    "map.tile_url": "",            # blank = OpenStreetMap's standard tiles (no key needed)
+    "map.tile_attribution": "",
     "ui.timezone": "Europe/London",
     "ui.theme": "dark",
     "mqtt.enabled": False,
@@ -68,6 +70,10 @@ BOUNDS: dict[str, tuple[int, int]] = {
     "library.recent_check_min": (2, 120),
     "notify.digest_wait_min": (0, 240),
     "mqtt.port": (1, 65535),
+    "binge.gap_min": (5, 240),
+    "binge.min_episodes": (2, 20),
+    "abandoned.days": (7, 730),
+    "library.stale_months": (1, 60),
 }
 
 

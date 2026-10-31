@@ -70,3 +70,7 @@
 .progress-track { @apply h-1.5 w-full overflow-hidden rounded-full bg-white/10; }
 [data-theme="light"] .progress-track { @apply bg-black/10; }
 .progress-fill { @apply h-full rounded-full bg-gradient-to-r from-accent to-accent-2 transition-[width] duration-1000 ease-linear; }
+
+/* OpenStreetMap tiles are light only: darken them for the dark theme. */
+.map-dark .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(0.9) contrast(0.85) saturate(0.35); }
+.map-dark.leaflet-container { background: #1a1d26; }

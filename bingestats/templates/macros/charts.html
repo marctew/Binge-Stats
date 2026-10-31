@@ -93,7 +93,7 @@
   <div class="grid md:grid-cols-5">
     {% if mapped %}
     <div class="h-64 bg-surface-2 md:col-span-3 md:h-auto md:min-h-[18rem]"
-         data-map='{{ mapped | map_points | tojson }}'></div>
+         data-map='{{ mapped | map_points | tojson }}' data-tiles='{{ map_tiles() | tojson }}'></div>
     {% endif %}
     <ul class="divide-y divide-border {{ 'md:col-span-2' if mapped else 'md:col-span-5' }}">
       {% for l in locations[:8] %}
