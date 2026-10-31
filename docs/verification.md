@@ -15,7 +15,15 @@ Checked 2026-10-31 against PMS **1.43.5.11079** (LXC 601), with a live direct-pl
 - A direct play has **no `TranscodeSession`**, and `Part.decision` is `directplay`. The video stream has `colorTrc` (`bt709`), which is what dynamic range is read from.
 - `tests/fixtures/plex/sessions_direct_play.json` is this response with names, IPs and machine ids replaced and the cast list dropped.
 
-**Not yet seen live:** a transcode, a direct stream, a subtitle burn or music. `sessions_transcode.json` and `metadata_5001.json` are synthetic, built from the PMS shape as Tautulli documents it. In a transcode, `Media`/`Part`/`Stream` describe the **output**, so the poller fetches `/library/metadata/{ratingKey}` once per session to get the source file (codec, resolution, HDR, channels). Next time something transcodes, capture it with:
+**Direct stream, seen live 2026-10-31** (episode, MKV source, DASH client):
+- `TranscodeSession` is present with `videoDecision` and `audioDecision` both `copy`, `container: mp4` and `protocol: dash`.
+- `Part.decision` is `transcode` even though nothing is re-encoded, and each `Stream` has `decision: copy`. Don't use `Part.decision` to tell a transcode apart.
+- Session `Media` describes the **output**: `container: mp4` while the file is MKV, and `videoResolution: "1080p"` with a trailing `p`, which the parser strips.
+- `throttled: true` with `speed: 0.0` once the buffer is full, so a low speed means nothing while throttled. The `transcoder_slow` rule already ignores throttled sessions.
+- `transcodeHwRequested: true` and `transcodeHwFullPipeline: false`, with no `transcodeHwDecoding` / `transcodeHwEncoding` keys at all when only copying. HW correctly reads as false.
+- The poller looked up the source once (MKV, H.264 1080p, AAC 2.0) and recorded `direct_stream` with reason `container`, as intended.
+
+**Not yet seen live:** a video transcode, a subtitle burn or music. `sessions_transcode.json` and `metadata_5001.json` are synthetic, built from the PMS shape as Tautulli documents it. In a transcode, `Media`/`Part`/`Stream` describe the **output**, so the poller fetches `/library/metadata/{ratingKey}` once per session to get the source file (codec, resolution, HDR, channels). Next time something transcodes, capture it with:
 
 ```bash
 curl -s -H 'Accept: application/json' "http://127.0.0.1:32400/status/sessions?X-Plex-Token=$TOKEN"
