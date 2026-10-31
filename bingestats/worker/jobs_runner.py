@@ -9,7 +9,7 @@ import time
 from .. import db
 from ..importers import tautulli
 from ..plex.client import PlexError
-from ..services import activity, binges, geo, jobs, settings, wrapped
+from ..services import activity, backups, binges, geo, jobs, settings, wrapped
 from .library_sync import sync_libraries, sync_users
 
 log = logging.getLogger(__name__)
@@ -75,6 +75,10 @@ def run_job(conn, cfg, job: dict) -> dict:
             result = binges.rebuild(conn, progress)
             wrapped.clear(conn)   # longest binges may have changed
         return result
+    if kind == "backup":
+        result = backups.create(cfg.db_path, cfg.data_dir, int(settings.get(conn, "backup.keep")))
+        settings.set(conn, "backup.last_run_at", int(time.time()))
+        return result
     if kind == "wrapped":
         with db.transaction(conn):
             result = wrapped.refresh(conn, params.get("year"), progress)
@@ -106,13 +110,16 @@ def run_geo(conn, cfg, progress) -> dict:
 
 
 def schedule_due(conn, now: float | None = None) -> list[int]:
-    """Queue library and user syncs when they're due. Called from the worker loop."""
+    """Queue scheduled jobs that are due. Called from the worker loop."""
     now = now or time.time()
-    if not settings.plex_configured(conn):
-        return []
-    if conn.execute("SELECT 1 FROM servers LIMIT 1").fetchone() is None:
-        return []
     queued = []
+    # Backups: nightly at 03:30 local, Plex or not.
+    if backups.nightly_due(conn, now):
+        queued.append(jobs.ensure(conn, "backup"))
+    if not settings.plex_configured(conn):
+        return queued
+    if conn.execute("SELECT 1 FROM servers LIMIT 1").fetchone() is None:
+        return queued
     every = max(1, int(settings.get(conn, "library.sync_h"))) * 3600
     if now - (settings.get(conn, "library.last_sync_at") or 0) >= every:
         queued.append(jobs.ensure(conn, "library_sync"))

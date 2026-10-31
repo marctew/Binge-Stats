@@ -140,6 +140,47 @@
   </section>
 
   <section class="card p-5 lg:col-span-3">
+    <div class="flex flex-wrap items-center justify-between gap-4">
+      <div>
+        <h2 class="font-semibold">Appearance</h2>
+        <p class="mt-1 text-sm text-muted">Light, dark, or follow your device. Wrapped pages are always dark.</p>
+      </div>
+      <div class="flex items-center gap-3">
+        <div class="w-40 [&>form]:mt-0 [&>form]:px-0">{% include "partials/theme_switch.html" %}</div>
+        <a href="{{ url_for('ui.about_page') }}" class="btn-ghost">{{ icon('info', 'h-4 w-4') }} About</a>
+      </div>
+    </div>
+  </section>
+
+  <section id="backups" class="card p-5 lg:col-span-3">
+    <div class="flex flex-wrap items-start justify-between gap-3">
+      <div>
+        <h2 class="flex items-center gap-2 font-semibold">{{ icon('download', 'h-4 w-4 text-accent') }} Backups</h2>
+        <p class="mt-1 text-sm text-muted">The database is backed up every night at 03:30 to <code class="text-text">/data/backups</code>, keeping the last {{ backup_keep }}.
+          Last backup {{ backup_last | relative if backup_last else 'not run yet' }}. A backup holds your Plex token, so keep downloads somewhere safe.</p>
+      </div>
+      <form method="post" action="{{ url_for('ui.settings_backup_now') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn-ghost">Back up now</button>
+      </form>
+    </div>
+    {% if backup_list %}
+    <ul class="mt-4 divide-y divide-border rounded-xl border border-border">
+      {% for b in backup_list %}
+      <li class="flex items-center gap-3 px-3 py-2 text-sm">
+        <span class="min-w-0 flex-1 truncate font-mono text-xs">{{ b.name }}</span>
+        <span class="hidden text-xs text-muted sm:inline">{{ b.created | relative }}</span>
+        <span class="w-20 text-right text-xs tabular-nums text-muted">{{ b.size | filesize }}</span>
+        <a href="{{ url_for('ui.settings_backup_download', name=b.name) }}" class="btn-icon" title="Download">{{ icon('download', 'h-4 w-4') }}</a>
+      </li>
+      {% endfor %}
+    </ul>
+    <p class="mt-3 text-xs text-faint">To restore: stop the containers, copy a backup over <code>/data/bingestats.db</code> (and delete any <code>-wal</code> and <code>-shm</code> files next to it), then start them again.</p>
+    {% else %}
+    <p class="mt-4 rounded-xl border border-dashed border-border p-4 text-center text-sm text-faint">No backups yet. The first runs tonight, or now if you press the button.</p>
+    {% endif %}
+  </section>
+
+  <section class="card p-5 lg:col-span-3">
     <h2 class="font-semibold">Recording</h2>
     <p class="mt-1 text-sm text-muted">Changes apply on the worker's next poll.</p>
     <form method="post" class="mt-5 grid gap-4 sm:grid-cols-2">

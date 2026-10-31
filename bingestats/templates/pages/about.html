@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% from "macros/ui.html" import page_header %}
+{% from "macros/icons.html" import icon %}
+{% block title %}About · Binge Stats{% endblock %}
+{% block content %}
+{% call page_header('About', 'Self-hosted Plex stats, a modern take on Tautulli') %}
+<a href="https://github.com/marctew/Binge-Stats" class="btn-ghost" target="_blank" rel="noopener">GitHub</a>
+{% endcall %}
+<div class="grid gap-6 lg:grid-cols-3">
+  <section class="card p-5">
+    <div class="flex items-center gap-3">
+      <img src="{{ url_for('static', filename='img/icon.svg') }}" class="h-10 w-10" alt="">
+      <div><div class="text-lg font-semibold">Binge <span class="brand-gradient">Stats</span></div>
+        <div class="text-sm text-muted">v{{ info.version }}{% if info.sha %} · {{ info.sha }}{% endif %}</div></div>
+    </div>
+    <dl class="mt-5 space-y-2 text-sm">
+      {% for k, v in [('Database schema', 'v' ~ info.schema), ('Python', info.python), ('SQLite', info.sqlite),
+                      ('Plex', (info.plex.name ~ ' · ' ~ info.plex.version) if info.plex and info.plex.version else 'Not connected yet'),
+                      ('Worker', ('running, last seen ' ~ (info.worker.heartbeat_at | relative)) if info.worker.alive else 'not running')] %}
+      <div class="flex justify-between gap-4"><dt class="text-muted">{{ k }}</dt><dd class="text-right">{{ v }}</dd></div>
+      {% endfor %}
+    </dl>
+  </section>
+  <section class="card p-5">
+    <h2 class="font-semibold">Your data</h2>
+    <dl class="mt-4 space-y-2 text-sm">
+      {% for k, v in [('Plays', '{:,}'.format(info.plays)), ('People', '{:,}'.format(info.users)), ('Library items', '{:,}'.format(info.library_items)),
+                      ('History since', (info.first_play | localtime('%-d %B %Y')) if info.first_play else '–'),
+                      ('Database', info.db_bytes | filesize), ('Image cache', info.cache_bytes | filesize), ('Backups', info.backup_bytes | filesize)] %}
+      <div class="flex justify-between gap-4"><dt class="text-muted">{{ k }}</dt><dd class="text-right tabular-nums">{{ v }}</dd></div>
+      {% endfor %}
+    </dl>
+    <p class="mt-4 text-xs text-faint">Everything lives in <code>/data</code>: the database, its backups, the image cache and <code>config.toml</code>.</p>
+  </section>
+  <section class="card p-5">
+    <h2 class="font-semibold">Built with</h2>
+    <ul class="mt-4 space-y-1.5 text-sm text-muted">
+      <li>Flask, SQLite, HTMX, Alpine.js and Tailwind CSS</li>
+      <li><a class="underline hover:text-text" href="https://echarts.apache.org" target="_blank" rel="noopener">Apache ECharts</a> for charts</li>
+      <li><a class="underline hover:text-text" href="https://leafletjs.com" target="_blank" rel="noopener">Leaflet</a> with <a class="underline hover:text-text" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> tiles</li>
+      <li>IP locations by <a class="underline hover:text-text" href="https://db-ip.com" target="_blank" rel="noopener">DB-IP</a> (CC BY 4.0)</li>
+      <li>Notifications through <a class="underline hover:text-text" href="https://github.com/caronc/apprise" target="_blank" rel="noopener">Apprise</a></li>
+      <li>Home Assistant over MQTT with paho-mqtt</li>
+    </ul>
+    <p class="mt-4 text-xs text-faint">Not affiliated with Plex Inc. Plex is a trademark of Plex Inc.</p>
+  </section>
+</div>
+{% endblock %}

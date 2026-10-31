@@ -201,7 +201,7 @@ def test_manual_plex_connection(logged_in, app_conn):
     responses.get("http://192.168.1.10:32400/status/sessions", json=load_fixture("sessions_empty.json"))
     logged_in.get("/setup/plex")
     r = logged_in.post("/setup/plex/save", {"url": "192.168.1.10", "token": "newtoken", "verify_tls": "1"})
-    assert r.status_code == 302 and r.headers["Location"].endswith("/activity")
+    assert r.status_code == 302 and r.headers["Location"].endswith("/setup/start")      # first connection: get-started step
     assert settings.get(app_conn, "plex.url") == "http://192.168.1.10:32400"
     assert settings.get(app_conn, "plex.token") == "newtoken"
 

@@ -84,3 +84,9 @@
   }
   body.wrapped { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+
+/* Categorical slots 0 and 1 for HTML bars, matching charts.js per theme. */
+.bar-0 { background-color: #3987e5; }
+.bar-1 { background-color: #d95926; }
+[data-theme="light"] .bar-0 { background-color: #2a78d6; }
+[data-theme="light"] .bar-1 { background-color: #eb6834; }

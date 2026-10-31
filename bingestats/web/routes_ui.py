@@ -2,15 +2,15 @@
 from __future__ import annotations
 
 from flask import (Blueprint, Response, current_app, flash, redirect, render_template, request,
-                   url_for)
+                   send_file, url_for)
 
 from ..plex.client import PlexError
-from ..services import (activity, alerts, api_tokens, binges, completion, geo, history, homeassistant, jobs,
+from ..services import (activity, alerts, api_tokens, backups, binges, completion, geo, history, homeassistant, jobs,
                         libraries, plex_setup, settings, stats, wrapped)
 
 bp = Blueprint("ui", __name__)
 
-SETUP_ENDPOINTS = {"ui.setup_plex", "ui.setup_plex_pin", "ui.setup_plex_pin_check", "ui.setup_plex_save",
+SETUP_ENDPOINTS = {"ui.set_theme", "ui.about_page", "ui.setup_plex", "ui.setup_plex_pin", "ui.setup_plex_pin_check", "ui.setup_plex_save",
                    "ui.settings_page", "ui.job_page", "ui.job_partial"}
 DEFAULT_IMPORT_PATH = "/data/import/tautulli.db"
 
@@ -46,6 +46,15 @@ OSM_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">Open
 def _register_globals(state):
     # a global rather than a context variable, so imported macros can call it
     state.app.jinja_env.globals["map_tiles"] = _map_tiles
+    state.app.jinja_env.globals["ui_theme"] = _ui_theme
+
+
+def _ui_theme() -> str:
+    try:
+        t = settings.get(_db(), "ui.theme")
+    except Exception:  # noqa: BLE001 - no database yet
+        return "dark"
+    return t if t in ("dark", "light", "system") else "dark"
 
 
 def _map_tiles() -> dict:
@@ -76,7 +85,8 @@ def index():
         top_shows=stats.top(conn, month, kind="shows", limit=6)["items"],
         top_movies=stats.top(conn, month, kind="movies", limit=6)["items"],
         recent=stats.recently_added(conn, 8),
-        open_alerts=alerts.list_alerts(conn, limit=5), open_alert_count=alerts.unacked_count(conn))
+        open_alerts=alerts.list_alerts(conn, limit=5), open_alert_count=alerts.unacked_count(conn),
+        no_history=conn.execute("SELECT 1 FROM plays LIMIT 1").fetchone() is None)
 
 
 @bp.route("/dashboard/now")
@@ -201,9 +211,28 @@ def setup_plex_save():
         flash(f"Couldn't connect: {e}", "error")
         return redirect(url_for("ui.setup_plex"))
     flash(f"Connected to {info['name'] or 'Plex'} ({info['version']})", "ok")
+    # first time through: the "get started" step; a reconnect goes back to Activity
+    first = not settings.get(conn, "library.last_sync_at")
+    target = url_for("ui.setup_start") if first else url_for("ui.activity")
     if request.headers.get("HX-Request"):
-        return "", 204, {"HX-Redirect": url_for("ui.activity")}
-    return redirect(url_for("ui.activity"))
+        return "", 204, {"HX-Redirect": target}
+    return redirect(target)
+
+
+@bp.route("/setup/start")
+def setup_start():
+    return render_template("pages/setup_start.html", step=3)
+
+
+@bp.route("/setup/start/progress")
+def setup_progress():
+    conn = _db()
+    srv = conn.execute("SELECT name, is_up FROM servers ORDER BY id LIMIT 1").fetchone()
+    return render_template("partials/setup_progress.html", server=srv,
+                           lib=jobs.latest(conn, "library_sync"), users=jobs.latest(conn, "user_sync"),
+                           items=conn.execute("SELECT COUNT(*) FROM media_items WHERE is_present = 1").fetchone()[0],
+                           people=conn.execute("SELECT COUNT(*) FROM users").fetchone()[0],
+                           worker=activity.worker_status(conn))
 
 
 # -- settings ----------------------------------------------------------------------
@@ -225,6 +254,7 @@ EDITABLE = [
     ("library.stale_months", "Library health: stale after (months)", "number"),
     ("ui.public_url", "Public URL for share links (blank: the address you're using)", "text"),
     ("map.tile_url", "Map tiles URL (blank for OpenStreetMap)", "text"),
+    ("backup.keep", "Backups to keep", "number"),
     ("map.tile_attribution", "Map tiles attribution (HTML)", "text"),
 ]
 BINGE_KEYS = ("binge.gap_min", "binge.min_episodes")
@@ -300,7 +330,10 @@ def _render_settings(conn, **extra):
                            server=conn.execute("SELECT * FROM servers ORDER BY id LIMIT 1").fetchone(),
                            library_sync=jobs.latest(conn, "library_sync"), user_sync=jobs.latest(conn, "user_sync"),
                            last_library_sync=settings.get(conn, "library.last_sync_at"),
-                           recent_jobs=jobs.recent(conn, 8), ha=homeassistant.view(conn))
+                           recent_jobs=jobs.recent(conn, 8), ha=homeassistant.view(conn),
+                           backup_list=backups.list_backups(current_app.config["BS_CONFIG"].data_dir),
+                           backup_keep=settings.get(conn, "backup.keep"),
+                           backup_last=settings.get(conn, "backup.last_run_at"))
 
 
 @bp.route("/settings/homeassistant", methods=["POST"])
@@ -311,6 +344,62 @@ def settings_homeassistant():
     except ValueError as e:
         flash(str(e), "error")
     return redirect(url_for("ui.settings_page") + "#homeassistant")
+
+
+@bp.route("/about")
+def about_page():
+    import platform
+    import sqlite3 as _sqlite3
+
+    from .. import db as dbmod
+    conn = _db()
+    cfg = current_app.config["BS_CONFIG"]
+
+    def size(p):
+        try:
+            if p.is_file():
+                return p.stat().st_size
+            return sum(f.stat().st_size for f in p.rglob("*") if f.is_file()) if p.exists() else 0
+        except OSError:
+            return 0
+    count = lambda sql: conn.execute(sql).fetchone()[0]  # noqa: E731
+    srv = conn.execute("SELECT name, version FROM servers ORDER BY id LIMIT 1").fetchone()
+    info = {
+        "version": current_app.config["BS_VERSION"], "sha": current_app.config["BS_SHA"],
+        "schema": dbmod.current_version(conn), "python": platform.python_version(), "sqlite": _sqlite3.sqlite_version,
+        "plex": dict(srv) if srv else None,
+        "db_bytes": size(cfg.db_path) + size(cfg.db_path.with_name(cfg.db_path.name + "-wal")),
+        "cache_bytes": size(cfg.cache_dir), "backup_bytes": size(backups.backup_dir(cfg.data_dir)),
+        "plays": count("SELECT COUNT(*) FROM plays WHERE group_id IS NULL"),
+        "users": count("SELECT COUNT(*) FROM users"),
+        "library_items": count("SELECT COUNT(*) FROM media_items WHERE is_present = 1"),
+        "first_play": count("SELECT MIN(started_at) FROM plays"),
+        "worker": activity.worker_status(conn),
+    }
+    return render_template("pages/about.html", info=info)
+
+
+@bp.route("/settings/theme", methods=["POST"])
+def set_theme():
+    theme = request.form.get("theme")
+    if theme in ("dark", "light", "system"):
+        settings.set(_db(), "ui.theme", theme)
+    nxt = request.form.get("next") or "/"
+    return redirect(nxt if nxt.startswith("/") and not nxt.startswith("//") else url_for("ui.index"))
+
+
+@bp.route("/settings/backups", methods=["POST"])
+def settings_backup_now():
+    job_id = jobs.ensure(_db(), "backup")
+    return redirect(url_for("ui.job_page", job_id=job_id))
+
+
+@bp.route("/settings/backups/<name>")
+def settings_backup_download(name: str):
+    path = backups.path_for(current_app.config["BS_CONFIG"].data_dir, name)
+    if path is None:
+        return render_template("pages/not_found.html", what="backup"), 404
+    return send_file(path, as_attachment=True, download_name=name, mimetype="application/vnd.sqlite3")
 
 
 @bp.route("/settings/sync", methods=["POST"])

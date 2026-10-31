@@ -1,0 +1,11 @@
+{%- from "macros/icons.html" import icon -%}
+<form method="post" action="{{ url_for('ui.set_theme') }}" class="mt-3 px-3">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="next" value="{{ request.full_path if request.query_string else request.path }}">
+  <div class="grid grid-cols-3 gap-1 rounded-xl border border-border bg-surface-2/40 p-1" role="radiogroup" aria-label="Theme">
+    {% for value, label, ic in [('light', 'Light', 'sun'), ('dark', 'Dark', 'moon'), ('system', 'System', 'monitor')] %}
+    <button name="theme" value="{{ value }}" title="{{ label }}" aria-label="{{ label }} theme" role="radio" aria-checked="{{ 'true' if ui_theme() == value else 'false' }}"
+            class="flex items-center justify-center rounded-lg py-1.5 transition {{ 'bg-accent/20 text-text' if ui_theme() == value else 'text-faint hover:text-text' }}">{{ icon(ic, 'h-4 w-4') }}</button>
+    {% endfor %}
+  </div>
+</form>

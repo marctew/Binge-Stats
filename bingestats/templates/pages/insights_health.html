@@ -82,6 +82,6 @@
   </table>
 </div>
 {% else %}
-<div class="card p-6 text-center text-sm text-faint">{{ 'Nothing stale. Everything gets watched.' if tab == 'stale' else ('Everything has been watched at least once.' if tab == 'never' else 'No sizes yet: run a library sync.') }}</div>
+<div class="card p-6 text-center text-sm text-faint">{{ 'No library synced yet. It fills in after the first library sync.' if not t.item_count else 'Nothing stale. Everything gets watched.' if tab == 'stale' else ('Everything has been watched at least once.' if tab == 'never' else 'No sizes yet: run a library sync.') }}</div>
 {% endif %}
 {% endblock %}

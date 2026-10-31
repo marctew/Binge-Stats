@@ -110,7 +110,7 @@ def test_cache_and_refresh_job(data):
 def test_wrapped_job_scheduled_daily_and_run(data, tmp_path):
     settings.set(data, "plex.url", "http://p")
     settings.set(data, "plex.token", "t")
-    for k in ("library.last_sync_at", "users.last_sync_at", "geo.last_run_at"):
+    for k in ("library.last_sync_at", "users.last_sync_at", "geo.last_run_at", "backup.last_run_at"):
         settings.set(data, k, 10**10)
     settings.set(data, "geo.enabled", False)
     [jid] = jobs_runner.schedule_due(data, now=10**10)

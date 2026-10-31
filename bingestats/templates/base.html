@@ -1,10 +1,10 @@
 {% from "macros/icons.html" import icon %}
 <!doctype html>
-<html lang="en-GB" data-theme="dark">
+<html lang="en-GB" data-theme="{{ 'light' if ui_theme() == 'light' else 'dark' }}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#090b11">
+  {% include "partials/theme_head.html" %}
   <title>{% block title %}Binge Stats{% endblock %}</title>
   <link rel="icon" href="{{ url_for('static', filename='img/icon.svg') }}" type="image/svg+xml">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v={{ app_sha or app_version }}">
@@ -39,7 +39,8 @@
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button class="nav-link w-full">{{ icon('logout') }}Sign out</button>
       </form>
-      <div class="mt-3 px-3 text-xs text-faint">v{{ app_version }}{% if app_sha %} · {{ app_sha }}{% endif %}</div>
+      {% include "partials/theme_switch.html" %}
+      <a href="{{ url_for('ui.about_page') }}" class="mt-3 block px-3 text-xs text-faint hover:text-muted">v{{ app_version }}{% if app_sha %} · {{ app_sha }}{% endif %} · About</a>
     </div>
   </aside>
 

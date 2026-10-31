@@ -58,7 +58,7 @@
         {% elif kind in ('shows', 'movies', 'artists') %}{{ poster(it.thumb, it.name, 'w-7', 'square' if kind == 'artists' else 'poster', 150) }}{% endif %}
         <span class="min-w-0 flex-1">
           <span class="block truncate text-sm">{{ it.name or 'Unknown' }}</span>
-          <span class="mt-1 block h-1 overflow-hidden rounded-full bg-surface-2"><span class="block h-full rounded-full bg-[#3987e5]" style="width: {{ (v / top_value * 100) | round(1) }}%"></span></span>
+          <span class="mt-1 block h-1 overflow-hidden rounded-full bg-surface-2"><span class="block h-full rounded-full bar-0" style="width: {{ (v / top_value * 100) | round(1) }}%"></span></span>
         </span>
         <span class="shrink-0 text-right text-sm tabular-nums">
           {% if metric == 'plays' %}{{ '{:,}'.format(it.plays or 0) }}{% else %}{{ it.play_s | duration(True) }}{% endif %}
@@ -124,7 +124,7 @@
         <span class="min-w-0 truncate">{{ r.name }}</span>
         <span class="shrink-0 tabular-nums text-muted"><span class="text-text">{{ r.pct }}%</span> · {{ r.transcodes }} of {{ '{:,}'.format(r.plays) }}</span>
       </div>
-      <div class="mt-1 h-1.5 overflow-hidden rounded-full bg-surface-2"><div class="h-full rounded-full bg-[#d95926]" style="width: {{ r.pct }}%"></div></div>
+      <div class="mt-1 h-1.5 overflow-hidden rounded-full bg-surface-2"><div class="h-full rounded-full bar-1" style="width: {{ r.pct }}%"></div></div>
     </li>
     {% endfor %}
   </ol>

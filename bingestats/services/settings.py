@@ -49,6 +49,7 @@ DEFAULTS: dict[str, Any] = {
     "mqtt.discovery_prefix": "homeassistant",
     "mqtt.tracked_users": [],      # user ids that get a "watching" sensor and a stop button
     "backup.keep": 7,
+    "backup.last_run_at": 0,
     "auth.proxy_header": "",
     # Written by the worker, read by the UI.
     "worker.heartbeat_at": 0,
@@ -77,6 +78,7 @@ BOUNDS: dict[str, tuple[int, int]] = {
     "binge.min_episodes": (2, 20),
     "abandoned.days": (7, 730),
     "library.stale_months": (1, 60),
+    "backup.keep": (1, 60),
 }
 
 

@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="en-GB" data-theme="dark">
+<html lang="en-GB" data-theme="{{ 'light' if ui_theme() == 'light' else 'dark' }}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#090b11">
+  {% include "partials/theme_head.html" %}
   <title>{% block title %}Binge Stats{% endblock %}</title>
   <link rel="icon" href="{{ url_for('static', filename='img/icon.svg') }}" type="image/svg+xml">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v={{ app_sha or app_version }}">
@@ -23,7 +23,7 @@
     </div>
     {% if step %}
     <ol class="mb-6 flex items-center justify-center gap-2 text-xs text-muted">
-      {% for n, label in [(1, 'Admin account'), (2, 'Connect Plex')] %}
+      {% for n, label in [(1, 'Admin account'), (2, 'Connect Plex'), (3, 'Get started')] %}
       <li class="flex items-center gap-2">
         <span class="flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-semibold {{ 'bg-accent text-white' if n == step else ('bg-play/20 text-play' if n < step else 'bg-surface-2') }}">{{ '✓' if n < step else n }}</span>
         <span class="{{ 'text-text' if n == step }}">{{ label }}</span>

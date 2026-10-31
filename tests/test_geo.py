@@ -97,6 +97,7 @@ def test_geo_job_scheduled_when_ips_pending(conn):
     settings.set(conn, "library.last_sync_at", 10**10)
     settings.set(conn, "users.last_sync_at", 10**10)
     settings.set(conn, "wrapped.last_run_at", 10**10)
+    settings.set(conn, "backup.last_run_at", 10**10)
     add_play(conn, "81.2.69.160")
     queued = jobs_runner.schedule_due(conn, now=10**10)
     assert [jobs.get(conn, j)["kind"] for j in queued] == ["geo"]

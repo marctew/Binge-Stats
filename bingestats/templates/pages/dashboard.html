@@ -14,6 +14,19 @@
   <a href="{{ url_for('ui.graphs_page') }}" class="btn-ghost">{{ icon('activity', 'h-4 w-4') }} All graphs</a>
 </div>
 
+{% if no_history %}
+<section class="card relative mb-6 overflow-hidden p-5 sm:p-6">
+  <div class="absolute inset-0 bg-gradient-to-br from-accent/15 via-transparent to-accent-2/10"></div>
+  <div class="relative flex flex-wrap items-center justify-between gap-4">
+    <div class="max-w-xl">
+      <h2 class="font-semibold">No history yet</h2>
+      <p class="mt-1 text-sm text-muted">Everything played from now on is recorded live. Coming from Tautulli? Import years of history in a couple of minutes and every page here fills in.</p>
+    </div>
+    <a href="{{ url_for('ui.import_page') }}" class="btn-primary">{{ icon('upload', 'h-4 w-4') }} Import from Tautulli</a>
+  </div>
+</section>
+{% endif %}
+
 <div hx-get="{{ url_for('ui.dashboard_now') }}" hx-trigger="every 5s [!document.body.dataset.hold]" hx-swap="innerHTML">
   {% include "partials/now_strip.html" %}
 </div>

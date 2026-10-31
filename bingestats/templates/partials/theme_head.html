@@ -1,0 +1,13 @@
+{#- Sets data-theme before first paint. "system" follows the OS and reloads when it flips, so charts redraw. -#}
+{%- set pref = ui_theme() -%}
+<meta name="theme-color" content="{{ '#f5f6fa' if pref == 'light' else '#090b11' }}">
+<script>
+(function () {
+  var pref = {{ pref | tojson }}, root = document.documentElement;
+  root.dataset.themePref = pref;
+  if (pref !== "system") { root.dataset.theme = pref; return; }
+  var mq = window.matchMedia("(prefers-color-scheme: light)");
+  root.dataset.theme = mq.matches ? "light" : "dark";
+  mq.addEventListener("change", function () { location.reload(); });
+})();
+</script>

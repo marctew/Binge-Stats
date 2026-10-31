@@ -1,0 +1,18 @@
+{% from "macros/icons.html" import icon %}
+{% macro row(done, busy, title, sub) -%}
+<li class="flex items-center gap-3 py-2.5">
+  {% if done %}<span class="flex h-6 w-6 items-center justify-center rounded-full bg-play/20 text-play">{{ icon('check', 'h-4 w-4') }}</span>
+  {% elif busy %}<span class="flex h-6 w-6 animate-spin items-center justify-center text-accent">{{ icon('buffer', 'h-5 w-5') }}</span>
+  {% else %}<span class="h-6 w-6 rounded-full border border-border"></span>{% endif %}
+  <div class="min-w-0 flex-1"><div class="text-sm font-medium">{{ title }}</div><div class="truncate text-xs text-muted">{{ sub }}</div></div>
+</li>
+{%- endmacro %}
+<ul class="divide-y divide-border">
+  {{ row(server, worker.alive and not server, 'Plex server', (server.name ~ ' is ' ~ ('up' if server.is_up else 'not answering')) if server else ('Waiting for the worker’s first poll' if worker.alive else 'The worker isn’t running: check the worker container')) }}
+  {% set lib_busy = lib and lib.status in ('queued', 'running') %}
+  {{ row(lib and lib.status == 'done', lib_busy or (server and not lib), 'Libraries',
+         ('{:,} items'.format(items)) if lib and lib.status == 'done' else ((lib.message or 'Syncing') ~ ' · ' ~ (lib.progress or 0) ~ '%') if lib_busy else ('Sync failed: ' ~ lib.message if lib and lib.status == 'failed' else 'Starts after the first poll')) }}
+  {% set users_busy = users and users.status in ('queued', 'running') %}
+  {{ row(users and users.status == 'done', users_busy or (server and not users), 'People',
+         ('{:,} people with access'.format(people)) if users and users.status == 'done' else ('Syncing' if users_busy else ('Sync failed: ' ~ users.message if users and users.status == 'failed' else 'Starts after the first poll'))) }}
+</ul>

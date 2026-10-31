@@ -48,7 +48,7 @@
 <section class="flex min-h-[80vh] flex-col items-center justify-center px-6 text-center">
   <div class="text-sm font-semibold uppercase tracking-[0.3em] text-accent">{{ w.year }} · Wrapped</div>
   <h1 class="mt-4 text-4xl font-bold sm:text-6xl">Nothing to wrap yet</h1>
-  <p class="mt-4 max-w-md text-muted">No plays recorded for {{ who }} in {{ w.year }}.</p>
+  <p class="mt-4 max-w-md text-muted">No plays recorded {{ ('for ' ~ who) if w.user_id else 'on this server' }} in {{ w.year }}.</p>
 </section>
 {% else %}
 

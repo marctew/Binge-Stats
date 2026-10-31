@@ -18,6 +18,7 @@ KINDS = {
     "geo": "Look up locations",
     "rebuild_binges": "Rebuild binges",
     "wrapped": "Build Wrapped",
+    "backup": "Back up the database",
 }
 
 

@@ -146,6 +146,7 @@ def test_unknown_job_kind(conn):
 
 
 def test_schedule_due(srv, clock):
+    settings.set(srv, "backup.last_run_at", int(clock.t))           # covered by test_backups
     assert jobs_runner.schedule_due(srv, now=clock.t) == []        # plex not configured
     settings.set(srv, "plex.url", "http://p:32400")
     settings.set(srv, "plex.token", "t")

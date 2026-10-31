@@ -1,0 +1,22 @@
+{% extends "auth_base.html" %}
+{% from "macros/icons.html" import icon %}
+{% block title %}Get started · Binge Stats{% endblock %}
+{% block card %}
+<h1 class="text-xl font-semibold">You're connected</h1>
+<p class="mt-1 text-sm text-muted">Binge Stats is reading your libraries and users now. Anything played from here on is recorded live.</p>
+<div class="mt-6" hx-get="{{ url_for('ui.setup_progress') }}" hx-trigger="load, every 2s" hx-swap="innerHTML">
+  <div class="h-24 animate-pulse rounded-xl bg-surface-2/60"></div>
+</div>
+
+<div class="mt-6 rounded-2xl border border-border bg-surface-2/40 p-4">
+  <div class="flex items-start gap-3">
+    <span class="mt-0.5 text-accent">{{ icon('upload', 'h-5 w-5') }}</span>
+    <div>
+      <div class="font-medium">Coming from Tautulli?</div>
+      <p class="mt-1 text-sm text-muted">Copy <code class="text-text">tautulli.db</code> into <code class="text-text">data/import/</code> (or mount Tautulli's folder at <code class="text-text">/import</code>) and import years of history in a couple of minutes.</p>
+      <a href="{{ url_for('ui.import_page') }}" class="btn-ghost mt-3">Import from Tautulli</a>
+    </div>
+  </div>
+</div>
+<a href="{{ url_for('ui.index') }}" class="btn-primary mt-6 w-full">Go to the dashboard</a>
+{% endblock %}
