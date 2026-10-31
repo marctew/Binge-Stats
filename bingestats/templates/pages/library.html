@@ -8,13 +8,13 @@
 <div class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
   {{ stat_tile(top, '{:,}'.format(lib.item_count or 0), ('{:,} '.format(lib.child_count) ~ ('episodes' if lib.type == 'show' else 'tracks')) if lib.child_count else None, 'stack', 'accent') }}
   {{ stat_tile('Size', (lib.total_size_bytes or 0) | filesize, None, 'chip', 'stream') }}
-  {{ stat_tile('Plays', '{:,}'.format(lib.stats.plays), lib.stats.users ~ ' people', 'play', 'play') }}
+  {{ stat_tile('Plays', '{:,}'.format(lib.stats.plays), lib.stats.users | plural('person', 'people'), 'play', 'play') }}
   {{ stat_tile('Watch time', lib.stats.play_s | duration(True), None, 'history', 'transcode') }}
 </div>
 
 {% if lib.recently_added %}
 {{ section_title('Recently added') }}
-<div class="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-6">
+<div class="grid grid-cols-3 gap-3 sm:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8">
   {% for i in lib.recently_added %}{{ poster_card(i.title, i.rating_key, i.thumb, (i.parent_title ~ ' · ' if lib.type == 'artist' and i.parent_title else '') ~ (i.added_at | relative), 'square' if lib.type == 'artist' else 'poster') }}{% endfor %}
 </div>
 {% endif %}

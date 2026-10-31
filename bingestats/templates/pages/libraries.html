@@ -33,7 +33,7 @@
         {% else %}<div><dt class="text-xs text-muted">Size</dt><dd class="font-semibold tabular-nums">{{ (l.total_size_bytes or 0) | filesize }}</dd></div>{% endif %}
         <div><dt class="text-xs text-muted">Plays (30d)</dt><dd class="font-semibold tabular-nums">{{ '{:,}'.format(l.plays_30d or 0) }}</dd></div>
       </dl>
-      <div class="mt-3 text-xs text-muted">{% if kind[2] %}{{ (l.total_size_bytes or 0) | filesize }} · {% endif %}{{ '{:,}'.format(l.plays) }} plays all time{% if l.last_played %} · last {{ l.last_played | relative }}{% endif %}</div>
+      <div class="mt-3 text-xs text-muted">{% if kind[2] %}{{ (l.total_size_bytes or 0) | filesize }} · {% endif %}{{ l.plays | plural('play') }} all time{% if l.last_played %} · last {{ l.last_played | relative }}{% endif %}</div>
     </div>
   </a>
   {% endfor %}

@@ -93,6 +93,12 @@ def channels(value) -> str:
     return {1: "Mono", 2: "Stereo", 6: "5.1", 8: "7.1"}.get(int(value), f"{value}ch")
 
 
+def plural(n, word: str, plural_word: str | None = None) -> str:
+    """'1 play', '3 plays', '1,234 plays'."""
+    n = int(n or 0)
+    return f"{n:,} {word if n == 1 else (plural_word or word + 's')}"
+
+
 def filesize(n) -> str:
     n = float(n or 0)
     for unit in ("B", "KB", "MB", "GB", "TB"):
@@ -147,7 +153,7 @@ def media_subtitle(p) -> str:
 def register(app) -> None:
     for name, fn in {
         "duration": duration, "clock": clock, "localtime": localtime, "relative": relative,
-        "resolution": resolution, "codec": codec, "channels": channels, "bandwidth": bandwidth, "filesize": filesize,
+        "resolution": resolution, "codec": codec, "channels": channels, "bandwidth": bandwidth, "filesize": filesize, "plural": plural,
         "decision_label": decision_label, "reason_label": reason_label,
         "media_title": media_title, "media_subtitle": media_subtitle,
     }.items():

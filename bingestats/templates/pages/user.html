@@ -33,18 +33,18 @@
   {{ stat_tile('Plays', '{:,}'.format(st.plays), (st.plays_30d or 0) ~ ' in the last 30 days', 'play', 'accent') }}
   {{ stat_tile('Watch time', st.play_s | duration(True), (st.play_s_30d or 0) | duration(True) ~ ' in the last 30 days', 'history', 'play') }}
   {{ stat_tile('Last played', st.last_play | relative, st.last_play | localtime('%a %d %b, %H:%M') if st.last_play else None, 'tv', 'stream') }}
-  {{ stat_tile('Transcoded', (((st.transcodes or 0) / st.plays * 100) | round | int ~ '%') if st.plays else '–', (st.transcodes or 0) ~ ' plays', 'bolt', 'transcode') }}
+  {{ stat_tile('Transcoded', (((st.transcodes or 0) / st.plays * 100) | round | int ~ '%') if st.plays else '–', st.transcodes | plural('play'), 'bolt', 'transcode') }}
 </div>
 
 {% if user.top_shows %}
 {{ section_title('Most watched shows') }}
-<div class="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-6">
-  {% for s in user.top_shows %}{{ poster_card(s.title, s.rating_key, s.thumb, (s.play_s | duration(True)) ~ ' · ' ~ s.plays ~ ' plays') }}{% endfor %}
+<div class="grid grid-cols-3 gap-3 sm:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8">
+  {% for s in user.top_shows %}{{ poster_card(s.title, s.rating_key, s.thumb, (s.play_s | duration(True)) ~ ' · ' ~ (s.plays | plural('play'))) }}{% endfor %}
 </div>
 {% endif %}
 {% if user.top_movies %}
 {{ section_title('Most watched films') }}
-<div class="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-6">
+<div class="grid grid-cols-3 gap-3 sm:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8">
   {% for m in user.top_movies %}{{ poster_card(m.title, m.rating_key, m.thumb, (m.year or '') ~ (' · ' if m.year else '') ~ (m.play_s | duration(True))) }}{% endfor %}
 </div>
 {% endif %}
@@ -56,10 +56,10 @@
     <div class="card overflow-hidden">
       <table class="w-full">
         <thead class="border-b border-border bg-surface-2/40"><tr>
-          <th class="th">Title</th><th class="th hidden md:table-cell">User</th><th class="th hidden lg:table-cell">Device</th>
+          <th class="th">Title</th>
           <th class="th hidden sm:table-cell">When</th><th class="th text-right">Watched</th><th class="th hidden md:table-cell">Stream</th>
         </tr></thead>
-        {% include "partials/history_rows.html" %}
+        {% with compact = true %}{% include "partials/history_rows.html" %}{% endwith %}
       </table>
     </div>
     {% if more %}<a href="{{ url_for('ui.history_page', user=user.id) }}" class="btn-ghost mt-3">All of {{ user.name }}'s history</a>{% endif %}
@@ -76,7 +76,7 @@
         <span class="text-faint">{{ icon('device', 'h-5 w-5') }}</span>
         <div class="min-w-0 flex-1"><div class="truncate text-sm font-medium">{{ d.player_title or 'Unknown' }}</div>
           <div class="truncate text-xs text-muted">{{ d.product or d.platform or '' }}</div></div>
-        <div class="text-right text-xs text-muted"><div class="tabular-nums">{{ d.plays }} plays</div><div>{{ d.last_used | relative }}</div></div>
+        <div class="text-right text-xs text-muted"><div class="tabular-nums">{{ d.plays | plural('play') }}</div><div>{{ d.last_used | relative }}</div></div>
       </div>
       {% endfor %}
     </div>
