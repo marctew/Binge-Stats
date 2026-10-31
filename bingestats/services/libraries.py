@@ -12,6 +12,10 @@ def backfill_play_guids(conn: sqlite3.Connection) -> int:
     - show guid for episodes (Tautulli doesn't store it), from the show's
       rating key, or failing that from the episode's guid: when a show is
       re-added to Plex its rating keys change but the episode guids don't,
+      and last from the show title when exactly one show in the library has
+      it (plays from before Plex's agent change carry legacy guids),
+    - a modern episode guid from show + season + episode number, for the same
+      legacy-guid plays,
     - a modern plex:// guid where the play has a legacy agent guid but the
       item is still in the library under the same rating key.
     Returns the number of plays changed."""
@@ -28,6 +32,22 @@ def backfill_play_guids(conn: sqlite3.Connection) -> int:
         "WHERE media_type = 'episode' AND grandparent_guid IS NULL AND guid IS NOT NULL "
         "AND EXISTS (SELECT 1 FROM media_items e JOIN media_items s ON s.rating_key = e.grandparent_rating_key "
         "  AND s.guid IS NOT NULL WHERE e.guid = plays.guid AND e.type = 'episode')").rowcount
+    n += conn.execute(
+        "UPDATE plays SET grandparent_guid = (SELECT s.guid FROM media_items s WHERE s.type = 'show' "
+        "  AND s.is_present = 1 AND s.guid IS NOT NULL AND lower(s.title) = lower(plays.grandparent_title)) "
+        "WHERE media_type = 'episode' AND grandparent_guid IS NULL AND grandparent_title IS NOT NULL "
+        "AND (SELECT COUNT(*) FROM media_items s WHERE s.type = 'show' AND s.is_present = 1 AND s.guid IS NOT NULL "
+        "  AND lower(s.title) = lower(plays.grandparent_title)) = 1").rowcount
+    n += conn.execute(
+        "UPDATE plays SET guid = (SELECT e.guid FROM media_items e JOIN media_items s "
+        "  ON s.rating_key = e.grandparent_rating_key AND s.guid = plays.grandparent_guid "
+        "  WHERE e.type = 'episode' AND e.season_index = plays.season_index "
+        "  AND e.episode_index = plays.episode_index AND e.guid LIKE 'plex://%' LIMIT 1) "
+        "WHERE media_type = 'episode' AND (guid IS NULL OR guid NOT LIKE 'plex://%') "
+        "AND grandparent_guid IS NOT NULL AND season_index IS NOT NULL AND episode_index IS NOT NULL "
+        "AND EXISTS (SELECT 1 FROM media_items e JOIN media_items s ON s.rating_key = e.grandparent_rating_key "
+        "  AND s.guid = plays.grandparent_guid WHERE e.type = 'episode' AND e.season_index = plays.season_index "
+        "  AND e.episode_index = plays.episode_index AND e.guid LIKE 'plex://%')").rowcount
     n += conn.execute(
         "UPDATE plays SET guid = (SELECT mi.guid FROM media_items mi WHERE mi.rating_key = plays.rating_key) "
         "WHERE (guid IS NULL OR guid NOT LIKE 'plex://%') AND rating_key IS NOT NULL "

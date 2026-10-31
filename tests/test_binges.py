@@ -260,3 +260,25 @@ def test_migration_5_backfills_and_queues_rebuild(tmp_path, monkeypatch):
     assert db.migrate(c) == db.LATEST
     assert c.execute("SELECT grandparent_guid FROM plays").fetchone()[0] == "plex://show/a"
     assert c.execute("SELECT COUNT(*) FROM jobs WHERE kind = 'rebuild_binges'").fetchone()[0] == 1
+
+
+def test_legacy_agent_plays_matched_by_title_and_episode_number(conn):
+    from bingestats.services.libraries import backfill_play_guids
+    setup_users(conn, 1)
+    library(conn, "A", episodes=2)
+    conn.execute("INSERT INTO media_items (rating_key, server_id, type, guid, title) VALUES "
+                 "(60, 1, 'show', 'plex://show/dup1', 'Twin'), (61, 1, 'show', 'plex://show/dup2', 'twin')")
+    for title, ep in (("show a", 1), ("Show A", 2), ("Twin", 1)):
+        conn.execute("INSERT INTO plays (server_id, user_id, started_at, stopped_at, play_s, media_type, guid, "
+                     "grandparent_rating_key, grandparent_title, season_index, episode_index, watched) VALUES "
+                     "(1, 1, 1, 2, 1, 'episode', ?, 31543, ?, 1, ?, 1)",
+                     (f"com.plexapp.agents.thetvdb://73800/1/{ep}?lang=en", title, ep))
+    backfill_play_guids(conn)
+    got = conn.execute("SELECT grandparent_title, grandparent_guid, guid FROM plays ORDER BY id").fetchall()
+    assert [tuple(r) for r in got] == [
+        ("show a", "plex://show/a", "plex://show/a/e1"),
+        ("Show A", "plex://show/a", "plex://show/a/e2"),
+        ("Twin", None, "com.plexapp.agents.thetvdb://73800/1/1?lang=en"),   # two shows called that: left alone
+    ]
+    completion.clear_cache()
+    assert completion.for_user(conn, 1, 10)[0]["pct"] == 100

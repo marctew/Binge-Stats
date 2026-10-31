@@ -482,7 +482,7 @@ Checked when a session starts:
 
 As built in `services/binges.py` and `services/completion.py`.
 
-- **Show identity:** a play's `grandparent_guid`, else the guid of the show with its `grandparent_rating_key` in `media_items`, else `rk:<grandparent_rating_key>`. The library sync (and migration v5) backfills `grandparent_guid`, also through the episode's guid, because a show re-added to Plex gets new rating keys while its episode guids stay the same. On the real data that recovered 1,342 of 1,375 plays (Desperate Housewives, Suits, Gossip Girl and others); the rest are shows no longer in the library.
+- **Show identity:** a play's `grandparent_guid`, else the guid of the show with its `grandparent_rating_key` in `media_items`, else `rk:<grandparent_rating_key>`. The library sync (and migration v5) backfills `grandparent_guid`, also through the episode's guid, because a show re-added to Plex gets new rating keys while its episode guids stay the same. Plays from before Plex's agent change carry legacy guids (`com.plexapp.agents.thetvdb://...`), so after that it matches the show by title (only when exactly one show in the library has it) and upgrades the episode guid by season and episode number (migration v6).
 - **Binge (materialised in `binges`):**
   - A run is a user's episode plays in start order where each is the same show as the one before and starts within `binge.gap_min` (30) of it stopping. Movies in between don't break a run; another show's episode does.
   - A run is a binge once it has `binge.min_episodes` (3) **distinct** episodes, so resumed parts and rewatches count once. `play_s` is the sum over the run.

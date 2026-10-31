@@ -264,7 +264,13 @@ def _m5(conn: sqlite3.Connection) -> None:
         _queue_rebuild(conn)
 
 
-MIGRATIONS = [_m1, _m2, _m3, _m4, _m5]
+def _m6(conn: sqlite3.Connection) -> None:
+    """Same backfill, now also matching legacy-agent plays by show title and
+    episode number."""
+    _m5(conn)
+
+
+MIGRATIONS = [_m1, _m2, _m3, _m4, _m5, _m6]
 LATEST = len(MIGRATIONS)
 
 
