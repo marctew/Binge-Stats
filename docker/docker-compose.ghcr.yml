@@ -1,0 +1,31 @@
+# Binge Stats from the published image. Save this as docker-compose.yml in a
+# folder of its own, then: docker compose up -d   (update: docker compose pull && docker compose up -d)
+services:
+  web:
+    image: ghcr.io/marctew/binge-stats:latest
+    command: web
+    ports: ["8181:8181"]
+    volumes: ["./data:/data"]
+    environment: &env
+      TZ: Europe/London        # your timezone, for "today" and the nightly backup
+      PUID: "1000"             # the user that owns ./data
+      PGID: "1000"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8181/api/v1/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  worker:
+    image: ghcr.io/marctew/binge-stats:latest
+    command: worker
+    volumes:
+      - ./data:/data
+      # Tautulli import: mount Tautulli's data folder read-only and import /import/tautulli.db
+      # - /path/to/tautulli:/import:ro
+    environment: *env
+    restart: unless-stopped
+    depends_on:
+      web:
+        condition: service_started

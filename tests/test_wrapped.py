@@ -1,5 +1,4 @@
 """Wrapped (SPEC.md section 13): the numbers, the cache, share links and the public page."""
-import json
 from datetime import datetime
 from zoneinfo import ZoneInfo
 

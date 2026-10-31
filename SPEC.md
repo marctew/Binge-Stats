@@ -645,7 +645,7 @@ Document it in `docs/API.md`, with an example per endpoint.
 1. Stage `assets`: `scripts/fetch-assets.sh` downloads htmx, Alpine and the Tailwind standalone CLI at the versions and sha256s in `bingestats/static/vendor/VERSIONS`. `scripts/build-css.sh` then builds `static/css/app.css`. The downloaded files are gitignored, and nothing loads from a CDN at runtime.
 2. Stage `app`: `python:3.12-slim`, install the requirements, copy the app and the built CSS, run as a non-root user with UID/GID from `PUID`/`PGID` (default 1000).
 
-**`docker-compose.yml`** (repo root, builds the image locally. GHCR comes in M8):
+**`docker-compose.yml`** (repo root, builds the image locally; `docker/docker-compose.ghcr.yml` is the same using the published image):
 
 ```yaml
 services:
@@ -671,8 +671,16 @@ services:
 - `worker` runs `python -m bingestats worker`.
 - Both run migrations at startup, guarded by a file lock in `/data` so only one migrates.
 - **GeoIP:** the DB-IP Lite City MMDB (CC BY 4.0, no account needed) is downloaded by the worker to `/data/geo/` on the first run and monthly after that. Show an attribution line on pages that show locations. Lookups are cached in `ip_geo` for 30 days. Private ranges are stored as `is_private = 1`, labelled "LAN", and get no lookup.
-- **Backups:** nightly at 03:30 local, using the SQLite backup API → `/data/backups/bingestats-YYYYMMDD.db`, keeping `backup.keep`. Settings has a "Backup now" button and lists the backups.
-- **CI** (GitHub Actions): pytest on push. On a tag, build and push the image to GHCR.
+- **Backups** (as built, `services/backups.py`):
+  - The worker runs a `backup` job nightly at 03:30 local, whether or not Plex is connected. It uses the SQLite online backup API to write `/data/backups/bingestats-YYYYMMDD-HHMMSS.db`.
+  - Each file is a self-contained copy (journal mode DELETE) and is quick-checked before it's kept. The newest `backup.keep` (7) are kept.
+  - Settings → Backups lists them, with "Back up now" (queues the job) and an admin-only download.
+  - Restore is manual: stop the containers, copy the file over `bingestats.db`, delete the `-wal` and `-shm` files.
+- **CI** (`.github/workflows/ci.yml`):
+  - pyflakes and pytest on every push and pull request.
+  - The image is built for linux/amd64 and linux/arm64 every time.
+  - It's pushed to `ghcr.io/marctew/binge-stats` from the default branch (`:latest`, `:sha-xxxxxxx`) and from `v*` tags (`:1.2.3`, `:1.2`).
+  - `docker/docker-compose.ghcr.yml` is the compose file for installing from the image.
 
 **Development without Docker:** `python -m bingestats web --dev` (Flask debug server on 8181) and `python -m bingestats worker` in another shell, with `DATA_DIR=./data`. Run `scripts/build-css.sh` once after cloning. It fetches the vendored JS and the pinned Tailwind CLI (into `.cache/`) and builds the CSS. `--watch` rebuilds on template changes. The built CSS and fetched JS are gitignored.
 

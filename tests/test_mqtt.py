@@ -4,7 +4,6 @@ from types import SimpleNamespace
 
 import pytest
 
-from bingestats import db
 from bingestats.services import homeassistant, settings
 from bingestats.worker.mqtt import REPUBLISH_S, MqttBridge
 from bingestats.worker.poller import Poller
