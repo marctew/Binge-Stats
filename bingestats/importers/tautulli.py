@@ -80,10 +80,18 @@ def snapshot(path: str | os.PathLike, work_dir: str | os.PathLike) -> Path:
             src = sqlite3.connect(f"file:{path}?immutable=1", uri=True)
         with closing(src), closing(sqlite3.connect(tmp)) as dst:
             src.backup(dst)
+            # The copy inherits WAL mode; switch it off so reading the copy
+            # doesn't leave -wal/-shm files behind.
+            dst.execute("PRAGMA journal_mode=DELETE")
     except sqlite3.DatabaseError as e:
-        Path(tmp).unlink(missing_ok=True)
+        remove_copy(Path(tmp))
         raise TautulliImportError(f"Couldn't read {path.name}: {e}") from e
     return Path(tmp)
+
+
+def remove_copy(path: Path) -> None:
+    for suffix in ("", "-wal", "-shm", "-journal"):
+        Path(str(path) + suffix).unlink(missing_ok=True)
 
 
 def _columns(src: sqlite3.Connection, table: str) -> set[str]:
@@ -140,7 +148,7 @@ def inspect(conn: sqlite3.Connection, path: str | os.PathLike, work_dir: str | o
             "to_import": total - already, "plex_connected": _server_id(conn) is not None,
         }
     finally:
-        copy.unlink(missing_ok=True)
+        remove_copy(copy)
 
 
 def _count_existing(conn: sqlite3.Connection, ids: list[int]) -> int:
@@ -171,7 +179,7 @@ def run(conn: sqlite3.Connection, path: str | os.PathLike, work_dir: str | os.Pa
             optional = check_schema(src)
             return _import(conn, src, optional, server_id, progress)
     finally:
-        copy.unlink(missing_ok=True)
+        remove_copy(copy)
 
 
 def _sel(alias: str, table: str, cols: set[str], optional: dict[str, set[str]]) -> str:

@@ -75,7 +75,17 @@ def test_inspect_counts_without_writing(conn, tmp_path):
     assert {u["name"] for u in r["users"]} >= {"Sarah", "dad"}
     assert r["plex_connected"] is False
     assert conn.execute("SELECT COUNT(*) FROM plays").fetchone()[0] == 0
-    assert list((tmp_path / "work").iterdir()) == []   # snapshot cleaned up
+    assert list((tmp_path / "work").iterdir()) == []   # snapshot cleaned up, no -wal/-shm left
+
+
+def test_wal_source_leaves_no_side_files(server, tmp_path):
+    path = make_tautulli(tmp_path / "t.db", [play(1)])
+    c = sqlite3.connect(path)
+    c.execute("PRAGMA journal_mode=WAL")
+    c.close()
+    tautulli.inspect(server, path, tmp_path / "w")
+    tautulli.run(server, path, tmp_path / "w")
+    assert list((tmp_path / "w").iterdir()) == []
 
 
 def test_import_maps_fields_and_units(server, tmp_path):
