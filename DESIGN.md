@@ -9,7 +9,7 @@ This document records decisions that are already made. Build to it. `SPEC.md` ho
 | Area | Decision |
 |---|---|
 | Media server | **Plex only.** No Jellyfin or Emby support. Keep Plex code in one package (`bingestats/plex/`) so it isn't smeared across the app, but don't build an abstraction for servers that won't exist. |
-| Users | **Admin only.** One local admin account. No Plex sign-in for friends and family, no per-user portal. The only public page is a Wrapped share link the admin chooses to hand out. |
+| Users | **One admin, plus viewer logins** (Marc changed this on 2026-10-31). The admin runs everything. The admin can give a person on the server a password. They then sign in with their Plex username and see **only their own** stats, history, binges, shows in progress and Wrapped (`/me`). Viewers can't see other people, settings, alerts, insights, the API or any stop button. There's no Plex OAuth sign-in. Wrapped share links stay public. |
 | Database | **SQLite**, WAL mode, plain `sqlite3`, no ORM. Schema and migrations in `bingestats/db.py`. |
 | History import | **Tautulli import is a v1 feature**, not an afterthought. Years of history must carry over. |
 | Stack | Python 3.12, Flask, Jinja, HTMX, Alpine.js, Tailwind, ECharts. |
@@ -95,5 +95,5 @@ v1 scope. Section numbers match the milestones in `SPEC.md`.
 - A newsletter (emailed "what's new" page).
 - Sonarr / Radarr / Overseerr links (requester on history rows, "downloaded but never watched").
 - Multiple Plex servers in the UI. The schema carries `server_id` from day one, so adding this later is UI work only.
-- Plex sign-in for users and a per-user portal.
+- Plex OAuth sign-in for users. Viewer logins exist (password set by the admin, own data only). Signing in with a Plex account, and viewers seeing anything beyond their own data, are still v2.
 - Exports (CSV is in v1 for history. Anything more is v2).

@@ -8,12 +8,17 @@ import time
 from flask import (Blueprint, abort, current_app, flash, redirect, render_template, request,
                    session, url_for)
 
+from ..services import accounts
 from ..services import auth as auth_svc
 
 bp = Blueprint("auth", __name__)
 
 # Endpoints reachable without logging in.
 PUBLIC = {"auth.login", "auth.setup_admin", "static", "wrapped.public_page", "wrapped.public_image"}
+# What a signed-in viewer (not the admin) may reach. Everything else sends them
+# to their own home page: an allow-list, so new admin pages are closed by default.
+VIEWER_ENDPOINTS = {"auth.logout", "img.plex_image"}
+VIEWER_PREFIXES = ("me.",)
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 
 
@@ -48,6 +53,8 @@ def install(app) -> None:
             if request.method not in SAFE_METHODS:
                 _check_csrf()
             return None
+        if session.get("viewer"):
+            return _viewer_gate(conn, ep)
         if not session.get("admin"):
             if request.headers.get("HX-Request"):
                 return "", 401, {"HX-Redirect": url_for("auth.login")}
@@ -55,6 +62,23 @@ def install(app) -> None:
         if request.method not in SAFE_METHODS:
             _check_csrf()
         return None
+
+
+def _viewer_gate(conn, ep: str):
+    uid = session["viewer"]
+    if not accounts.session_still_valid(conn, uid, session.get("viewer_v")):
+        session.clear()
+        flash("Please sign in again.", "error")
+        return redirect(url_for("auth.login"))
+    allowed = ep in VIEWER_ENDPOINTS or ep.startswith(VIEWER_PREFIXES) or \
+        (ep == "img.user_avatar" and (request.view_args or {}).get("user_id") == uid)
+    if not allowed:
+        if request.method in SAFE_METHODS and not request.headers.get("HX-Request"):
+            return redirect(url_for("me.home"))
+        abort(403)
+    if request.method not in SAFE_METHODS:
+        _check_csrf()
+    return None
 
 
 def _safe_next(target: str | None) -> str:
@@ -67,12 +91,22 @@ def _safe_next(target: str | None) -> str:
 def login():
     conn = current_app.get_db()
     if request.method == "POST":
-        if auth_svc.check_login(conn, request.form.get("username", ""), request.form.get("password", "")):
+        username, password = request.form.get("username", ""), request.form.get("password", "")
+        if auth_svc.check_login(conn, username, password):
             session.clear()
             session.permanent = True
             session["admin"] = True
             csrf_token()
             return redirect(_safe_next(request.args.get("next")))
+        login = accounts.check(conn, username, password)
+        if login is not None:
+            session.clear()
+            session.permanent = True
+            session["viewer"] = login["user_id"]
+            session["viewer_v"] = login["updated_at"]
+            csrf_token()
+            nxt = request.args.get("next") or ""
+            return redirect(nxt if nxt.startswith("/me") else url_for("me.home"))
         time.sleep(0.5)
         flash("Wrong username or password", "error")
     return render_template("pages/login.html", next=request.args.get("next"))

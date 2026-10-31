@@ -131,6 +131,41 @@
 
 <div class="mt-8">{{ locations_card(locations, geo_enabled) }}</div>
 
+<section id="login" class="card mt-8 p-5" x-data="{ open: false }">
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <h2 class="flex items-center gap-2 font-semibold">{{ icon('user', 'h-4 w-4 text-accent') }} Binge Stats login</h2>
+      {% if login %}
+      <p class="mt-1 text-sm text-muted">{{ user.name }} signs in as <span class="font-mono text-text">{{ user.username }}</span> and sees only their own viewing.
+        {% if login.last_login_at %}Last signed in {{ login.last_login_at | relative }}.{% else %}Hasn't signed in yet.{% endif %}</p>
+      {% elif can_login[0] %}
+      <p class="mt-1 text-sm text-muted">Give {{ user.name }} a password and they can sign in with their Plex username, <span class="font-mono text-text">{{ user.username }}</span>, to see their own stats, history and Wrapped. Nobody else's.</p>
+      {% else %}
+      <p class="mt-1 text-sm text-muted">{{ can_login[1] }}</p>
+      {% endif %}
+    </div>
+    {% if login %}
+    <div class="flex gap-2">
+      <button type="button" class="btn-ghost" @click="open = !open">Reset password</button>
+      <form method="post" action="{{ url_for('ui.user_login_remove', user_id=user.id) }}" onsubmit="return confirm('Remove {{ user.name }}\'s login? They\'ll be signed out.')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn-ghost text-danger">Remove login</button>
+      </form>
+    </div>
+    {% elif can_login[0] %}
+    <button type="button" class="btn-primary" @click="open = !open">Create login</button>
+    {% endif %}
+  </div>
+  {% if login or can_login[0] %}
+  <form x-cloak x-show="open" method="post" action="{{ url_for('ui.user_login_set', user_id=user.id) }}" class="mt-4 grid max-w-2xl gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div><label class="label" for="lpw">{{ 'New password' if login else 'Password' }}</label><input id="lpw" name="password" type="password" class="input" minlength="8" autocomplete="new-password" required></div>
+    <div><label class="label" for="lpw2">Again</label><input id="lpw2" name="password2" type="password" class="input" minlength="8" autocomplete="new-password" required></div>
+    <button class="btn-primary">{{ 'Reset' if login else 'Create' }}</button>
+    <p class="text-xs text-faint sm:col-span-3">At least 8 characters. Send it to them however you like; they can change it once they're in.</p>
+  </form>
+  {% endif %}
+</section>
+
 {% if user_alerts %}
 {{ section_title('Alerts') }}
 {% from "macros/alerts.html" import alert_list %}

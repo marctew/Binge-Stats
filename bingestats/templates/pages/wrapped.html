@@ -23,17 +23,18 @@
 {% if not public %}
 <div class="sticky top-0 z-40 border-b border-white/5 bg-bg/80 backdrop-blur print:hidden" x-data="{ copied: false }">
   <div class="mx-auto flex max-w-5xl flex-wrap items-center gap-2 px-4 py-2.5 text-sm sm:px-6">
-    <a href="{{ url_for('wrapped.index', year=w.year) }}" class="btn-ghost">← Wrapped</a>
+    {% if viewer %}<a href="{{ url_for('me.home') }}" class="btn-ghost">← Home</a>
+    {% else %}<a href="{{ url_for('wrapped.index', year=w.year) }}" class="btn-ghost">← Wrapped</a>{% endif %}
     {% if years | length > 1 %}
     <div class="inline-flex max-w-full overflow-x-auto rounded-xl border border-border bg-surface p-1">
-      {% for y in years %}<a href="{{ url_for('wrapped.page', year=y, user_id=w.user_id) }}" class="whitespace-nowrap rounded-lg px-2.5 py-1 {{ 'bg-accent/20 text-text' if y == w.year else 'text-muted hover:text-text' }}">{{ y }}</a>{% endfor %}
+      {% for y in years %}<a href="{{ url_for('me.wrapped_page', year=y) if viewer else url_for('wrapped.page', year=y, user_id=w.user_id) }}" class="whitespace-nowrap rounded-lg px-2.5 py-1 {{ 'bg-accent/20 text-text' if y == w.year else 'text-muted hover:text-text' }}">{{ y }}</a>{% endfor %}
     </div>
     {% endif %}
     <div class="ml-auto flex flex-wrap items-center gap-2">
       <input class="input hidden w-64 font-mono text-xs md:block" readonly value="{{ share_url }}" x-ref="link" @focus="$el.select()">
       <button type="button" class="btn-primary" @click="navigator.clipboard.writeText('{{ share_url }}'); copied = true; setTimeout(() => copied = false, 2000)" x-text="copied ? 'Link copied' : 'Copy share link'">Copy share link</button>
       <button type="button" class="btn-ghost" onclick="window.print()">Print</button>
-      <form method="post" action="{{ url_for('wrapped.revoke', user_id=w.user_id) }}" onsubmit="return confirm('Stop every share link for {{ who }} working? You can copy a new one straight after.')">
+      <form method="post" action="{{ url_for('me.wrapped_revoke') if viewer else url_for('wrapped.revoke', user_id=w.user_id) }}" onsubmit="return confirm('Stop every share link for {{ 'you' if viewer else who }} working? You can copy a new one straight after.')">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="year" value="{{ w.year }}">
         <button class="btn-ghost text-danger">Revoke links</button>
       </form>

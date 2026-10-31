@@ -270,7 +270,18 @@ def _m6(conn: sqlite3.Connection) -> None:
     _m5(conn)
 
 
-MIGRATIONS = [_m1, _m2, _m3, _m4, _m5, _m6]
+def _m7(conn: sqlite3.Connection) -> None:
+    """Sign-ins for the people on the server, created by the admin."""
+    conn.execute("""CREATE TABLE IF NOT EXISTS user_logins (
+        user_id INTEGER PRIMARY KEY REFERENCES users(id),
+        password_hash TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,       -- bumped on reset; sessions from before it end
+        last_login_at INTEGER
+    )""")
+
+
+MIGRATIONS = [_m1, _m2, _m3, _m4, _m5, _m6, _m7]
 LATEST = len(MIGRATIONS)
 
 

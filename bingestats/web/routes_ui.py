@@ -5,7 +5,7 @@ from flask import (Blueprint, Response, current_app, flash, redirect, render_tem
                    send_file, url_for)
 
 from ..plex.client import PlexError
-from ..services import (activity, alerts, api_tokens, backups, binges, completion, geo, history, homeassistant, jobs,
+from ..services import (accounts, activity, alerts, api_tokens, backups, binges, completion, geo, history, homeassistant, jobs,
                         libraries, plex_setup, settings, stats, wrapped)
 
 bp = Blueprint("ui", __name__)
@@ -50,6 +50,9 @@ def _register_globals(state):
 
 
 def _ui_theme() -> str:
+    from flask import session
+    if session.get("viewer") and session.get("theme") in ("dark", "light", "system"):
+        return session["theme"]
     try:
         t = settings.get(_db(), "ui.theme")
     except Exception:  # noqa: BLE001 - no database yet
@@ -456,7 +459,7 @@ def import_page():
 def users_page():
     show_all = request.args.get("all") == "1"
     return render_template("pages/users.html", users=libraries.list_users(_db(), include_inactive=show_all),
-                           show_all=show_all)
+                           show_all=show_all, with_login=accounts.ids_with_login(_db()))
 
 
 @bp.route("/users/<int:user_id>", methods=["GET", "POST"])
@@ -488,7 +491,31 @@ def user_page(user_id: int):
                            user_binges=binges.longest(conn, user_id=user_id, limit=5),
                            binge_totals=binges.totals(conn, user_id=user_id), shows=completion.summary(conn, user_id),
                            abandoned_days=settings.get(conn, "abandoned.days"),
-                           wrapped_year=(wrapped.years(conn, user_id) or [None])[0])
+                           wrapped_year=(wrapped.years(conn, user_id) or [None])[0],
+                           login=accounts.get(conn, user_id), can_login=accounts.can_have_login(conn, user_id))
+
+
+@bp.route("/users/<int:user_id>/login", methods=["POST"])
+def user_login_set(user_id: int):
+    conn = _db()
+    pw, pw2 = request.form.get("password", ""), request.form.get("password2", "")
+    had = accounts.get(conn, user_id) is not None
+    try:
+        if pw != pw2:
+            raise ValueError("The passwords don't match")
+        accounts.set_password(conn, user_id, pw)
+        flash("Password reset. They've been signed out everywhere." if had else
+              "Login created. They can sign in with their Plex username and this password.", "ok")
+    except ValueError as e:
+        flash(str(e), "error")
+    return redirect(url_for("ui.user_page", user_id=user_id) + "#login")
+
+
+@bp.route("/users/<int:user_id>/login/remove", methods=["POST"])
+def user_login_remove(user_id: int):
+    if accounts.remove(_db(), user_id):
+        flash("Login removed. They've been signed out.", "ok")
+    return redirect(url_for("ui.user_page", user_id=user_id) + "#login")
 
 
 @bp.route("/users/<int:user_id>/stop", methods=["POST"])

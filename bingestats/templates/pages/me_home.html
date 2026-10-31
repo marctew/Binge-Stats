@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% from "macros/ui.html" import stat_tile, poster, decision_badge %}
+{% from "macros/charts.html" import chart_scripts, chart_card %}
+{% from "macros/media.html" import section_title, binge_list, completion_list %}
+{% from "macros/icons.html" import icon %}
+{% block title %}{{ user.name }} · Binge Stats{% endblock %}
+{% block head %}{{ chart_scripts() }}{% endblock %}
+{% block content %}
+<div class="mb-6 flex flex-wrap items-end justify-between gap-3">
+  <div>
+    <h1 class="text-2xl font-semibold tracking-tight sm:text-3xl">Hi {{ user.name }}</h1>
+    <p class="mt-1 text-sm text-muted">Your Plex, in numbers{% if user.stats.first_play %} · watching since {{ user.stats.first_play | localtime('%B %Y') }}{% endif %}</p>
+  </div>
+  {% if has_wrapped %}<a href="{{ url_for('me.wrapped_page', year=year) }}" class="btn-primary">{{ icon('bulb', 'h-4 w-4') }} Your {{ year }} Wrapped</a>{% endif %}
+</div>
+
+{% if sessions %}
+<div class="card mb-6 p-4">
+  <h2 class="mb-3 flex items-center gap-2 text-sm font-semibold">
+    <span class="relative flex h-2 w-2"><span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-play opacity-60"></span><span class="relative inline-flex h-2 w-2 rounded-full bg-play"></span></span>
+    Watching now
+  </h2>
+  <div class="grid gap-3 sm:grid-cols-2">
+    {% for a in sessions %}{% set s = a.session %}
+    <div class="flex items-center gap-3 rounded-xl bg-surface-2/50 p-2.5">
+      {{ poster(s.poster, s.title, 'w-10', 'square' if s.media_type == 'track' else 'poster', 150) }}
+      <div class="min-w-0 flex-1">
+        <div class="truncate text-sm font-medium">{{ s | media_title }}</div>
+        <div class="truncate text-xs text-muted">{{ s.player_title or s.product }}</div>
+        <div class="mt-1.5 progress-track"><div class="progress-fill" style="width: {{ '%.1f' % a.progress_pct }}%"></div></div>
+      </div>
+      {{ decision_badge(s.stream.decision) }}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<div class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+  {{ stat_tile('Today', totals.today.watch_time_s | duration(True), totals.today.plays | plural('play'), 'play', 'accent') }}
+  {{ stat_tile('Last 30 days', totals.month.watch_time_s | duration(True), totals.month.plays | plural('play'), 'history', 'play') }}
+  {{ stat_tile('All time', totals.all.watch_time_s | duration(True), totals.all.titles | plural('title'), 'tv', 'stream') }}
+  {{ stat_tile('Binges', binge_totals.binges, ('longest ' ~ binge_totals.longest ~ ' episodes') if binge_totals.binges else 'none yet', 'bolt', 'transcode') }}
+</div>
+
+<div class="mt-6 grid gap-4 lg:grid-cols-3">
+  {{ chart_card('Hours watched · last 12 months', 'bars', url_for('me.data_timeseries', range='1y', metric='watch_time'), 'hours', 'h-64', None, 'lg:col-span-2') }}
+  {{ chart_card('When you watch', 'heatmap', url_for('me.data_heatmap', range='all'), 'hours', 'h-64', 'all time') }}
+</div>
+
+<div class="mt-2 grid gap-6 lg:grid-cols-2">
+  {% for title, items in [('Top shows · last 12 months', top_shows), ('Top films · last 12 months', top_movies)] %}
+  <div>
+    {{ section_title(title) }}
+    {% if items %}
+    <div class="grid grid-cols-3 gap-3 sm:grid-cols-6 lg:grid-cols-3 xl:grid-cols-6">
+      {% for it in items %}
+      <div class="min-w-0">
+        {{ poster(it.thumb, it.name, 'w-full', 'poster', 300) }}
+        <div class="mt-2 truncate text-sm font-medium">{{ it.name }}</div>
+        <div class="text-xs text-muted">{{ it.play_s | duration(True) }}</div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}<div class="card p-6 text-center text-sm text-faint">Nothing in the last 12 months.</div>{% endif %}
+  </div>
+  {% endfor %}
+</div>
+
+<div class="mt-2 grid gap-6 lg:grid-cols-3">
+  <div class="lg:col-span-2">
+    {{ section_title('Your longest binges') }}
+    {{ binge_list(user_binges, False, 'No binges yet: three episodes of one show back to back makes one.', links=False) }}
+  </div>
+  <div>
+    {{ section_title('Shows on the go', shows.finished | length ~ ' finished') }}
+    {{ completion_list(shows.in_progress[:6], 'Nothing on the go.', links=False) }}
+    {% if shows.abandoned %}
+    {{ section_title('Not touched in a while') }}
+    {{ completion_list(shows.abandoned[:5], links=False) }}
+    {% endif %}
+  </div>
+</div>
+
+{{ section_title('Recently watched') }}
+{% if rows %}
+<div class="card overflow-hidden">
+  <table class="w-full">
+    {% with compact = true, viewer = true, parts_ep = 'me.history_parts', more_ep = 'me.history_page', cursor = None, f = None %}{% include "partials/history_rows.html" %}{% endwith %}
+  </table>
+</div>
+{% if more %}<a href="{{ url_for('me.history_page') }}" class="btn-ghost mt-3">All your history</a>{% endif %}
+{% else %}
+<div class="card p-6 text-center text-sm text-faint">Nothing played yet. It'll show here as soon as you watch something.</div>
+{% endif %}
+{% endblock %}

@@ -22,10 +22,16 @@
                ('ui.libraries_page', 'Libraries', 'stack', ['ui.libraries_page', 'ui.library_page', 'ui.item_page']),
                ('notify.index', 'Notifications', 'bell', ['notify.index', 'notify.rule_new', 'notify.rule_edit']),
                ('ui.settings_page', 'Settings', 'settings', ['ui.settings_page', 'ui.import_page', 'ui.job_page'])] %}
+{% set viewer = session.get('viewer') %}
+{% set home_ep = 'me.home' if viewer else 'ui.index' %}
+{% if viewer %}
+{% set nav = [('me.home', 'Home', 'home', ['me.home']), ('me.history_page', 'History', 'history', ['me.history_page']),
+               ('me.wrapped_page', 'Wrapped', 'bulb', ['me.wrapped_page']), ('me.account', 'Account', 'user', ['me.account'])] %}
+{% endif %}
 <div class="lg:pl-64">
   {# Sidebar (desktop) #}
   <aside class="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-border bg-surface/60 px-4 py-6 backdrop-blur lg:flex">
-    <a href="{{ url_for('ui.index') }}" class="mb-8 flex items-center gap-2.5 px-2">
+    <a href="{{ url_for(home_ep) }}" class="mb-8 flex items-center gap-2.5 px-2">
       <img src="{{ url_for('static', filename='img/icon.svg') }}" class="h-8 w-8" alt="">
       <span class="text-lg font-semibold tracking-tight">Binge <span class="brand-gradient">Stats</span></span>
     </a>
@@ -40,13 +46,14 @@
         <button class="nav-link w-full">{{ icon('logout') }}Sign out</button>
       </form>
       {% include "partials/theme_switch.html" %}
-      <a href="{{ url_for('ui.about_page') }}" class="mt-3 block px-3 text-xs text-faint hover:text-muted">v{{ app_version }}{% if app_sha %} · {{ app_sha }}{% endif %} · About</a>
+      {% if viewer %}<div class="mt-3 px-3 text-xs text-faint">Binge Stats v{{ app_version }}</div>
+      {% else %}<a href="{{ url_for('ui.about_page') }}" class="mt-3 block px-3 text-xs text-faint hover:text-muted">v{{ app_version }}{% if app_sha %} · {{ app_sha }}{% endif %} · About</a>{% endif %}
     </div>
   </aside>
 
   {# Top bar (mobile) #}
   <header class="sticky top-0 z-30 flex items-center justify-between border-b border-border bg-bg/80 px-4 py-3 backdrop-blur lg:hidden">
-    <a href="{{ url_for('ui.index') }}" class="flex items-center gap-2">
+    <a href="{{ url_for(home_ep) }}" class="flex items-center gap-2">
       <img src="{{ url_for('static', filename='img/icon.svg') }}" class="h-7 w-7" alt="">
       <span class="font-semibold">Binge <span class="brand-gradient">Stats</span></span>
     </a>
@@ -57,7 +64,8 @@
   </header>
 
   <main class="mx-auto max-w-7xl px-4 pb-28 pt-6 sm:px-6 lg:px-8 lg:pb-12 lg:pt-10">
-    {% if not worker.alive %}
+    {% if viewer %}{# the worker banners are admin business #}
+    {% elif not worker.alive %}
     <div class="mb-6 flex items-start gap-3 rounded-2xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm">
       <span class="mt-0.5 text-danger">{{ icon('alert', 'h-5 w-5') }}</span>
       <div><div class="font-medium">The worker isn't running</div>
@@ -79,6 +87,13 @@
   </main>
 
   {# Bottom nav (mobile): four main pages plus a More menu #}
+  {% if nav | length <= 5 %}
+  <nav class="fixed inset-x-0 bottom-0 z-30 grid grid-cols-{{ nav | length }} border-t border-border bg-surface/90 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden">
+    {% for ep, label, ic, eps in nav %}
+    <a href="{{ url_for(ep) }}" class="flex flex-col items-center gap-1 py-2.5 text-[11px] font-medium {{ 'text-accent' if request.endpoint in eps else 'text-muted' }}">{{ icon(ic) }}{{ label }}</a>
+    {% endfor %}
+  </nav>
+  {% else %}
   <nav class="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-border bg-surface/90 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden" x-data="{ more: false }">
     {% for ep, label, ic, eps in nav[:4] %}
     <a href="{{ url_for(ep) }}" class="flex flex-col items-center gap-1 py-2.5 text-[11px] font-medium {{ 'text-accent' if request.endpoint in eps else 'text-muted' }}">{{ icon(ic) }}{{ label }}</a>
@@ -92,6 +107,7 @@
       {% endfor %}
     </div>
   </nav>
+  {% endif %}
 </div>
 <div id="toasts" class="pointer-events-none fixed inset-x-0 bottom-20 z-50 flex flex-col items-center gap-2 px-4 lg:bottom-6 lg:items-end lg:pr-6"></div>
 {% endblock %}

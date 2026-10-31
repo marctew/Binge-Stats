@@ -22,6 +22,7 @@ Self-hosted Plex monitoring and statistics: a modern take on Tautulli. Live acti
 - **Notifications:** rules (trigger → conditions → message → channels) to Discord, Telegram, ntfy, Pushover, email and the rest through Apprise. A season drop sends one "recently added" digest.
 - **Stream rules:** per-person stream and transcode limits that alert, or stop the newest stream. Alerts for one account playing from two places at once, or from a new country.
 - **Home Assistant:** MQTT discovery for stream counts, bandwidth, Plex status, a "now watching" sensor and a "stop streams" button per person.
+- **Logins for your people:** give someone a password from their user page. They sign in with their Plex username and see only their own stats, history and Wrapped.
 - **The rest:** a REST API with tokens, nightly backups, and dark, light or system themes.
 
 | | |
@@ -36,7 +37,7 @@ Self-hosted Plex monitoring and statistics: a modern take on Tautulli. Live acti
 
 ## Install
 
-You need Docker with Compose, and a Plex Media Server you own. Binge Stats is admin-only: it's for the person running the server.
+You need Docker with Compose, and a Plex Media Server you own. Binge Stats is run by the server's admin; the admin can also give the people on the server a login to see their own stats.
 
 ```bash
 mkdir binge-stats && cd binge-stats

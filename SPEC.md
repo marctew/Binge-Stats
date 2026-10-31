@@ -571,6 +571,27 @@ Off until configured in **Settings → Home Assistant**. As built in `worker/mqt
 
 ---
 
+## 14a. Viewer logins
+
+As built in `services/accounts.py`, `web/auth.py` and `web/routes_me.py` (migration v7, `user_logins`).
+
+- **Creating a login:** the admin goes to the person's page → **Binge Stats login** → **Create login** and sets a password (8+ characters). The person signs in at `/login` with their **Plex username** (case-insensitive) and that password.
+  - The username isn't stored. It's read from `users.username` at sign-in, so it follows renames on Plex.
+  - No login is possible for: managed Home users (no Plex username); people who no longer have access; a username equal to the admin's; or a username shared by two active people.
+- **Sessions:** a viewer's session holds `viewer` (their user id) and `viewer_v` (the login's `updated_at`). Every request checks both, so the session ends at once if:
+  - the admin resets the password (which always moves `updated_at` on);
+  - the admin removes the login;
+  - the person loses access on Plex.
+- **What they see:** the `me` blueprint only.
+  - `/me` home: watching now (their own streams), today / 30 days / all time, hours over 12 months, their heatmap, top shows and films, longest binges, shows on the go and not touched in a while, recent plays.
+  - `/me/history` (search, type, date), `/me/wrapped[/<year>]` (copy share link, print, revoke their own links), `/me/account` (change password), plus `/me/data/*` chart JSON.
+  - Their theme choice is kept in their session.
+- **The gate is an allow-list:** viewers may reach `me.*`, library artwork (`/img/plex`), their own avatar and sign-out. Any other page redirects to `/me`; any other POST is 403. The REST API answers 401 to a viewer session.
+  - Pages shown to viewers link to nothing admin-only: history rows and lists take `viewer` / `links=False`.
+- **Admin's view:** a "Login" badge on the Users list; on the person's page, last sign-in, Reset password and Remove login.
+
+---
+
 ## 15. Pages
 
 Every page is a Jinja template that extends `base.html`. Pages refresh their parts with HTMX partials; there are no full-page JS apps. Routes are thin, and all data comes from `services/`.

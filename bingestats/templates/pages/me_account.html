@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% from "macros/ui.html" import page_header, avatar %}
+{% block title %}Account · Binge Stats{% endblock %}
+{% block content %}
+{% call page_header('Account') %}{% endcall %}
+<div class="grid gap-6 lg:grid-cols-2">
+  <section class="card p-5">
+    <div class="flex items-center gap-4">
+      {{ avatar(user.id, user.name, 'h-14 w-14 text-lg') }}
+      <div>
+        <div class="text-lg font-semibold">{{ user.name }}</div>
+        <div class="text-sm text-muted">Signs in as <span class="font-mono text-text">{{ user.username }}</span>, your Plex username</div>
+      </div>
+    </div>
+    <p class="mt-5 text-sm text-muted">This login shows your own viewing only. The server's admin set it up and can reset or remove it.</p>
+  </section>
+  <section class="card p-5">
+    <h2 class="font-semibold">Change your password</h2>
+    <form method="post" class="mt-4 space-y-3">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div><label class="label" for="current">Current password</label><input id="current" name="current" type="password" class="input" autocomplete="current-password" required></div>
+      <div><label class="label" for="new">New password</label><input id="new" name="new" type="password" class="input" autocomplete="new-password" minlength="8" required></div>
+      <div><label class="label" for="again">New password again</label><input id="again" name="again" type="password" class="input" autocomplete="new-password" minlength="8" required></div>
+      <button class="btn-primary">Change password</button>
+    </form>
+  </section>
+</div>
+{% endblock %}

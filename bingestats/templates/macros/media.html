@@ -17,7 +17,7 @@
 {%- endmacro %}
 
 {# Binge rows: poster, show, who, episodes, time, when. #}
-{% macro binge_list(items, show_user=True, empty='No binges yet') -%}
+{% macro binge_list(items, show_user=True, empty='No binges yet', links=True) -%}
 {% from "macros/ui.html" import avatar %}
 {% if items %}
 <div class="card divide-y divide-border">
@@ -25,7 +25,7 @@
   <div class="flex items-center gap-3 px-4 py-3">
     {{ poster(b.show_thumb, b.show_title, 'w-10', 'poster', 150) }}
     <div class="min-w-0 flex-1">
-      {% if b.show_rating_key %}<a href="{{ url_for('ui.item_page', rating_key=b.show_rating_key) }}" class="block truncate text-sm font-medium hover:text-accent">{{ b.show_title or 'Unknown show' }}</a>
+      {% if b.show_rating_key and links %}<a href="{{ url_for('ui.item_page', rating_key=b.show_rating_key) }}" class="block truncate text-sm font-medium hover:text-accent">{{ b.show_title or 'Unknown show' }}</a>
       {% else %}<div class="truncate text-sm font-medium">{{ b.show_title or 'Unknown show' }}</div>{% endif %}
       <div class="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted">
         {% if show_user %}<a href="{{ url_for('ui.user_page', user_id=b.user_id) }}" class="inline-flex items-center gap-1.5 hover:text-text">{{ avatar(b.user_id, b.user_name, 'h-4 w-4') }}{{ b.user_name }}</a><span>·</span>{% endif %}
@@ -45,12 +45,12 @@
 {%- endmacro %}
 
 {# Series completion rows: poster, title, progress bar, x of y. #}
-{% macro completion_list(items, empty='Nothing here') -%}
+{% macro completion_list(items, empty='Nothing here', links=True) -%}
 {% from "macros/ui.html" import progress %}
 {% if items %}
 <div class="card divide-y divide-border">
   {% for a in items %}
-  <a href="{{ url_for('ui.item_page', rating_key=a.rating_key) }}" class="flex items-center gap-3 px-4 py-3 transition hover:bg-surface-2/40">
+  <{{ 'a' if links else 'div' }} {% if links %}href="{{ url_for('ui.item_page', rating_key=a.rating_key) }}"{% endif %} class="flex items-center gap-3 px-4 py-3 transition {{ 'hover:bg-surface-2/40' if links }}">
     {{ poster(a.thumb, a.title, 'w-9', 'poster', 150) }}
     <div class="min-w-0 flex-1">
       <div class="flex items-baseline justify-between gap-3">
@@ -60,7 +60,7 @@
       {{ progress(a.pct, 'mt-1.5') }}
       <div class="mt-1 text-xs text-faint">last watched {{ a.last_played | relative }}</div>
     </div>
-  </a>
+  </{{ 'a' if links else 'div' }}>
   {% endfor %}
 </div>
 {% else %}

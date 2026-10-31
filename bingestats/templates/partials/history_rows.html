@@ -1,4 +1,6 @@
 {% from "macros/ui.html" import poster, avatar, decision_badge, progress %}
+{#- Also used by a viewer's own history (viewer=true): no links into admin pages. -#}
+{%- set parts_ep = parts_ep or 'ui.history_parts' -%}{%- set more_ep = more_ep or 'ui.history_page' -%}
 {% for r in rows %}{% set p = r.play %}
 <tbody class="border-t border-border first:border-t-0" x-data="{ open: false }">
 <tr class="transition hover:bg-surface-2/40">
@@ -6,13 +8,14 @@
     <div class="flex items-center gap-3">
       {{ poster(p.thumb, p.title, 'w-9', 'square' if p.media_type == 'track' else 'poster', 150) }}
       <div class="min-w-0">
-        <a href="{{ url_for('ui.item_page', rating_key=(p.grandparent_rating_key if p.media_type == 'episode' and p.grandparent_rating_key else p.rating_key) or 0) }}" class="block truncate font-medium hover:text-accent">{{ p | media_title }}</a>
+        {% if viewer %}<div class="truncate font-medium">{{ p | media_title }}</div>
+        {% else %}<a href="{{ url_for('ui.item_page', rating_key=(p.grandparent_rating_key if p.media_type == 'episode' and p.grandparent_rating_key else p.rating_key) or 0) }}" class="block truncate font-medium hover:text-accent">{{ p | media_title }}</a>{% endif %}
         <div class="truncate text-xs text-muted">{{ p | media_subtitle }}</div>
         <div class="mt-0.5 truncate text-xs text-faint {{ 'sm:hidden' if compact else 'md:hidden' }}">{% if not compact %}{{ r.user_name }} · {% endif %}{{ p.started_at | relative }}{% if compact %} · {{ p.player_title or '' }}{% endif %}</div>
       </div>
       {% if r.parts > 1 %}
       <button type="button" class="badge-muted ml-auto shrink-0 hover:text-text"
-              hx-get="{{ url_for('ui.history_parts', play_id=p.id) }}" hx-target="#parts-{{ p.id }}" hx-trigger="click once"
+              hx-get="{{ url_for(parts_ep, play_id=p.id) }}" hx-target="#parts-{{ p.id }}" hx-trigger="click once"
               @click="open = !open" :class="open && 'ring-accent/50 text-text'">{{ r.parts }} parts</button>
       {% endif %}
     </div>
@@ -47,7 +50,7 @@
 {% if cursor %}
 <tbody id="load-more"><tr>
   <td colspan="6" class="p-4 text-center">
-    <button class="btn-ghost" hx-get="{{ url_for('ui.history_page', before=cursor, **f.query_args()) }}"
+    <button class="btn-ghost" hx-get="{{ url_for(more_ep, before=cursor, **f.query_args()) }}"
             hx-target="#load-more" hx-swap="outerHTML">Load more</button>
   </td>
 </tr></tbody>

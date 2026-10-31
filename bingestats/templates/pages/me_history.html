@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% from "macros/ui.html" import page_header %}
+{% from "macros/icons.html" import icon %}
+{% block title %}Your history · Binge Stats{% endblock %}
+{% block content %}
+{% call page_header('Your history', 'Everything you’ve played, newest first.') %}{% endcall %}
+<form method="get" action="{{ url_for('me.history_page') }}" class="card mb-5 grid grid-cols-2 gap-3 p-4 sm:grid-cols-4"
+      hx-get="{{ url_for('me.history_page') }}" hx-target="body" hx-push-url="true"
+      hx-trigger="change, keyup changed delay:400ms from:input[name=q]">
+  <div class="col-span-2">
+    <label class="label" for="q">Search</label>
+    <div class="relative">
+      <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-faint">{{ icon('search', 'h-4 w-4') }}</span>
+      <input id="q" name="q" value="{{ f.q or '' }}" class="input pl-9" placeholder="Title, show or album" autocomplete="off">
+    </div>
+  </div>
+  <div>
+    <label class="label" for="type">Type</label>
+    <select id="type" name="type" class="input">
+      <option value="">All</option>
+      {% for t in media_types %}<option value="{{ t }}" {{ 'selected' if f.media_type == t }}>{{ {'movie': 'Films', 'episode': 'Episodes', 'track': 'Music'}[t] }}</option>{% endfor %}
+    </select>
+  </div>
+  <div>
+    <label class="label" for="from">From</label>
+    <input id="from" name="from" type="date" value="{{ f.date_from or '' }}" class="input">
+  </div>
+</form>
+{% if rows %}
+<div class="card overflow-hidden">
+  <table class="w-full">
+    <thead class="border-b border-border bg-surface-2/40"><tr>
+      <th class="th">Title</th><th class="th hidden sm:table-cell">When</th><th class="th text-right">Watched</th><th class="th hidden md:table-cell">Stream</th>
+    </tr></thead>
+    {% include "partials/history_rows.html" %}
+  </table>
+</div>
+{% else %}
+<div class="card p-10 text-center text-sm text-faint">{{ 'Nothing matches that.' if f.q or f.media_type or f.date_from else 'Nothing played yet.' }}</div>
+{% endif %}
+{% endblock %}
