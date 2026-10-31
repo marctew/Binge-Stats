@@ -16,9 +16,10 @@ from .. import config as config_mod
 from .. import db
 from ..plex.client import PlexAuthError, PlexClient
 from ..plex.ws import PlexNudger
-from ..services import settings
+from ..services import activity, settings
 from ..services.notify import Notifier
 from .jobs_runner import JobRunner, schedule_due
+from .mqtt import MqttBridge
 from .poller import Poller
 from .recently_added import check_recent, digest
 
@@ -55,6 +56,10 @@ class Worker:
         self.jobs = JobRunner(cfg, self.stop, self.job_wake)
         self.client: PlexClient | None = None
         self.notifier = Notifier(self.conn, cfg.db_path, poster_fetch=self._poster)
+        self.mqtt = MqttBridge(self.conn, stop_user=self._stop_user, wake=self.nudge.set)
+
+    def _stop_user(self, user_id: int) -> int:
+        return activity.stop_user_sessions(self.conn, user_id, client=self.client)
 
     def _poster(self, path: str) -> bytes | None:
         if self.client is None:
@@ -95,7 +100,7 @@ class Worker:
         client_id = ensure_client_id(self.conn)
         client = PlexClient(url, token, client_id, verify_tls=verify)
         self.client = client
-        self.poller = Poller(self.conn, client, on_event=self.on_event)
+        self.poller = Poller(self.conn, client, on_event=self.on_event, data_dir=self.cfg.data_dir)
         if use_ws:
             self.nudger = PlexNudger(client.websocket_url(), token, client_id, self.nudge, self.stop)
             self.nudger.start()
@@ -139,6 +144,10 @@ class Worker:
                 self.recently_added()
             except Exception:  # noqa: BLE001
                 log.exception("recently added check failed")
+            try:
+                self.mqtt.tick()
+            except Exception:  # noqa: BLE001
+                log.exception("MQTT publish failed")
             interval = settings.get(self.conn, "poll.interval_s")
             # A websocket nudge cuts the wait short, debounced by 1 s so a burst
             # of notifications becomes one poll.
@@ -147,6 +156,7 @@ class Worker:
                 self.stop.wait(1)
                 self.nudge.clear()
         self._teardown_ws()
+        self.mqtt.close()
         self.notifier.stop()
         log.info("Worker stopped")
 

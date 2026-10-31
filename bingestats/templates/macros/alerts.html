@@ -1,0 +1,32 @@
+{% from "macros/icons.html" import icon %}
+{% from "macros/ui.html" import avatar %}
+
+{% macro alert_list(alerts, next_url) -%}
+<div class="card divide-y divide-border">
+  {% for a in alerts %}
+  <div class="flex items-start gap-3 px-4 py-3 {{ 'opacity-60' if a.acknowledged }}">
+    <span class="mt-0.5 {{ 'text-play' if a.severity == 'ok' else ('text-transcode' if a.severity == 'warn' else 'text-danger') }}">{{ icon('check' if a.severity == 'ok' else 'alert', 'h-5 w-5') }}</span>
+    <div class="min-w-0 flex-1">
+      <div class="flex flex-wrap items-center gap-2">
+        <span class="badge-muted">{{ a.label }}</span>
+        {% if a.user_id %}<a href="{{ url_for('ui.user_page', user_id=a.user_id) }}" class="flex items-center gap-1.5 text-sm font-medium hover:text-accent">{{ avatar(a.user_id, a.user_name, 'h-5 w-5') }}{{ a.user_name }}</a>{% endif %}
+        <span class="text-xs text-muted" title="{{ a.created_at | localtime }}">{{ a.created_at | relative }}</span>
+      </div>
+      <p class="mt-1 text-sm">{{ a.text }}</p>
+      {% if a.detail.sessions %}
+      <ul class="mt-1 space-y-0.5 text-xs text-muted">
+        {% for s in a.detail.sessions %}<li>• {{ s.title }} on {{ s.player }}{% if s.ip and not s.local %} · {{ s.ip }}{% endif %}{% if s.session_id == a.detail.stopped %} <span class="text-danger">(stopped)</span>{% endif %}</li>{% endfor %}
+      </ul>
+      {% endif %}
+    </div>
+    {% if not a.acknowledged %}
+    <form method="post" action="{{ url_for('ui.alerts_ack') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="id" value="{{ a.id }}"><input type="hidden" name="next" value="{{ next_url }}">
+      <button class="btn-ghost py-1 text-xs">Got it</button>
+    </form>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{%- endmacro %}

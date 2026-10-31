@@ -80,13 +80,41 @@ def get_user(conn: sqlite3.Connection, user_id: int) -> dict | None:
     return u
 
 
+_KEEP = object()
+
+
 def update_user(conn: sqlite3.Connection, user_id: int, *, friendly_name: str | None,
-                keep_history: bool) -> None:
+                keep_history: bool, max_streams=_KEEP, max_transcodes=_KEEP, limit_action=_KEEP,
+                limit_message=_KEEP) -> None:
+    """Limits default to unchanged so callers that only rename don't wipe them."""
     name = (friendly_name or "").strip()[:60] or None
     cur = conn.execute("UPDATE users SET friendly_name = ?, keep_history = ? WHERE id = ?",
                        (name, int(keep_history), user_id))
     if not cur.rowcount:
         raise LookupError("No such user")
+
+    def limit(v):
+        if v in (None, "", 0, "0"):
+            return None
+        try:
+            n = int(v)
+        except (TypeError, ValueError):
+            raise ValueError("Limits must be whole numbers") from None
+        if not 1 <= n <= 20:
+            raise ValueError("Limits must be between 1 and 20, or blank for no limit")
+        return n
+
+    if max_streams is not _KEEP:
+        conn.execute("UPDATE users SET max_streams = ? WHERE id = ?", (limit(max_streams), user_id))
+    if max_transcodes is not _KEEP:
+        conn.execute("UPDATE users SET max_transcodes = ? WHERE id = ?", (limit(max_transcodes), user_id))
+    if limit_action is not _KEEP:
+        if limit_action not in ("notify", "stop"):
+            raise ValueError("Over the limit must be 'notify' or 'stop'")
+        conn.execute("UPDATE users SET limit_action = ? WHERE id = ?", (limit_action, user_id))
+    if limit_message is not _KEEP:
+        conn.execute("UPDATE users SET limit_message = ? WHERE id = ?",
+                     ((limit_message or "").strip()[:200] or None, user_id))
 
 
 # -- libraries ----------------------------------------------------------------------

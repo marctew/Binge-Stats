@@ -45,6 +45,10 @@ TRIGGERS: dict[str, dict] = {
     "recently_added": {"label": "Recently added", "group": "added"},
     "server_down": {"label": "Plex server down", "group": "server"},
     "server_up": {"label": "Plex server back", "group": "server"},
+    "stream_limit": {"label": "Stream limit reached", "group": "limit"},
+    "transcode_limit": {"label": "Transcode limit reached", "group": "limit"},
+    "concurrent_ips": {"label": "Same account, different places", "group": "limit"},
+    "new_country": {"label": "Played from a new country", "group": "limit"},
 }
 
 DECISION_LABELS = {"direct_play": "Direct Play", "direct_stream": "Direct Stream", "transcode": "Transcode"}
@@ -85,6 +89,8 @@ FIELDS: dict[str, list[tuple]] = {
     "added": [("kind", "What was added", "choice", "added_kinds"), ("library.id", "Library", "choice", "libraries"),
               ("count", "Number of items", "int", None), ("show", "Show or artist", "str", None)],
     "server": [],
+    "limit": [("user.id", "Person", "choice", "users"), ("stopped", "Stream was stopped", "bool", None),
+              ("count", "Number of streams", "int", None)],
 }
 
 
@@ -316,6 +322,11 @@ def build_context(conn: sqlite3.Connection, trigger: str, event: dict) -> dict:
                "show": event.get("show"), "season": event.get("season"), "count": len(event.get("items") or []),
                "items": event.get("items") or [], "headline": event.get("headline"),
                "_poster": event.get("poster"), "_key": event.get("key")}
+    elif group == "limit":
+        ctx = session_context(conn, event.get("session") or {})
+        d = event.get("detail") or {}
+        ctx.update(_limit_fields(d))
+        ctx["_key"] = f"user:{ctx['user']['id']}"
     else:
         srv = event.get("server") or {}
         ctx = {"down_for": event.get("down_for_s") or 0, "error": event.get("error") or "",
@@ -325,6 +336,15 @@ def build_context(conn: sqlite3.Connection, trigger: str, event: dict) -> dict:
     ctx["trigger_label"] = TRIGGERS[trigger]["label"]
     ctx["now"] = int(time.time())
     return ctx
+
+
+def _limit_fields(d: dict) -> dict:
+    sessions = d.get("sessions") or []
+    return {"count": d.get("count") or len(sessions), "limit": d.get("limit"), "stopped": bool(d.get("stopped")),
+            "sessions": [{"title": x.get("title"), "player": x.get("player"), "ip": x.get("ip"),
+                          "decision": DECISION_LABELS.get(x.get("decision"), x.get("decision"))} for x in sessions],
+            "places_text": " and ".join(p["place"] for p in d.get("places") or []),
+            "country": d.get("country"), "city": d.get("city")}
 
 
 def _sample_session(trigger: str) -> dict:
@@ -353,6 +373,14 @@ def sample_context(trigger: str) -> dict:
     group = TRIGGERS[trigger]["group"]
     if group in ("session", "stop"):
         ctx = _sample_session(trigger)
+    elif group == "limit":
+        ctx = _sample_session(trigger)
+        ctx.update(_limit_fields({"count": 3, "limit": 2, "stopped": "x", "country": "Spain", "city": "Málaga",
+                                  "sessions": [{"title": "Slow Horses", "player": "Living Room TV", "ip": "81.2.69.160",
+                                                "decision": "direct_play"},
+                                               {"title": "Dune: Part Two", "player": "iPhone", "ip": "88.12.34.56",
+                                                "decision": "transcode"}],
+                                  "places": [{"place": "London, United Kingdom"}, {"place": "Málaga, Spain"}]}))
     elif group == "added":
         items = [{"title": f"Episode {n}", "display_title": f"Slow Horses · S05E0{n} · Episode {n}",
                   "season": 5, "episode": n, "year": 2026} for n in (1, 2, 3)]

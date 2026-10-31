@@ -153,6 +153,55 @@ def fill(conn: sqlite3.Connection, data_dir: Path, now: float | None = None, lim
     return {"looked_up": found, "private": private, "unknown": unknown, "pending_no_db": reader is None}
 
 
+_reader_cache: dict = {}
+
+
+def _reader(data_dir: Path):
+    """One open reader per process, reopened when the monthly file changes."""
+    path = db_path(data_dir)
+    if not path.exists():
+        return None
+    mtime = path.stat().st_mtime
+    cached = _reader_cache.get("r")
+    if cached and cached[0] == str(path) and cached[1] == mtime:
+        return cached[2]
+    import maxminddb
+    if cached:
+        try:
+            cached[2].close()
+        except Exception:  # noqa: BLE001
+            pass
+    reader = maxminddb.open_database(str(path))
+    _reader_cache["r"] = (str(path), mtime, reader)
+    return reader
+
+
+def lookup(conn: sqlite3.Connection, data_dir: Path, ip: str | None, now: float | None = None) -> dict | None:
+    """Location for one IP, from ip_geo if known, else the local database
+    (and cached in ip_geo). None if unknown or no database yet."""
+    if not ip:
+        return None
+    row = conn.execute("SELECT * FROM ip_geo WHERE ip = ?", (ip,)).fetchone()
+    if row is not None:
+        return dict(row)
+    now = int(now or time.time())
+    if is_private(ip):
+        rec, priv = {"city": None, "region": None, "country_code": None, "country": None, "lat": None, "lon": None}, 1
+    else:
+        reader = _reader(Path(data_dir))
+        if reader is None:
+            return None
+        try:
+            rec = parse_record(reader.get(ip))
+        except ValueError:
+            return None
+        priv = 0
+    conn.execute("INSERT OR REPLACE INTO ip_geo (ip, is_private, city, region, country_code, country, lat, lon, "
+                 "looked_up_at) VALUES (?,?,?,?,?,?,?,?,?)",
+                 (ip, priv, rec["city"], rec["region"], rec["country_code"], rec["country"], rec["lat"], rec["lon"], now))
+    return {"ip": ip, "is_private": priv, **rec}
+
+
 def pending(conn: sqlite3.Connection) -> int:
     return conn.execute(
         "SELECT COUNT(DISTINCT p.ip_address) FROM plays p LEFT JOIN ip_geo g ON g.ip = p.ip_address "

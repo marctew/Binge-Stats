@@ -78,6 +78,21 @@ def stop_session(conn: sqlite3.Connection, session_id: str, message: str) -> Non
     client.terminate(session_id, (message or "").strip()[:200] or "Your stream was stopped by the server admin.")
 
 
+def stop_user_sessions(conn: sqlite3.Connection, user_id: int, message: str = "",
+                       client: PlexClient | None = None) -> int:
+    """Stop every active stream for one person. Returns how many were stopped."""
+    ids = [r[0] for r in conn.execute("SELECT session_id FROM active_sessions WHERE user_id = ?", (user_id,))]
+    if not ids:
+        return 0
+    client = client or plex_client(conn)
+    if client is None:
+        raise PlexError("Plex is not configured")
+    msg = (message or "").strip()[:200] or "Your stream was stopped by the server admin."
+    for sid in ids:
+        client.terminate(sid, msg)
+    return len(ids)
+
+
 def worker_status(conn: sqlite3.Connection, now: float | None = None) -> dict:
     now = now or time.time()
     hb = settings.get(conn, "worker.heartbeat_at") or 0

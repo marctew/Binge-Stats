@@ -17,7 +17,10 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
+from pathlib import Path
+
 from .. import db
+from . import guard
 from ..plex.client import PlexClient, PlexError
 from ..plex.models import PlexSession
 from ..plex.parse import build_stream, parse_identity, parse_sessions, parse_source_media
@@ -50,13 +53,19 @@ class PollResult:
     started: list[str] = field(default_factory=list)
     finalised: list[int | None] = field(default_factory=list)   # play ids (None = dropped)
     events: list[tuple[str, dict]] = field(default_factory=list)
+    stopped: list[str] = field(default_factory=list)
 
 
 class Poller:
     def __init__(self, conn: sqlite3.Connection, client: PlexClient,
-                 clock: Callable[[], float] = time.time, on_event: EventSink | None = None):
+                 clock: Callable[[], float] = time.time, on_event: EventSink | None = None,
+                 data_dir: Path | None = None):
         self.conn = conn
         self.client = client
+        # where the geo database lives; defaults to the database's own folder
+        self.data_dir = Path(data_dir) if data_dir else Path(conn.execute("PRAGMA database_list").fetchone()[2]).parent
+        self._stops: list[tuple[str, str]] = []
+        self._live: set[str] = set()
         self.clock = clock
         self.on_event = on_event or (lambda t, c: None)
         self.failures = 0
@@ -148,6 +157,8 @@ class Poller:
                     s.stream = build_stream(raw, src)
             prepared.append((s, raw, row, snap))
 
+        self._stops = []
+        self._live = {s.session_id for s, *_ in prepared}
         with db.transaction(self.conn):
             self.conn.execute("UPDATE servers SET last_seen_at = ?, is_up = 1 WHERE id = ?",
                               (now, self.server_id))
@@ -175,6 +186,13 @@ class Poller:
                     self.conn.execute("UPDATE active_sessions SET missed_polls = ? WHERE session_id = ?",
                                       (missed, sid))
 
+        for session_id, message in self._stops:
+            try:
+                self.client.terminate(session_id, message)
+                log.info("stopped session %s (limit)", session_id)
+            except PlexError as e:
+                log.warning("couldn't stop session %s: %s", session_id, e)
+        result.stopped = [sid for sid, _m in self._stops]
         self._emit(events)
         return result
 
@@ -234,6 +252,7 @@ class Poller:
         events.append(("play_start", ctx))
         if s.stream.decision == "transcode":
             events.append(("transcode_start", ctx))
+        self._stops += guard.on_start(self.conn, s, now, self.data_dir, events, live=self._live)
 
     def _update(self, s: PlexSession, row: sqlite3.Row, snap: dict, now: int, cfg: dict,
                 events: list) -> None:
@@ -259,6 +278,7 @@ class Poller:
 
         if prev is not None and prev.stream.decision != "transcode" and s.stream.decision == "transcode":
             events.append(("transcode_start", ctx))
+            self._stops += guard.on_transcode(self.conn, s, now, events, live=self._live)
 
         if not snap.get("fired_watched") and s.duration_s:
             pct = s.view_offset_s / s.duration_s * 100

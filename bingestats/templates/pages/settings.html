@@ -89,6 +89,56 @@
     </div>
   </section>
 
+  <section id="homeassistant" class="card p-5 lg:col-span-3" x-data="{ on: {{ 'true' if ha['mqtt.enabled'] else 'false' }} }">
+    <div class="flex flex-wrap items-start justify-between gap-3">
+      <div>
+        <h2 class="flex items-center gap-2 font-semibold">{{ icon('home', 'h-4 w-4 text-[#18bcf2]') }} Home Assistant</h2>
+        <p class="mt-1 text-sm text-muted">Publishes stream counts, bandwidth, Plex status and alerts to your MQTT broker, with discovery so they appear in HA as one device.</p>
+      </div>
+      {% set st = ha['mqtt.status'] %}
+      <span class="{{ 'badge-play' if st == 'connected' else ('badge-muted' if st == 'off' or st.startswith('Connecting') else 'badge-transcode') }}">
+        {{ 'Connected' if st == 'connected' else ('Off' if st == 'off' else st) }}</span>
+    </div>
+    <form method="post" action="{{ url_for('ui.settings_homeassistant') }}" class="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label class="flex items-center gap-3 rounded-xl border border-border bg-surface-2/40 px-3 py-2.5 text-sm sm:col-span-2 lg:col-span-4">
+        <input type="checkbox" name="mqtt.enabled" x-model="on" {{ 'checked' if ha['mqtt.enabled'] }} class="rounded"> Publish to MQTT
+      </label>
+      <div class="sm:col-span-2 lg:col-span-1"><label class="label" for="mqtt_host">Broker host</label>
+        <input id="mqtt_host" name="mqtt.host" class="input" value="{{ ha['mqtt.host'] }}" placeholder="192.168.4.121" :required="on"></div>
+      <div><label class="label" for="mqtt_port">Port</label>
+        <input id="mqtt_port" name="mqtt.port" type="number" min="1" max="65535" class="input" value="{{ ha['mqtt.port'] }}"></div>
+      <div><label class="label" for="mqtt_user">Username</label>
+        <input id="mqtt_user" name="mqtt.username" class="input" value="{{ ha['mqtt.username'] }}" autocomplete="off"></div>
+      <div><label class="label" for="mqtt_pass">Password</label>
+        <input id="mqtt_pass" name="mqtt.password" type="password" class="input" autocomplete="new-password"
+               placeholder="{{ 'Saved – leave blank to keep' if ha.has_password else 'None' }}">
+        {% if ha.has_password %}<label class="mt-1.5 flex items-center gap-2 text-xs text-muted"><input type="checkbox" name="clear_password" class="rounded"> Remove saved password</label>{% endif %}
+      </div>
+      <div><label class="label" for="mqtt_base">Base topic</label>
+        <input id="mqtt_base" name="mqtt.base_topic" class="input font-mono text-xs" value="{{ ha['mqtt.base_topic'] }}"></div>
+      <div><label class="label" for="mqtt_prefix">Discovery prefix</label>
+        <input id="mqtt_prefix" name="mqtt.discovery_prefix" class="input font-mono text-xs" value="{{ ha['mqtt.discovery_prefix'] }}"></div>
+      <label class="flex items-center gap-3 self-end rounded-xl border border-border bg-surface-2/40 px-3 py-2.5 text-sm sm:col-span-2">
+        <input type="checkbox" name="mqtt.tls" {{ 'checked' if ha['mqtt.tls'] }} class="rounded"> Use TLS
+      </label>
+      <fieldset class="sm:col-span-2 lg:col-span-4">
+        <legend class="label">People to track</legend>
+        <p class="mb-2 text-xs text-muted">Each gets a "watching" sensor and a "stop streams" button in HA.</p>
+        {% if ha.users %}
+        <div class="flex flex-wrap gap-2">
+          {% for u in ha.users %}
+          <label class="flex cursor-pointer items-center gap-2 rounded-full border border-border px-3 py-1.5 text-sm has-[:checked]:border-accent has-[:checked]:bg-accent/15">
+            <input type="checkbox" name="tracked_users" value="{{ u.id }}" {{ 'checked' if u.tracked }} class="rounded"> {{ u.name }}
+          </label>
+          {% endfor %}
+        </div>
+        {% else %}<p class="text-sm text-muted">No users yet. They appear after the first user sync.</p>{% endif %}
+      </fieldset>
+      <div class="sm:col-span-2 lg:col-span-4"><button class="btn-primary">Save</button></div>
+    </form>
+  </section>
+
   <section class="card p-5 lg:col-span-3">
     <h2 class="font-semibold">Recording</h2>
     <p class="mt-1 text-sm text-muted">Changes apply on the worker's next poll.</p>

@@ -58,9 +58,11 @@ def test_migration_2_upgrades_v1_database(tmp_path, monkeypatch):
     assert db.migrate(c) == 1
     c.execute("INSERT INTO notify_rules (name, trigger, body_template, channel_ids) VALUES ('mine', 'play_start', 'x', '[]')")
     monkeypatch.undo()
-    assert db.migrate(c) == 2
+    assert db.migrate(c) == db.LATEST
     names = [r[0] for r in c.execute("SELECT name FROM notify_rules ORDER BY id")]
-    assert names[0] == "mine" and "Recently added" in names and len(names) == 1 + 5
+    from bingestats.services.notify_defaults import DEFAULT_RULES, LIMIT_RULES
+    assert names[0] == "mine" and "Recently added" in names and "Stream limit reached" in names
+    assert len(names) == 1 + len(DEFAULT_RULES) + len(LIMIT_RULES)
     assert c.execute("SELECT COUNT(*) FROM notify_rules WHERE enabled = 1 AND name != 'mine'").fetchone()[0] == 0
     c.execute("INSERT INTO notify_samples VALUES ('play_start', '{}', 0)")
 
@@ -196,14 +198,14 @@ def test_conditions_disabled_rules_and_channels(ndb):
     cid = channel(ndb)
     off = channel(ndb, "off")
     ndb.execute("UPDATE notify_channels SET enabled = 0 WHERE id = ?", (off,))
-    rule(ndb, channels=[cid, off], name="local only",
-         conditions=[{"field": "location.is_local", "op": "is_true"}])
+    local_only = rule(ndb, channels=[cid, off], name="local only",
+                      conditions=[{"field": "location.is_local", "op": "is_true"}])
     rule(ndb, channels=[cid], name="remote only", conditions=[{"field": "location.is_local", "op": "is_false"}])
     rid = rule(ndb, channels=[cid], name="paused")
     notify.set_rule_enabled(ndb, rid, False)
     n = Notifier(ndb, "unused", sender=Sent(), start_thread=False)
     out = n.handle("play_start", session_event())
-    assert [(d.rule_id, d.channel_id) for d in out] == [(1 + 5, cid)]
+    assert [(d.rule_id, d.channel_id) for d in out] == [(local_only, cid)]
 
 
 def test_cooldown(ndb, clock):

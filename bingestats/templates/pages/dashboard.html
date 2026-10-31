@@ -18,6 +18,17 @@
   {% include "partials/now_strip.html" %}
 </div>
 
+{% if open_alerts %}
+<section class="mt-6">
+  <div class="mb-2 flex items-baseline justify-between">
+    <h2 class="text-sm font-semibold">Needs a look · {{ open_alert_count }}</h2>
+    <a href="{{ url_for('ui.alerts_page') }}" class="text-xs text-muted hover:text-text">All alerts →</a>
+  </div>
+  {% from "macros/alerts.html" import alert_list %}
+  {{ alert_list(open_alerts, url_for('ui.index')) }}
+</section>
+{% endif %}
+
 <div class="mt-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
   {{ stat_tile('Plays today', '{:,}'.format(today.plays), (today.watch_time_s | duration(True)) ~ ' watched', 'play', 'accent') }}
   {{ stat_tile('Last 7 days', '{:,}'.format(week.plays), (week.watch_time_s | duration(True)) ~ ' · ' ~ (week.users | plural('person', 'people')), 'history', 'play') }}

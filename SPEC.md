@@ -463,12 +463,18 @@ Turning a rule on requires picking a channel first.
 
 ## 10. Stream limits and sharing detection
 
+As built in `worker/guard.py`, called by the poller inside its write transaction. Alerts are written there; any stream to stop is stopped after the commit, so a slow Plex call never holds the database lock.
+
 Checked when a session starts:
-- **Stream limit:** count the user's active sessions. If the count is over `max_streams`, raise a `stream_limit` alert and trigger. If `limit_action = 'stop'`, stop the **newest** session with `limit_message`.
-- **Transcode limit:** same as the stream limit, counting only transcoding sessions.
-- **Concurrent IPs:** two or more active sessions for one user from different **public** IPs (private and LAN IPs are ignored). Raise a `concurrent_ips` alert with both locations. This flags only and never stops anything automatically.
-- **New country:** the first play ever for this user from a country (by geo) that isn't the user's most common country. Flag only.
-- **Alerts** appear on the dashboard with an "acknowledge" action and live on the user's page.
+- **Which streams count:** only the ones Plex reported in this poll. A stream that just ended is still in `active_sessions` for the grace polls, and counting it would trip the limit when someone stops on the TV and carries on on their phone.
+- **Stream limit:** if the user's live streams are over `max_streams`, raise a `stream_limit` alert and trigger. If `limit_action = 'stop'`, stop the **newest** stream with `limit_message` (or a default).
+- **Transcode limit:** the same, counting only transcoding streams. Also checked when a running stream switches to transcoding.
+- **Concurrent IPs:** two or more live streams for one user from different **public** IPs (private, LAN and CGNAT/Tailscale addresses are ignored). Raises a `concurrent_ips` alert with each place. Flag only, never stops anything. Not repeated for the same user within an hour.
+- **New country:** a play from a country this user has never played from, when they have at least one earlier located play to compare with. Once per user per country. Flag only.
+- Limits are 1–20 or blank for none, set on the user page or with `PATCH /api/v1/users/{id}`.
+- Two notification rules are seeded, disabled: "Stream limit reached" and "Possible account sharing" (6 h cooldown). Limit triggers carry `count`, `limit`, `stopped`, `sessions`, `places_text`, `country` and `city`.
+- **Alerts** show on the dashboard ("Needs a look"), on `/alerts` and on the user's page, each with "Got it" (acknowledge), plus "Acknowledge all". Acknowledging is a web-process write, like settings.
+- **Stop all of a user's streams:** user page, `POST /api/v1/users/{id}/stop`, and the HA button.
 
 ---
 
@@ -531,24 +537,25 @@ Per user and per year, plus server-wide (`user_id = 0`). Computed by `services/w
 
 ## 14. Home Assistant (MQTT)
 
-Off until configured. The worker publishes discovery configs under `{discovery_prefix}` with one device, "Binge Stats" (model: the Plex server name). State is published under `{base_topic}/...`, retained, with availability on `{base_topic}/status` via LWT.
+Off until configured in **Settings → Home Assistant**. As built in `worker/mqtt.py` (paho-mqtt 2.1, MQTT 3.1.1). The worker connects, publishes discovery configs under `{discovery_prefix}` for one device, "Binge Stats" (model: the Plex server name), and publishes state under `{base_topic}/...`. Everything is retained. Availability is `{base_topic}/status`, `online`/`offline`, with `offline` as the LWT.
 
-| Entity | Type | Value |
+| Entity | Type | Topic and value |
 |---|---|---|
-| Active streams | sensor | count, with attributes listing sessions (user, title, state, decision) |
-| Transcodes | sensor | count |
-| Direct plays / direct streams | sensor | counts |
-| Bandwidth total / LAN / WAN | sensor | Mbps, 1 dp |
-| Plex server | binary_sensor (connectivity) | up/down |
-| Plays today / watch time today | sensor | count / hours |
+| Active streams | sensor | `{base}/state` `streams`; attributes from `{base}/sessions` (user, title, state, decision, player, progress) |
+| Transcodes / Direct plays / Direct streams | sensor | `{base}/state` counts |
+| Bandwidth / Bandwidth LAN / Bandwidth WAN | sensor, `data_rate` | Mbit/s, 1 dp |
+| Plex server | binary_sensor, `connectivity` | `plex_up` |
+| Plays today / Watch time today | sensor, `total_increasing` | finished plays since local midnight / hours |
 | Unacknowledged alerts | sensor | count |
-| `{friendly_name}` watching | sensor, per tracked user | the title, or "idle"; attributes: progress %, device, decision |
-| Stop `{friendly_name}`'s streams | button, per tracked user | stops all of that user's sessions with the default message |
+| `{name}` watching | sensor, per tracked user | `{base}/user/{id}`: the title (`Show S01E02`, `Film (2024)`) or `idle`; attributes: streams, progress, player, decision, playback, sessions |
+| Stop `{name}`'s streams | button, per tracked user | presses `PRESS` on `{base}/cmd/stop_user/{id}`; stops all of that user's streams with the default message |
 
-- **Tracked users** are chosen in Settings → Home Assistant. The default is none, so we don't create entities for every user.
-- Publish on change, and every 60 s.
-- Command topic: `{base_topic}/cmd/stop_user/{user_id}`.
-- Removing a tracked user publishes an empty discovery config so HA deletes the entity.
+- **Tracked users** are ticked in Settings. The default is none, so we don't create entities for every user. Button presses for users who aren't tracked are ignored.
+- State is published when it changes (checked every worker pass, so within one poll interval) and everything again every 60 s. Discovery is published when it changes and on every (re)connect.
+- Un-tracking a user publishes empty discovery configs and an empty state topic, so HA removes the entities. The worker remembers who it published in `mqtt.published_users`, so this survives restarts.
+- Changing the broker, credentials or topics reconnects. Changing the topics leaves the old retained discovery behind; clear it from the broker if you do that.
+- The connection status is shown in Settings (`mqtt.status`, written by the worker). The password is never shown back; leaving it blank keeps the saved one.
+- Callbacks run on paho's thread and only queue work; the worker thread does all database reads and Plex calls. A button press wakes the worker straight away.
 
 ---
 
@@ -601,6 +608,7 @@ Every page is a Jinja template that extends `base.html`. Pages refresh their par
 | GET | `/history?user_id&library_id&type&decision&from&to&q` | read |
 | GET | `/users`, `/users/{id}`, `/users/{id}/stats?from&to` | read |
 | PATCH | `/users/{id}` `{friendly_name, max_streams, max_transcodes, limit_action, limit_message, keep_history}` | write |
+| POST | `/users/{id}/stop` `{message}` → `{stopped}` | write |
 | GET | `/libraries`, `/libraries/{id}` | read |
 | GET | `/items/{rating_key}` | read |
 | GET | `/stats/summary?from&to` | read |
@@ -608,7 +616,8 @@ Every page is a Jinja template that extends `base.html`. Pages refresh their par
 | GET | `/stats/top?kind=users\|shows\|movies\|platforms&from&to&limit` | read |
 | GET | `/stats/heatmap?user_id&from&to` | read |
 | GET | `/insights/transcodes`, `/insights/library-health`, `/insights/binges` | read |
-| GET | `/alerts`, POST `/alerts/{id}/ack` | read / write |
+| GET | `/alerts?all&user_id&limit` → `{items, unacknowledged}` | read |
+| POST | `/alerts/{id}/ack`, `/alerts/ack` (all) | write |
 | GET | `/wrapped/{user_id}/{year}` | read |
 | POST | `/jobs` `{kind, params}`, GET `/jobs/{id}` | write / read |
 

@@ -45,3 +45,24 @@ DEFAULT_RULES = [
                  "{% if items | length > 10 %}…and {{ items | length - 10 }} more{% endif %}"),
     },
 ]
+
+
+# Added by migration 3 (milestone 5).
+LIMIT_RULES = [
+    {
+        "name": "Stream limit reached",
+        "trigger": "stream_limit",
+        "title": "{{ user.name }} hit their stream limit ({{ count }}/{{ limit }})",
+        "body": ("{% for s in sessions %}• {{ s.title }} on {{ s.player }}\n{% endfor %}"
+                 "{% if stopped %}The newest stream was stopped.{% endif %}"),
+        "include_poster": False,
+    },
+    {
+        "name": "Possible account sharing",
+        "trigger": "concurrent_ips",
+        "title": "{{ user.name }} is streaming from two places at once",
+        "body": "{{ places_text }}\n{% for s in sessions %}• {{ s.title }} on {{ s.player }} ({{ s.ip }})\n{% endfor %}",
+        "include_poster": False,
+        "cooldown_s": 21600,
+    },
+]

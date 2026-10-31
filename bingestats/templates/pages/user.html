@@ -21,11 +21,27 @@
   <div x-data="{ open: false }" class="relative">
     <button class="btn-ghost" @click="open = !open">{{ icon('settings', 'h-4 w-4') }} Edit</button>
     <form x-cloak x-show="open" @click.outside="open = false" method="post"
-          class="absolute right-0 top-12 z-20 w-72 space-y-3 rounded-2xl border border-border bg-surface p-4 shadow-2xl">
+          class="absolute right-0 top-12 z-20 w-80 space-y-3 rounded-2xl border border-border bg-surface p-4 shadow-2xl">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div><label class="label" for="friendly_name">Display name</label>
         <input id="friendly_name" name="friendly_name" class="input" value="{{ user.friendly_name or '' }}" placeholder="{{ user.username or '' }}"></div>
       <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="keep_history" {{ 'checked' if user.keep_history }} class="rounded"> Record this user's plays</label>
+      <div class="border-t border-border pt-3">
+        <span class="label">Limits</span>
+        <div class="grid grid-cols-2 gap-2">
+          <div><label class="text-xs text-muted" for="max_streams">Streams at once</label>
+            <input id="max_streams" name="max_streams" type="number" min="1" max="20" class="input" value="{{ user.max_streams or '' }}" placeholder="No limit"></div>
+          <div><label class="text-xs text-muted" for="max_transcodes">Transcodes at once</label>
+            <input id="max_transcodes" name="max_transcodes" type="number" min="1" max="20" class="input" value="{{ user.max_transcodes or '' }}" placeholder="No limit"></div>
+        </div>
+        <label class="mt-2 block text-xs text-muted" for="limit_action">When over the limit</label>
+        <select id="limit_action" name="limit_action" class="input">
+          <option value="notify" {{ 'selected' if user.limit_action != 'stop' }}>Alert me</option>
+          <option value="stop" {{ 'selected' if user.limit_action == 'stop' }}>Alert me and stop the newest stream</option>
+        </select>
+        <label class="mt-2 block text-xs text-muted" for="limit_message">Message they see when stopped</label>
+        <input id="limit_message" name="limit_message" class="input" maxlength="200" value="{{ user.limit_message or '' }}" placeholder="You've reached the stream limit on this server.">
+      </div>
       <button class="btn-primary w-full">Save</button>
     </form>
   </div>
@@ -92,4 +108,10 @@
 </div>
 
 <div class="mt-8">{{ locations_card(locations, geo_enabled) }}</div>
+
+{% if user_alerts %}
+{{ section_title('Alerts') }}
+{% from "macros/alerts.html" import alert_list %}
+{{ alert_list(user_alerts, url_for('ui.user_page', user_id=user.id)) }}
+{% endif %}
 {% endblock %}

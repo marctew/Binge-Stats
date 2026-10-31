@@ -12,7 +12,7 @@ from functools import wraps
 from flask import Blueprint, current_app, jsonify, request, session
 
 from ..plex.client import PlexError
-from ..services import activity, api_tokens, history, libraries, settings, stats
+from ..services import activity, alerts, api_tokens, history, libraries, settings, stats
 
 bp = Blueprint("api", __name__, url_prefix="/api/v1")
 
@@ -168,10 +168,52 @@ def api_user_update(user_id: int):
     u = libraries.get_user(conn, user_id)
     if u is None:
         return _err("not_found", "No such user", 404)
-    libraries.update_user(conn, user_id,
-                          friendly_name=body.get("friendly_name", u["friendly_name"]),
-                          keep_history=bool(body.get("keep_history", u["keep_history"])))
+    limits = {k: body[k] for k in ("max_streams", "max_transcodes", "limit_action", "limit_message") if k in body}
+    try:
+        libraries.update_user(conn, user_id,
+                              friendly_name=body.get("friendly_name", u["friendly_name"]),
+                              keep_history=bool(body.get("keep_history", u["keep_history"])), **limits)
+    except ValueError as e:
+        return _err("invalid", str(e), 400)
     return jsonify({"ok": True})
+
+
+@bp.route("/users/<int:user_id>/stop", methods=["POST"])
+@require("write")
+def api_user_stop(user_id: int):
+    conn = _db()
+    if libraries.get_user(conn, user_id) is None:
+        return _err("not_found", "No such user", 404)
+    body = request.get_json(silent=True) or {}
+    try:
+        n = activity.stop_user_sessions(conn, user_id, body.get("message", ""))
+    except PlexError as e:
+        return _err("plex_error", str(e), 502)
+    return jsonify({"ok": True, "stopped": n})
+
+
+# -- alerts --------------------------------------------------------------------------
+
+@bp.route("/alerts")
+@require("read")
+def api_alerts():
+    items = alerts.list_alerts(_db(), include_acked=request.args.get("all") in ("1", "true"),
+                               user_id=_int_arg("user_id"), limit=_int_arg("limit", 100, 1, 500))
+    return jsonify({"items": items, "unacknowledged": alerts.unacked_count(_db())})
+
+
+@bp.route("/alerts/<int:alert_id>/ack", methods=["POST"])
+@require("write")
+def api_alert_ack(alert_id: int):
+    if not alerts.acknowledge(_db(), alert_id):
+        return _err("not_found", "No such alert", 404)
+    return jsonify({"ok": True})
+
+
+@bp.route("/alerts/ack", methods=["POST"])
+@require("write")
+def api_alerts_ack_all():
+    return jsonify({"ok": True, "acknowledged": alerts.acknowledge(_db())})
 
 
 @bp.route("/libraries")

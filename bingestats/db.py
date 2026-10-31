@@ -227,7 +227,19 @@ def _m2(conn: sqlite3.Connection) -> None:
              r.get("cooldown_s", 0), int(r.get("include_poster", True))))
 
 
-MIGRATIONS = [_m1, _m2]
+def _m3(conn: sqlite3.Connection) -> None:
+    """Stream limits and sharing (M5): two more default rules, disabled."""
+    from .services.notify_defaults import LIMIT_RULES
+    for r in LIMIT_RULES:
+        conn.execute(
+            "INSERT INTO notify_rules (name, enabled, trigger, conditions, title_template, body_template, channel_ids, "
+            "cooldown_s, include_poster, created_at) VALUES (?, 0, ?, '[]', ?, ?, '[]', ?, ?, strftime('%s','now'))",
+            (r["name"], r["trigger"], r["title"], r["body"], r.get("cooldown_s", 0), int(r.get("include_poster", True))))
+    conn.execute("CREATE INDEX IF NOT EXISTS alerts_user ON alerts(user_id, kind, created_at)")
+    conn.execute("CREATE INDEX IF NOT EXISTS alerts_open ON alerts(acknowledged, created_at)")
+
+
+MIGRATIONS = [_m1, _m2, _m3]
 LATEST = len(MIGRATIONS)
 
 

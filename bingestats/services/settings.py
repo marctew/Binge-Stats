@@ -1,6 +1,7 @@
 """Typed access to the settings table. Nothing else reads it directly."""
 from __future__ import annotations
 
+import copy
 import json
 import sqlite3
 from typing import Any
@@ -41,11 +42,14 @@ DEFAULTS: dict[str, Any] = {
     "mqtt.tls": False,
     "mqtt.base_topic": "bingestats",
     "mqtt.discovery_prefix": "homeassistant",
+    "mqtt.tracked_users": [],      # user ids that get a "watching" sensor and a stop button
     "backup.keep": 7,
     "auth.proxy_header": "",
     # Written by the worker, read by the UI.
     "worker.heartbeat_at": 0,
     "worker.last_error": "",
+    "mqtt.status": "off",
+    "mqtt.published_users": [],    # users whose discovery is out there, so untracking can remove it
 }
 
 # Keys never shown back in the UI or logged.
@@ -63,6 +67,7 @@ BOUNDS: dict[str, tuple[int, int]] = {
     "library.sync_h": (1, 168),
     "library.recent_check_min": (2, 120),
     "notify.digest_wait_min": (0, 240),
+    "mqtt.port": (1, 65535),
 }
 
 
@@ -71,12 +76,12 @@ def get(conn: sqlite3.Connection, key: str) -> Any:
         raise KeyError(key)
     row = conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
     if row is None:
-        return DEFAULTS[key]
+        return copy.deepcopy(DEFAULTS[key])
     return json.loads(row[0])
 
 
 def get_many(conn: sqlite3.Connection, prefix: str = "") -> dict[str, Any]:
-    out = {k: v for k, v in DEFAULTS.items() if k.startswith(prefix)}
+    out = {k: copy.deepcopy(v) for k, v in DEFAULTS.items() if k.startswith(prefix)}
     for row in conn.execute("SELECT key, value FROM settings WHERE key LIKE ?", (prefix + "%",)):
         if row[0] in DEFAULTS:
             out[row[0]] = json.loads(row[1])
@@ -97,6 +102,8 @@ def set(conn: sqlite3.Connection, key: str, value: Any) -> None:  # noqa: A001 -
                 raise ValueError(f"{key} must be between {lo} and {hi}")
     elif isinstance(default, str):
         value = str(value)
+    elif isinstance(default, list):   # lists are of ids
+        value = sorted({int(v) for v in value})
     conn.execute(
         "INSERT INTO settings (key, value) VALUES (?, ?) "
         "ON CONFLICT(key) DO UPDATE SET value = excluded.value",

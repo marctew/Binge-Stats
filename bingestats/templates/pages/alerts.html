@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% from "macros/ui.html" import page_header, empty_state %}
+{% from "macros/alerts.html" import alert_list %}
+{% block title %}Alerts · Binge Stats{% endblock %}
+{% block content %}
+{% call page_header('Alerts', 'Stream limits, signs of account sharing, and Plex going up and down.') %}
+<div class="flex gap-2">
+  <a href="{{ url_for('ui.alerts_page', all=None if show_all else '1') }}" class="btn-ghost">{{ 'Hide acknowledged' if show_all else 'Show acknowledged' }}</a>
+  {% if alerts and not show_all %}
+  <form method="post" action="{{ url_for('ui.alerts_ack') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button class="btn-primary">Acknowledge all</button></form>
+  {% endif %}
+</div>
+{% endcall %}
+{% if alerts %}
+{{ alert_list(alerts, url_for('ui.alerts_page', all='1' if show_all else None)) }}
+{% else %}
+{{ empty_state('All clear', 'Nothing needs your attention. Set stream limits on a person\'s page.', 'check') }}
+{% endif %}
+{% endblock %}

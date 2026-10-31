@@ -5,7 +5,8 @@ from flask import (Blueprint, Response, current_app, flash, redirect, render_tem
                    url_for)
 
 from ..plex.client import PlexError
-from ..services import activity, api_tokens, geo, history, jobs, libraries, plex_setup, settings, stats
+from ..services import (activity, alerts, api_tokens, geo, history, homeassistant, jobs, libraries, plex_setup,
+                        settings, stats)
 
 bp = Blueprint("ui", __name__)
 
@@ -55,7 +56,8 @@ def index():
         top_users=stats.top(conn, month, kind="users", metric="watch_time", limit=6)["items"],
         top_shows=stats.top(conn, month, kind="shows", limit=6)["items"],
         top_movies=stats.top(conn, month, kind="movies", limit=6)["items"],
-        recent=stats.recently_added(conn, 8))
+        recent=stats.recently_added(conn, 8),
+        open_alerts=alerts.list_alerts(conn, limit=5), open_alert_count=alerts.unacked_count(conn))
 
 
 @bp.route("/dashboard/now")
@@ -258,7 +260,17 @@ def _render_settings(conn, **extra):
                            server=conn.execute("SELECT * FROM servers ORDER BY id LIMIT 1").fetchone(),
                            library_sync=jobs.latest(conn, "library_sync"), user_sync=jobs.latest(conn, "user_sync"),
                            last_library_sync=settings.get(conn, "library.last_sync_at"),
-                           recent_jobs=jobs.recent(conn, 8))
+                           recent_jobs=jobs.recent(conn, 8), ha=homeassistant.view(conn))
+
+
+@bp.route("/settings/homeassistant", methods=["POST"])
+def settings_homeassistant():
+    try:
+        homeassistant.save(_db(), request.form)
+        flash("Home Assistant settings saved. The worker picks them up within a few seconds.", "ok")
+    except ValueError as e:
+        flash(str(e), "error")
+    return redirect(url_for("ui.settings_page") + "#homeassistant")
 
 
 @bp.route("/settings/sync", methods=["POST"])
@@ -324,10 +336,16 @@ def user_page(user_id: int):
     if request.method == "POST":
         try:
             libraries.update_user(conn, user_id, friendly_name=request.form.get("friendly_name"),
-                                  keep_history=request.form.get("keep_history") == "on")
+                                  keep_history=request.form.get("keep_history") == "on",
+                                  max_streams=request.form.get("max_streams"),
+                                  max_transcodes=request.form.get("max_transcodes"),
+                                  limit_action=request.form.get("limit_action", "notify"),
+                                  limit_message=request.form.get("limit_message"))
             flash("Saved", "ok")
         except LookupError:
             pass
+        except ValueError as e:
+            flash(str(e), "error")
         return redirect(url_for("ui.user_page", user_id=user_id))
     user = libraries.get_user(conn, user_id)
     if user is None:
@@ -336,7 +354,38 @@ def user_page(user_id: int):
     return render_template("pages/user.html", user=user, rows=rows, cursor=None,
                            f=history.HistoryFilter(user_id=user_id), more=bool(cursor),
                            locations=geo.locations(conn, user_id=user_id),
-                           geo_enabled=settings.get(conn, "geo.enabled"))
+                           geo_enabled=settings.get(conn, "geo.enabled"),
+                           user_alerts=alerts.list_alerts(conn, include_acked=True, user_id=user_id, limit=10))
+
+
+@bp.route("/users/<int:user_id>/stop", methods=["POST"])
+def user_stop(user_id: int):
+    try:
+        n = activity.stop_user_sessions(_db(), user_id, request.form.get("message", ""))
+        msg, kind = (f"Stopped {n} stream{'s' if n != 1 else ''}" if n else "Nothing playing"), "ok"
+    except PlexError as e:
+        msg, kind = str(e), "error"
+    if request.headers.get("HX-Request"):
+        return render_template("partials/toast.html", message=msg, kind=kind)
+    flash(msg, kind)
+    return redirect(url_for("ui.user_page", user_id=user_id))
+
+
+# -- alerts --------------------------------------------------------------------------
+
+@bp.route("/alerts")
+def alerts_page():
+    show_all = request.args.get("all") == "1"
+    return render_template("pages/alerts.html", alerts=alerts.list_alerts(_db(), include_acked=show_all, limit=200),
+                           show_all=show_all)
+
+
+@bp.route("/alerts/ack", methods=["POST"])
+def alerts_ack():
+    aid = request.form.get("id")
+    alerts.acknowledge(_db(), int(aid) if aid and aid.isdigit() else None)
+    back = request.form.get("next") or url_for("ui.alerts_page")
+    return redirect(back if back.startswith("/") and not back.startswith("//") else url_for("ui.alerts_page"))
 
 
 # -- libraries ---------------------------------------------------------------------
