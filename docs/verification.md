@@ -138,3 +138,15 @@ Checked 2026-10-31 against Tautulli **v2.18.2**, `/opt/Tautulli/tautulli.db` on 
 - **Not checked from here:**
   - opening a share link on a real phone, from outside the LAN;
   - whether the server's real posters look right in the hero collage.
+
+## Polish (M8), 2026-10-31
+
+- **Backups:** after the deploy, the worker ran the owed nightly backup by itself within a second of starting.
+  - The file is 25.6 MB and self-contained.
+  - It matches the live database (5,554 plays, 15 users, 56,804 library items, schema v6), and `PRAGMA integrity_check` returns `ok`.
+- **CI:** the first run on GitHub Actions passed pyflakes and all 287 tests in 25 s.
+- **Fresh install** (checked locally against an empty database):
+  - every page has an empty state, and none errors;
+  - the dashboard and the new "Get started" step both point to the Tautulli import;
+  - library health and Wrapped explain themselves when there's nothing yet.
+- **Light theme:** every page checked against the same data; there are no dark-only overlays.
