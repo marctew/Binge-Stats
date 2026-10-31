@@ -66,6 +66,7 @@ def build_app(data_dir: str | None = None, *, testing: bool = False) -> Flask:
     from .auth import bp as auth_bp, install as install_auth
     from .routes_api import bp as api_bp
     from .routes_img import bp as img_bp
+    from .routes_notify import bp as notify_bp
     from .routes_ui import bp as ui_bp
 
     install_auth(app)
@@ -73,4 +74,5 @@ def build_app(data_dir: str | None = None, *, testing: bool = False) -> Flask:
     app.register_blueprint(ui_bp)
     app.register_blueprint(img_bp)
     app.register_blueprint(api_bp)
+    app.register_blueprint(notify_bp)
     return app

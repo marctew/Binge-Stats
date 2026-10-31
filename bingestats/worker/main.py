@@ -17,8 +17,10 @@ from .. import db
 from ..plex.client import PlexAuthError, PlexClient
 from ..plex.ws import PlexNudger
 from ..services import settings
+from ..services.notify import Notifier
 from .jobs_runner import JobRunner, schedule_due
 from .poller import Poller
+from .recently_added import check_recent, digest
 
 log = logging.getLogger("bingestats.worker")
 
@@ -51,6 +53,30 @@ class Worker:
         self._plex_key: tuple | None = None
         self.job_wake = threading.Event()
         self.jobs = JobRunner(cfg, self.stop, self.job_wake)
+        self.client: PlexClient | None = None
+        self.notifier = Notifier(self.conn, cfg.db_path, poster_fetch=self._poster)
+
+    def _poster(self, path: str) -> bytes | None:
+        if self.client is None:
+            return None
+        r = self.client.photo(path, 600, 900)
+        return r.content if r.headers.get("Content-Type", "").startswith("image/") else None
+
+    def on_event(self, trigger: str, ctx: dict) -> None:
+        log_event(trigger, ctx)
+        self.notifier.handle(trigger, ctx)
+
+    def recently_added(self) -> None:
+        """Quick new-item check when due, then fire any digest that's ready."""
+        now = time.time()
+        every = int(settings.get(self.conn, "library.recent_check_min")) * 60
+        if self.client is not None and self.poller is not None and self.poller.server_id is not None \
+                and now - (settings.get(self.conn, "library.last_recent_check_at") or 0) >= every:
+            n = check_recent(self.conn, self.client, self.poller.server_id, now)
+            if n:
+                log.info("recent check queued %d new item(s)", n)
+        for event in digest(self.conn, now):
+            self.on_event("recently_added", event)
 
     def _setup_plex(self) -> bool:
         url = settings.get(self.conn, "plex.url")
@@ -62,12 +88,14 @@ class Worker:
             return True
         self._teardown_ws()
         self.poller = None
+        self.client = None
         self._plex_key = key
         if not (url and token):
             return False
         client_id = ensure_client_id(self.conn)
         client = PlexClient(url, token, client_id, verify_tls=verify)
-        self.poller = Poller(self.conn, client, on_event=log_event)
+        self.client = client
+        self.poller = Poller(self.conn, client, on_event=self.on_event)
         if use_ws:
             self.nudger = PlexNudger(client.websocket_url(), token, client_id, self.nudge, self.stop)
             self.nudger.start()
@@ -107,6 +135,10 @@ class Worker:
                     self.job_wake.set()
             except Exception:  # noqa: BLE001
                 log.exception("heartbeat or scheduling failed")
+            try:
+                self.recently_added()
+            except Exception:  # noqa: BLE001
+                log.exception("recently added check failed")
             interval = settings.get(self.conn, "poll.interval_s")
             # A websocket nudge cuts the wait short, debounced by 1 s so a burst
             # of notifications becomes one poll.
@@ -115,6 +147,7 @@ class Worker:
                 self.stop.wait(1)
                 self.nudge.clear()
         self._teardown_ws()
+        self.notifier.stop()
         log.info("Worker stopped")
 
 

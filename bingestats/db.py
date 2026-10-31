@@ -212,7 +212,22 @@ def _m1(conn: sqlite3.Connection) -> None:
 # Ordered. Index + 1 is the schema version the migration produces. Never edit
 # a released migration; append a new one and a test that upgrades from the
 # previous version.
-MIGRATIONS = [_m1]
+def _m2(conn: sqlite3.Connection) -> None:
+    """Notifications (M4): the last real event per trigger, for template
+    previews, and the shipped default rules (disabled, no channels)."""
+    import json
+    conn.execute("CREATE TABLE notify_samples (trigger TEXT PRIMARY KEY, context TEXT NOT NULL, at INTEGER NOT NULL)")
+    conn.execute("ALTER TABLE notify_rules ADD COLUMN created_at INTEGER")
+    from .services.notify_defaults import DEFAULT_RULES
+    for r in DEFAULT_RULES:
+        conn.execute(
+            "INSERT INTO notify_rules (name, enabled, trigger, conditions, title_template, body_template, channel_ids, "
+            "cooldown_s, include_poster, created_at) VALUES (?, 0, ?, ?, ?, ?, '[]', ?, ?, strftime('%s','now'))",
+            (r["name"], r["trigger"], json.dumps(r.get("conditions", [])), r["title"], r["body"],
+             r.get("cooldown_s", 0), int(r.get("include_poster", True))))
+
+
+MIGRATIONS = [_m1, _m2]
 LATEST = len(MIGRATIONS)
 
 

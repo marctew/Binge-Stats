@@ -1,0 +1,18 @@
+{% from "macros/icons.html" import icon %}
+{% if p.error %}
+<div class="rounded-xl border border-danger/30 bg-danger/10 px-3 py-2 font-mono text-xs">{{ p.error }}</div>
+{% else %}
+<div class="rounded-2xl border border-border bg-surface-2/60 p-4">
+  <div class="text-sm font-semibold">{{ p.title or '(no title)' }}</div>
+  {% if p.body %}<div class="mt-1 whitespace-pre-line text-sm text-muted">{{ p.body }}</div>{% endif %}
+</div>
+{% endif %}
+{% if p.condition_error %}
+<p class="mt-3 text-xs text-transcode">Conditions: {{ p.condition_error }}</p>
+{% else %}
+<p class="mt-3 flex items-center gap-1.5 text-xs {{ 'text-play' if p.matches else 'text-muted' }}">
+  {% if p.matches %}{{ icon('check', 'h-3.5 w-3.5') }}{% endif %}
+  {% if p.real %}Rendered with the last real event: it {{ 'would' if p.matches else "wouldn't" }} have been sent.
+  {% else %}Rendered with an example; it {{ 'matches' if p.matches else "doesn't match" }} your conditions.{% endif %}
+</p>
+{% endif %}

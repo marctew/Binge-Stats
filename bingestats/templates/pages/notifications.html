@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% from "macros/ui.html" import page_header, empty_state %}
+{% from "macros/icons.html" import icon %}
+{% block title %}Notifications · Binge Stats{% endblock %}
+{% block content %}
+{% call page_header('Notifications', 'Rules decide what to send; channels decide where it goes.') %}
+<a href="{{ url_for('notify.rule_new') }}" class="btn-primary">{{ icon('plus', 'h-4 w-4') }} New rule</a>
+{% endcall %}
+
+{% if not channels %}
+<div class="mb-6 flex items-start gap-3 rounded-2xl border border-stream/30 bg-stream/10 px-4 py-3 text-sm">
+  <span class="mt-0.5 text-stream">{{ icon('send', 'h-5 w-5') }}</span>
+  <div>Add a channel first (Discord, ntfy, Telegram, Pushover, email…), then switch on the rules you want.
+    Your ntfy server, for example, would be <code class="text-text">ntfy://192.168.4.142/plex</code>.</div>
+</div>
+{% endif %}
+
+<section class="card overflow-hidden">
+  <div class="border-b border-border px-5 py-3"><h2 class="text-sm font-semibold">Rules</h2></div>
+  {% if rules %}
+  <ul class="divide-y divide-border">
+    {% for r in rules %}
+    <li class="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3 {{ 'opacity-60' if not r.enabled }}">
+      <form method="post" action="{{ url_for('notify.rule_toggle', rule_id=r.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="enabled" value="{{ '0' if r.enabled else '1' }}">
+        <button class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition {{ 'bg-play' if r.enabled else 'bg-surface-2 ring-1 ring-inset ring-border' }}"
+                title="{{ 'Switch off' if r.enabled else 'Switch on' }}" aria-pressed="{{ 'true' if r.enabled else 'false' }}">
+          <span class="inline-block h-4 w-4 rounded-full bg-white shadow transition {{ 'translate-x-6' if r.enabled else 'translate-x-1' }}"></span>
+        </button>
+      </form>
+      <a href="{{ url_for('notify.rule_edit', rule_id=r.id) }}" class="min-w-0 flex-1 hover:text-accent">
+        <div class="truncate font-medium">{{ r.name }}</div>
+        <div class="truncate text-xs text-muted">
+          When: {{ r.trigger_label }}{% if r.conditions %} · {{ r.conditions | length | plural('condition') }}{% endif %}
+          {% if r.cooldown_s %} · at most once per {{ r.cooldown_s | duration(True) }}{% endif %}
+        </div>
+      </a>
+      <div class="flex flex-wrap gap-1">
+        {% for cid in r.channel_ids %}<span class="badge-muted">{{ channel_names.get(cid, '?') }}</span>{% else %}<span class="text-xs text-faint">no channel</span>{% endfor %}
+      </div>
+      <span class="w-28 text-right text-xs text-muted">{{ ('sent ' ~ (r.last_sent | relative)) if r.last_sent else 'never sent' }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <div class="p-5">{{ empty_state('No rules', 'Create one to get told when something happens.', 'bell') }}</div>
+  {% endif %}
+</section>
+
+<section id="channels" class="card mt-6 overflow-hidden">
+  <div class="border-b border-border px-5 py-3"><h2 class="text-sm font-semibold">Channels</h2></div>
+  {% if channels %}
+  <ul class="divide-y divide-border">
+    {% for c in channels %}
+    <li x-data="{ edit: false }" class="px-5 py-3">
+      <div class="flex flex-wrap items-center gap-3">
+        <span class="badge-muted font-mono">{{ c.service }}</span>
+        <span class="min-w-0 flex-1 truncate font-medium {{ 'opacity-60' if not c.enabled }}">{{ c.name }}{% if not c.enabled %} <span class="text-xs text-muted">(off)</span>{% endif %}</span>
+        <span class="hidden text-xs text-muted sm:inline">{% if c.fails_24h %}<span class="text-danger">{{ c.fails_24h | plural('failure') }} today</span> · {% endif %}{{ ('last delivered ' ~ (c.last_ok | relative)) if c.last_ok else 'nothing delivered yet' }}</span>
+        <button class="btn-ghost py-1.5" hx-post="{{ url_for('notify.channel_test', channel_id=c.id) }}" hx-target="#toasts" hx-swap="beforeend">{{ icon('send', 'h-4 w-4') }} Test</button>
+        <button type="button" class="btn-icon" @click="edit = !edit" title="Edit">{{ icon('settings', 'h-4 w-4') }}</button>
+      </div>
+      <form x-cloak x-show="edit" method="post" action="{{ url_for('notify.channel_update', channel_id=c.id) }}" class="mt-3 grid gap-3 sm:grid-cols-3">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div><label class="label">Name</label><input name="name" class="input" value="{{ c.name }}" required></div>
+        <div><label class="label">Apprise URL</label><input name="url" class="input font-mono text-xs" placeholder="{{ c.masked }} (leave blank to keep)" autocomplete="off"></div>
+        <div class="flex items-end gap-2">
+          <label class="flex items-center gap-2 py-2 text-sm"><input type="checkbox" name="enabled" {{ 'checked' if c.enabled }} class="rounded"> On</label>
+          <button class="btn-primary">Save</button>
+          <button class="btn-icon text-danger" formaction="{{ url_for('notify.channel_delete', channel_id=c.id) }}" title="Delete" onclick="return confirm('Delete this channel?')">{{ icon('trash', 'h-4 w-4') }}</button>
+        </div>
+      </form>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+  <form method="post" action="{{ url_for('notify.channel_create') }}" class="grid gap-3 border-t border-border bg-surface-2/30 px-5 py-4 sm:grid-cols-[1fr_2fr_auto]">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div><label class="label" for="cname">Name</label><input id="cname" name="name" class="input" placeholder="Phone" required></div>
+    <div><label class="label" for="curl">Apprise URL</label><input id="curl" name="url" class="input font-mono text-xs" placeholder="ntfy://192.168.4.142/plex  ·  discord://webhook_id/token" autocomplete="off" required></div>
+    <div class="flex items-end"><button class="btn-primary w-full">{{ icon('plus', 'h-4 w-4') }} Add channel</button></div>
+    <p class="text-xs text-muted sm:col-span-3">Any service <a class="underline" href="https://github.com/caronc/apprise/wiki" target="_blank" rel="noopener">Apprise supports</a>. URLs often contain secrets, so they're never shown again after saving.</p>
+  </form>
+</section>
+
+<section class="card mt-6 overflow-hidden">
+  <div class="border-b border-border px-5 py-3"><h2 class="text-sm font-semibold">Recent deliveries</h2></div>
+  {% if log %}
+  <ul class="divide-y divide-border text-sm">
+    {% for l in log %}
+    <li class="flex flex-wrap items-baseline gap-x-3 gap-y-1 px-5 py-2.5">
+      <span class="{{ 'text-play' if l.ok else 'text-danger' }}">{{ icon('check' if l.ok else 'x', 'h-4 w-4') }}</span>
+      <span class="w-24 shrink-0 text-xs text-muted">{{ l.sent_at | relative }}</span>
+      <span class="min-w-0 flex-1 truncate">{{ l.title or (l.body | truncate(80)) or '–' }}</span>
+      <span class="text-xs text-muted">{{ l.rule_name or ('test' if l.dedupe_key == 'test' else 'deleted rule') }} → {{ l.channel_name or '–' }}</span>
+      {% if l.error %}<span class="w-full pl-7 text-xs text-danger">{{ l.error }}</span>{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="px-5 py-6 text-center text-sm text-faint">Nothing sent yet.</p>
+  {% endif %}
+</section>
+{% endblock %}

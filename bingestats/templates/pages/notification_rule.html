@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% from "macros/ui.html" import page_header %}
+{% from "macros/icons.html" import icon %}
+{% block title %}{{ rule.name or 'New rule' }} · Notifications · Binge Stats{% endblock %}
+{% block content %}
+{% call page_header(rule.name or 'New rule', 'When something happens, and it matches your conditions, send a message.') %}
+<a href="{{ url_for('notify.index') }}" class="btn-ghost">Back</a>
+{% endcall %}
+{% if error %}<div class="mb-4 rounded-2xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm">{{ error }}</div>{% endif %}
+
+<script type="application/json" id="rule-data">{{ {'trigger': rule.trigger, 'conditions': rule.conditions, 'fields': fields,
+  'choices': choices, 'opLabels': op_labels, 'variables': variables} | tojson }}</script>
+
+<form method="post" x-data="ruleEditor" class="grid gap-6 lg:grid-cols-5"
+      action="{{ url_for('notify.rule_edit', rule_id=rule.id) if rule.id else url_for('notify.rule_new') }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="conditions" :value="JSON.stringify(conditions)">
+
+  <div class="space-y-6 lg:col-span-3">
+    <section class="card space-y-4 p-5">
+      <div class="grid gap-4 sm:grid-cols-2">
+        <div><label class="label" for="name">Name</label>
+          <input id="name" name="name" class="input" value="{{ rule.name }}" placeholder="Tell me when the kids start watching" required maxlength="80"></div>
+        <div><label class="label" for="trigger">When</label>
+          <select id="trigger" name="trigger" class="input" x-model="trigger" @change="triggerChanged()">
+            {% for key, t in triggers.items() %}<option value="{{ key }}" {{ 'selected' if key == rule.trigger }}>{{ t.label }}</option>{% endfor %}
+          </select></div>
+      </div>
+
+      <div>
+        <span class="label">Only if</span>
+        <template x-if="!fields[trigger].length"><p class="text-sm text-muted">This trigger has no conditions.</p></template>
+        <div class="space-y-2">
+          <template x-for="(c, i) in conditions" :key="i">
+            <div class="flex flex-wrap items-start gap-2 rounded-xl bg-surface-2/50 p-2">
+              <select class="input w-auto flex-1" x-model="c.field" @change="fieldChanged(c)">
+                <template x-for="f in fields[trigger]" :key="f.field"><option :value="f.field" x-text="f.label" :selected="f.field === c.field"></option></template>
+              </select>
+              <select class="input w-auto" x-model="c.op">
+                <template x-for="op in field(c).ops" :key="op"><option :value="op" x-text="opLabels[op]" :selected="op === c.op"></option></template>
+              </select>
+              <template x-if="field(c).kind === 'choice'">
+                <div class="flex min-w-[12rem] flex-1 flex-wrap gap-1.5 py-1">
+                  <template x-for="o in choices[field(c).choices]" :key="o.value">
+                    <label class="flex cursor-pointer items-center gap-1.5 rounded-lg border border-border px-2 py-1 text-xs"
+                           :class="(c.value || []).includes(o.value) && 'border-accent bg-accent/15'">
+                      <input type="checkbox" class="sr-only" :value="o.value" :checked="(c.value || []).includes(o.value)"
+                             @change="toggleChoice(c, o.value)"><span x-text="o.label"></span>
+                    </label>
+                  </template>
+                </div>
+              </template>
+              <template x-if="field(c).kind === 'list'">
+                <select class="input w-auto flex-1" x-model="c.value">
+                  <template x-for="o in choices[field(c).choices]" :key="o.value"><option :value="o.value" x-text="o.label" :selected="o.value === c.value"></option></template>
+                </select>
+              </template>
+              <template x-if="field(c).kind === 'int'"><input type="number" class="input w-28" x-model="c.value"></template>
+              <template x-if="field(c).kind === 'str'"><input type="text" class="input w-auto flex-1" x-model="c.value"></template>
+              <button type="button" class="btn-icon" @click="conditions.splice(i, 1)" title="Remove">{{ icon('x', 'h-4 w-4') }}</button>
+            </div>
+          </template>
+        </div>
+        <button type="button" class="btn-ghost mt-2 py-1.5" x-show="fields[trigger].length" @click="addCondition()">{{ icon('plus', 'h-4 w-4') }} Add condition</button>
+        <p class="mt-2 text-xs text-muted" x-show="conditions.length > 1">All conditions must match.</p>
+      </div>
+    </section>
+
+    <section class="card space-y-4 p-5">
+      <div><label class="label" for="title_template">Title</label>
+        <input id="title_template" name="title_template" class="input font-mono text-xs" value="{{ rule.title_template }}" @focus="target = $el"></div>
+      <div><label class="label" for="body_template">Message</label>
+        <textarea id="body_template" name="body_template" rows="5" class="input font-mono text-xs" @focus="target = $el">{{ rule.body_template }}</textarea></div>
+      <details class="text-xs">
+        <summary class="cursor-pointer text-muted hover:text-text">Variables you can use <span class="text-faint" x-text="variables[trigger].real ? '(examples from the last real event)' : '(examples)'"></span></summary>
+        <div class="mt-2 max-h-64 overflow-y-auto rounded-xl border border-border">
+          <template x-for="v in variables[trigger].vars" :key="v[0]">
+            <button type="button" class="flex w-full items-baseline gap-3 border-b border-border/60 px-3 py-1.5 text-left hover:bg-surface-2" @click="insert(v[0])">
+              {% raw %}<code class="shrink-0 text-accent" x-text="'{{ ' + v[0] + ' }}'"></code>{% endraw %}
+              <span class="truncate text-muted" x-text="v[1] === null ? '' : v[1]"></span>
+            </button>
+          </template>
+        </div>
+        <p class="mt-2 text-muted">Templates are <a class="underline" href="https://jinja.palletsprojects.com/en/stable/templates/" target="_blank" rel="noopener">Jinja</a>: <code>{% raw %}{% if not location.is_local %}…{% endif %}{% endraw %}</code>. Extra helpers: <code>duration</code>, <code>progress_bar</code>, <code>plural</code>.</p>
+      </details>
+    </section>
+  </div>
+
+  <div class="space-y-6 lg:col-span-2">
+    <section class="card p-5" hx-post="{{ url_for('notify.preview') }}" hx-include="closest form"
+             hx-trigger="load, input from:closest form delay:500ms, change from:closest form, click from:closest form delay:100ms"
+             hx-target="#preview" hx-swap="innerHTML">
+      <h2 class="mb-3 text-sm font-semibold">Preview</h2>
+      <div id="preview"><p class="text-sm text-faint">Rendering…</p></div>
+    </section>
+
+    <section class="card space-y-4 p-5">
+      <div>
+        <span class="label">Send to</span>
+        {% if channels %}
+        <div class="space-y-1.5">
+          {% for c in channels %}
+          <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="channel_ids" value="{{ c.id }}" {{ 'checked' if c.id in rule.channel_ids }} class="rounded">
+            {{ c.name }} <span class="text-xs text-muted">{{ c.service }}</span></label>
+          {% endfor %}
+        </div>
+        {% else %}<p class="text-sm text-muted">No channels yet. <a class="underline" href="{{ url_for('notify.index') }}#channels">Add one</a>.</p>{% endif %}
+      </div>
+      <div><label class="label" for="cooldown_s">Don't repeat for the same thing within</label>
+        <select id="cooldown_s" name="cooldown_s" class="input">
+          {% for s, label in [(0, 'No limit'), (300, '5 minutes'), (900, '15 minutes'), (3600, '1 hour'), (21600, '6 hours'), (86400, '1 day')] %}
+          <option value="{{ s }}" {{ 'selected' if (rule.cooldown_s | int) == s }}>{{ label }}</option>{% endfor %}
+        </select>
+        <p class="mt-1 text-xs text-muted">"The same thing" means the same stream, play, show or server.</p></div>
+      <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="include_poster" {{ 'checked' if rule.include_poster }} class="rounded"> Attach the poster</label>
+      <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="enabled" {{ 'checked' if rule.enabled }} class="rounded"> Rule is on</label>
+      <div class="flex flex-wrap gap-2 pt-2">
+        <button class="btn-primary">Save rule</button>
+        {% if rule.id %}
+        <button class="btn-ghost text-danger" formaction="{{ url_for('notify.rule_delete', rule_id=rule.id) }}" formnovalidate onclick="return confirm('Delete this rule?')">{{ icon('trash', 'h-4 w-4') }} Delete</button>
+        {% endif %}
+      </div>
+    </section>
+  </div>
+</form>
+{% endblock %}

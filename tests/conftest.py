@@ -74,6 +74,11 @@ class FakePlex:
         return {"MediaContainer": {"totalSize": len(items), "size": len(items[start:start + size]),
                                    "Metadata": copy.deepcopy(items[start:start + size])}}
 
+    def section_recent(self, section_id, plex_type, size=30):
+        items = sorted(self.library.get((int(section_id), int(plex_type)), []),
+                       key=lambda m: -int(m.get("addedAt") or 0))[:size]
+        return {"MediaContainer": {"totalSize": len(items), "size": len(items), "Metadata": copy.deepcopy(items)}}
+
     def plextv(self, path, accept="application/json"):
         if path not in self.plextv_data:
             raise PlexError(f"plex.tv{path}: HTTP 404")

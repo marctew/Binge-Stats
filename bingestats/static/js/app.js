@@ -37,3 +37,48 @@ function fmt(s) {
   const mm = h ? String(m).padStart(2, "0") : String(m);
   return (h ? h + ":" : "") + mm + ":" + String(sec).padStart(2, "0");
 }
+
+// Notification rule editor: condition builder + variable inserter.
+document.addEventListener("alpine:init", () => {
+  window.Alpine.data("ruleEditor", () => {
+    const data = JSON.parse(document.getElementById("rule-data").textContent);
+    return {
+      trigger: data.trigger,
+      conditions: data.conditions.map((c) => ({ ...c })),
+      fields: data.fields, choices: data.choices, opLabels: data.opLabels, variables: data.variables,
+      target: null,
+      field(c) {
+        return this.fields[this.trigger].find((f) => f.field === c.field) || { ops: [], kind: "str" };
+      },
+      blank(f) {
+        return f.kind === "choice" ? [] : f.kind === "list" ? (this.choices[f.choices][0] || {}).value : f.kind === "int" ? 0 : "";
+      },
+      addCondition() {
+        const f = this.fields[this.trigger][0];
+        this.conditions.push({ field: f.field, op: f.ops[0], value: this.blank(f) });
+      },
+      fieldChanged(c) {
+        const f = this.field(c);
+        c.op = f.ops[0];
+        c.value = this.blank(f);
+      },
+      toggleChoice(c, v) {
+        const vals = Array.isArray(c.value) ? c.value : [];
+        c.value = vals.includes(v) ? vals.filter((x) => x !== v) : [...vals, v];
+      },
+      triggerChanged() {
+        const ok = new Set(this.fields[this.trigger].map((f) => f.field));
+        this.conditions = this.conditions.filter((c) => ok.has(c.field));
+      },
+      insert(name) {
+        const el = this.target || document.getElementById("body_template");
+        const text = "{{ " + name + " }}";
+        const at = el.selectionStart ?? el.value.length;
+        el.value = el.value.slice(0, at) + text + el.value.slice(el.selectionEnd ?? at);
+        el.focus();
+        el.selectionStart = el.selectionEnd = at + text.length;
+        el.dispatchEvent(new Event("input", { bubbles: true }));
+      },
+    };
+  });
+});

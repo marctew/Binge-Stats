@@ -442,7 +442,22 @@ Overlap with live data: if a Tautulli play overlaps a live play for the same use
 
 **Cooldown and dedupe:** `dedupe_key` is per trigger (for example `play_start:{session_id}` or `stream_limit:{user_id}`). Skip a send if the same rule and key were sent within `cooldown_s`. Log every attempt in `notify_log`, and add a "test channel" button.
 
-**Shipped default rules** (disabled until a channel is picked): "Someone started watching", "Transcode because of subtitles", "Stream limit hit", "Server down", "Recently added digest".
+**Shipped default rules**, added by migration 2, disabled and with no channel:
+- "Someone started watching";
+- "Transcoding because of subtitles" (1-hour cooldown per stream);
+- "Plex server down" and "Plex server back";
+- "Recently added".
+
+Turning a rule on requires picking a channel first.
+
+**As built (M4):**
+- **Contexts:** every trigger renders against a plain JSON context: `user`, `item`, `library`, `stream`, `player`, `location`, `progress`, plus `play` on stop and `server` on everything. The digest has `kind`, `show`, `season`, `count`, `items` and `headline`.
+- **Conditions:** only the fields listed in `services/notify.py` FIELDS can be used, and those are what the editor offers.
+- **Previews:** they use the last real event of that trigger, stored in `notify_samples`, or a built-in example if there hasn't been one.
+- **Quick check for new items:** every `library.recent_check_min` (10) minutes the worker asks each library for its newest films, shows, episodes and albums, so new content is spotted within minutes rather than at the 6-hourly full sync.
+- **Digest:** once nothing new has been queued for `notify.digest_wait_min` (10) minutes, the queue is grouped: one event per show and season, one per batch of films in a library, one per artist's albums.
+- **Sending:** a single sender thread in the worker sends through Apprise, attaches the poster when the rule asks for it, and logs every attempt.
+- **Channel URLs:** these often contain tokens. They're stored as entered but only ever shown masked.
 
 ---
 

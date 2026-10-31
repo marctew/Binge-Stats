@@ -25,6 +25,9 @@ DEFAULTS: dict[str, Any] = {
     "library.sync_h": 6,
     "library.stale_months": 12,
     "library.last_sync_at": 0,
+    "library.recent_check_min": 10,
+    "library.last_recent_check_at": 0,
+    "notify.digest_wait_min": 10,
     "users.last_sync_at": 0,
     "geo.enabled": True,
     "geo.last_run_at": 0,
@@ -58,6 +61,8 @@ BOUNDS: dict[str, tuple[int, int]] = {
     "ingest.watched_pct.track": (1, 100),
     "ingest.group_resume_h": (0, 168),
     "library.sync_h": (1, 168),
+    "library.recent_check_min": (2, 120),
+    "notify.digest_wait_min": (0, 240),
 }
 
 

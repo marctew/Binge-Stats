@@ -96,6 +96,13 @@ class PlexClient:
             "excludeElements": self.LEAN,
         }, timeout=60)
 
+    def section_recent(self, section_id: int, plex_type: int, size: int = 30) -> dict:
+        """Newest items of one type in a library, newest first."""
+        return self._request(f"/library/sections/{int(section_id)}/all", {
+            "type": plex_type, "sort": "addedAt:desc", "X-Plex-Container-Start": 0,
+            "X-Plex-Container-Size": size, "excludeElements": self.LEAN,
+        })
+
     # -- plex.tv (account-level, uses the same token) --------------------------
 
     def plextv(self, path: str, accept: str = "application/json"):
