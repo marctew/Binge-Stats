@@ -59,6 +59,26 @@ class FakePlex:
     def terminate(self, session_id, reason):
         self.terminated.append((session_id, reason))
 
+    # library + users ------------------------------------------------------------
+    library: dict = {}       # (section_id, plex_type) -> list of Metadata dicts
+    sections_list: list = []
+    page_calls: int = 0
+    plextv_data: dict = {}
+
+    def sections(self):
+        return {"MediaContainer": {"Directory": self.sections_list}}
+
+    def section_items(self, section_id, plex_type, start, size):
+        self.page_calls += 1
+        items = self.library.get((int(section_id), int(plex_type)), [])
+        return {"MediaContainer": {"totalSize": len(items), "size": len(items[start:start + size]),
+                                   "Metadata": copy.deepcopy(items[start:start + size])}}
+
+    def plextv(self, path, accept="application/json"):
+        if path not in self.plextv_data:
+            raise PlexError(f"plex.tv{path}: HTTP 404")
+        return copy.deepcopy(self.plextv_data[path])
+
     # helpers for tests
     def play(self, *names_or_dicts):
         metas = []

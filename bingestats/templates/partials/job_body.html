@@ -1,0 +1,76 @@
+{% from "macros/ui.html" import progress %}
+{% from "macros/icons.html" import icon %}
+<div {% if job.status in ('queued', 'running') %}hx-get="{{ url_for('ui.job_partial', job_id=job.id) }}" hx-trigger="every 1s" hx-swap="outerHTML"{% endif %} class="space-y-6">
+  <section class="card p-5">
+    <div class="flex items-center justify-between gap-3">
+      <div class="flex items-center gap-2 text-sm font-medium">
+        {% if job.status == 'done' %}<span class="text-play">{{ icon('check', 'h-5 w-5') }}</span> Finished
+        {% elif job.status == 'failed' %}<span class="text-danger">{{ icon('alert', 'h-5 w-5') }}</span> Failed
+        {% elif job.status == 'queued' %}<span class="animate-spin text-muted">{{ icon('buffer', 'h-5 w-5') }}</span> Waiting for the worker
+        {% else %}<span class="animate-spin text-accent">{{ icon('buffer', 'h-5 w-5') }}</span> Working{% endif %}
+      </div>
+      <span class="text-sm tabular-nums text-muted">{{ job.progress or 0 }}%</span>
+    </div>
+    {{ progress(job.progress or 0, 'mt-3 h-2') }}
+    {% if job.message %}<p class="mt-3 text-sm {{ 'text-danger' if job.status == 'failed' else 'text-muted' }}">{{ job.message }}</p>{% endif %}
+  </section>
+
+  {% set r = job.result %}
+  {% if r and job.kind == 'tautulli_check' %}
+  <section class="card p-5">
+    <h2 class="font-semibold">What's in it</h2>
+    <div class="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <div><div class="label">Plays</div><div class="text-2xl font-semibold tabular-nums">{{ '{:,}'.format(r.plays) }}</div></div>
+      <div><div class="label">New to import</div><div class="text-2xl font-semibold tabular-nums text-play">{{ '{:,}'.format(r.to_import) }}</div></div>
+      <div><div class="label">From</div><div class="text-lg font-semibold">{{ r.first_play | localtime('%d %b %Y') }}</div></div>
+      <div><div class="label">To</div><div class="text-lg font-semibold">{{ r.last_play | localtime('%d %b %Y') }}</div></div>
+    </div>
+    <div class="mt-4 flex flex-wrap gap-2 text-xs">
+      {% for t, n in r.by_type.items() %}<span class="badge-muted">{{ '{:,}'.format(n) }} {{ t }}s</span>{% endfor %}
+      {% if r.already_imported %}<span class="badge-stream">{{ '{:,}'.format(r.already_imported) }} already imported</span>{% endif %}
+      {% if r.missing_users %}<span class="badge-transcode">{{ r.missing_users }} with an unknown user (skipped)</span>{% endif %}
+    </div>
+    <h3 class="mt-6 text-sm font-semibold">Users</h3>
+    <div class="mt-2 grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
+      {% for u in r.users %}<div class="flex justify-between gap-3 border-b border-border/60 py-1.5"><span class="truncate">{{ u.name }}</span><span class="tabular-nums text-muted">{{ '{:,}'.format(u.plays) }}</span></div>{% endfor %}
+    </div>
+    {% if not r.plex_connected %}
+    <p class="mt-5 text-sm text-transcode">Connect Plex before importing.</p>
+    {% elif r.to_import %}
+    <form method="post" action="{{ url_for('ui.import_page') }}" class="mt-6">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="path" value="{{ job.params.path }}">
+      <button name="action" value="import" class="btn-primary">Import {{ '{:,}'.format(r.to_import) }} plays</button>
+    </form>
+    {% endif %}
+  </section>
+  {% elif r and job.kind == 'tautulli_import' %}
+  <section class="card p-5">
+    <h2 class="font-semibold">Imported</h2>
+    <div class="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <div><div class="label">Plays added</div><div class="text-2xl font-semibold tabular-nums text-play">{{ '{:,}'.format(r.imported) }}</div></div>
+      <div><div class="label">Already there</div><div class="text-2xl font-semibold tabular-nums">{{ '{:,}'.format(r.skipped_existing) }}</div></div>
+      <div><div class="label">Resumes linked</div><div class="text-2xl font-semibold tabular-nums">{{ '{:,}'.format(r.groups_linked) }}</div></div>
+      <div><div class="label">Users added</div><div class="text-2xl font-semibold tabular-nums">{{ r.users_added }}</div></div>
+    </div>
+    <ul class="mt-4 space-y-1 text-sm text-muted">
+      {% if r.skipped_overlap %}<li>{{ r.skipped_overlap }} skipped because Binge Stats had already recorded them live.</li>{% endif %}
+      {% if r.skipped_keep_history %}<li>{{ r.skipped_keep_history }} skipped for users with history turned off.</li>{% endif %}
+      {% if r.skipped_no_user %}<li>{{ r.skipped_no_user }} skipped with no matching user.</li>{% endif %}
+      {% if r.missing_show_guid %}<li>{{ '{:,}'.format(r.missing_show_guid) }} episodes not yet matched to a show in your library. A library sync fills these in.</li>{% endif %}
+      {% if r.failed %}<li class="text-danger">{{ r.failed }} rows failed.</li>{% endif %}
+    </ul>
+    {% if r.errors %}<pre class="mt-3 overflow-x-auto rounded-xl bg-surface-2 p-3 text-xs">{{ r.errors | join('\n') }}</pre>{% endif %}
+    <a href="{{ url_for('ui.history_page') }}" class="btn-primary mt-6">See history</a>
+  </section>
+  {% elif r %}
+  <section class="card p-5">
+    <h2 class="font-semibold">Result</h2>
+    <dl class="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
+      {% for k, v in r.items() if v is not mapping and v is not iterable or v is string %}
+      <div><dt class="label">{{ k | replace('_', ' ') }}</dt><dd class="text-xl font-semibold tabular-nums">{{ '{:,}'.format(v) if v is number else v }}</dd></div>
+      {% endfor %}
+    </dl>
+  </section>
+  {% endif %}
+</div>

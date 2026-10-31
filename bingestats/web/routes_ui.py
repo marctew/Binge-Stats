@@ -5,12 +5,13 @@ from flask import (Blueprint, Response, current_app, flash, redirect, render_tem
                    url_for)
 
 from ..plex.client import PlexError
-from ..services import activity, history, plex_setup, settings
+from ..services import activity, history, jobs, libraries, plex_setup, settings
 
 bp = Blueprint("ui", __name__)
 
 SETUP_ENDPOINTS = {"ui.setup_plex", "ui.setup_plex_pin", "ui.setup_plex_pin_check", "ui.setup_plex_save",
-                   "ui.settings_page"}
+                   "ui.settings_page", "ui.job_page", "ui.job_partial"}
+DEFAULT_IMPORT_PATH = "/data/import/tautulli.db"
 
 
 def _db():
@@ -164,6 +165,7 @@ EDITABLE = [
     ("ingest.watched_pct.episode", "Episode counts as watched at (%)", "number"),
     ("ingest.watched_pct.track", "Track counts as played at (%)", "number"),
     ("ingest.group_resume_h", "Group resumed plays within (hours)", "number"),
+    ("library.sync_h", "Sync libraries and users every (hours)", "number"),
 ]
 
 
@@ -197,4 +199,109 @@ def settings_page():
     values = {k: settings.get(conn, k) for k, _l, _t in EDITABLE}
     return render_template("pages/settings.html", fields=EDITABLE, values=values,
                            plex_url=settings.get(conn, "plex.url"),
-                           server=conn.execute("SELECT * FROM servers ORDER BY id LIMIT 1").fetchone())
+                           server=conn.execute("SELECT * FROM servers ORDER BY id LIMIT 1").fetchone(),
+                           library_sync=jobs.latest(conn, "library_sync"), user_sync=jobs.latest(conn, "user_sync"),
+                           last_library_sync=settings.get(conn, "library.last_sync_at"),
+                           recent_jobs=jobs.recent(conn, 8))
+
+
+@bp.route("/settings/sync", methods=["POST"])
+def settings_sync():
+    conn = _db()
+    kind = request.form.get("kind")
+    if kind not in ("library_sync", "user_sync"):
+        return redirect(url_for("ui.settings_page"))
+    job_id = jobs.ensure(conn, kind)
+    return redirect(url_for("ui.job_page", job_id=job_id))
+
+
+# -- jobs --------------------------------------------------------------------------
+
+@bp.route("/jobs/<int:job_id>")
+def job_page(job_id: int):
+    job = jobs.get(_db(), job_id)
+    if job is None:
+        return render_template("pages/not_found.html", what="job"), 404
+    return render_template("pages/job.html", job=job)
+
+
+@bp.route("/jobs/<int:job_id>/partial")
+def job_partial(job_id: int):
+    job = jobs.get(_db(), job_id)
+    if job is None:
+        return "", 404
+    return render_template("partials/job_body.html", job=job)
+
+
+# -- import ------------------------------------------------------------------------
+
+@bp.route("/import", methods=["GET", "POST"])
+def import_page():
+    conn = _db()
+    if request.method == "POST":
+        path = (request.form.get("path") or DEFAULT_IMPORT_PATH).strip()
+        kind = "tautulli_import" if request.form.get("action") == "import" else "tautulli_check"
+        try:
+            job_id = jobs.create(conn, kind, {"path": path})
+        except jobs.JobBusy as e:
+            job_id = e.job_id
+        return redirect(url_for("ui.job_page", job_id=job_id))
+    last_check = jobs.latest(conn, "tautulli_check")
+    last_import = jobs.latest(conn, "tautulli_import")
+    imported = conn.execute("SELECT COUNT(*) FROM plays WHERE source = 'tautulli'").fetchone()[0]
+    return render_template("pages/import.html", default_path=DEFAULT_IMPORT_PATH,
+                           last_check=last_check, last_import=last_import, imported=imported)
+
+
+# -- users -------------------------------------------------------------------------
+
+@bp.route("/users")
+def users_page():
+    show_all = request.args.get("all") == "1"
+    return render_template("pages/users.html", users=libraries.list_users(_db(), include_inactive=show_all),
+                           show_all=show_all)
+
+
+@bp.route("/users/<int:user_id>", methods=["GET", "POST"])
+def user_page(user_id: int):
+    conn = _db()
+    if request.method == "POST":
+        try:
+            libraries.update_user(conn, user_id, friendly_name=request.form.get("friendly_name"),
+                                  keep_history=request.form.get("keep_history") == "on")
+            flash("Saved", "ok")
+        except LookupError:
+            pass
+        return redirect(url_for("ui.user_page", user_id=user_id))
+    user = libraries.get_user(conn, user_id)
+    if user is None:
+        return render_template("pages/not_found.html", what="user"), 404
+    rows, cursor = libraries.user_history(conn, user_id, settings.get(conn, "ui.timezone"))
+    return render_template("pages/user.html", user=user, rows=rows, cursor=None,
+                           f=history.HistoryFilter(user_id=user_id), more=bool(cursor))
+
+
+# -- libraries ---------------------------------------------------------------------
+
+@bp.route("/libraries")
+def libraries_page():
+    conn = _db()
+    return render_template("pages/libraries.html", libraries=libraries.list_libraries(conn),
+                           last_sync=settings.get(conn, "library.last_sync_at"),
+                           sync_job=jobs.latest(conn, "library_sync"))
+
+
+@bp.route("/libraries/<int:library_id>")
+def library_page(library_id: int):
+    lib = libraries.get_library(_db(), library_id)
+    if lib is None:
+        return render_template("pages/not_found.html", what="library"), 404
+    return render_template("pages/library.html", lib=lib)
+
+
+@bp.route("/item/<int:rating_key>")
+def item_page(rating_key: int):
+    item = libraries.get_item(_db(), rating_key)
+    if item is None:
+        return render_template("pages/not_found.html", what="item"), 404
+    return render_template("pages/item.html", item=item)

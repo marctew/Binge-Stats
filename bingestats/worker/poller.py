@@ -197,7 +197,7 @@ class Poller:
             "VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET last_seen_at = excluded.last_seen_at, "
             "username = COALESCE(users.username, excluded.username), "
             "thumb_url = COALESCE(excluded.thumb_url, users.thumb_url)",
-            (s.user_id, s.user_title, s.user_title, s.user_thumb, secrets.token_hex(8), now, now),
+            (s.user_id, s.user_title, None, s.user_thumb, secrets.token_hex(8), now, now),
         )
 
     def _start(self, s: PlexSession, snap: dict, now: int, cfg: dict, events: list) -> None:

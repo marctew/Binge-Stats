@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% from "macros/ui.html" import avatar, stat_tile, empty_state %}
+{% from "macros/media.html" import poster_card, section_title %}
+{% from "macros/icons.html" import icon %}
+{% block title %}{{ user.name }} · Binge Stats{% endblock %}
+{% block content %}
+{% set st = user.stats %}
+<div class="mb-6 flex flex-wrap items-center gap-4">
+  {{ avatar(user.id, user.name, 'h-16 w-16 text-xl') }}
+  <div class="min-w-0 flex-1">
+    <h1 class="truncate text-2xl font-semibold tracking-tight sm:text-3xl">{{ user.name }}</h1>
+    <p class="mt-1 text-sm text-muted">
+      {% if user.username and user.username != user.name %}{{ user.username }} · {% endif %}
+      {% if user.is_owner %}Server owner{% elif user.is_home %}Plex Home{% else %}Shared user{% endif %}
+      {% if not user.is_active %} · no longer has access{% endif %}
+      {% if st.first_play %} · watching since {{ st.first_play | localtime('%b %Y') }}{% endif %}
+    </p>
+  </div>
+  <div x-data="{ open: false }" class="relative">
+    <button class="btn-ghost" @click="open = !open">{{ icon('settings', 'h-4 w-4') }} Edit</button>
+    <form x-cloak x-show="open" @click.outside="open = false" method="post"
+          class="absolute right-0 top-12 z-20 w-72 space-y-3 rounded-2xl border border-border bg-surface p-4 shadow-2xl">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div><label class="label" for="friendly_name">Display name</label>
+        <input id="friendly_name" name="friendly_name" class="input" value="{{ user.friendly_name or '' }}" placeholder="{{ user.username or '' }}"></div>
+      <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="keep_history" {{ 'checked' if user.keep_history }} class="rounded"> Record this user's plays</label>
+      <button class="btn-primary w-full">Save</button>
+    </form>
+  </div>
+</div>
+
+<div class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+  {{ stat_tile('Plays', '{:,}'.format(st.plays), (st.plays_30d or 0) ~ ' in the last 30 days', 'play', 'accent') }}
+  {{ stat_tile('Watch time', st.play_s | duration(True), (st.play_s_30d or 0) | duration(True) ~ ' in the last 30 days', 'history', 'play') }}
+  {{ stat_tile('Last played', st.last_play | relative, st.last_play | localtime('%a %d %b, %H:%M') if st.last_play else None, 'tv', 'stream') }}
+  {{ stat_tile('Transcoded', (((st.transcodes or 0) / st.plays * 100) | round | int ~ '%') if st.plays else '–', (st.transcodes or 0) ~ ' plays', 'bolt', 'transcode') }}
+</div>
+
+{% if user.top_shows %}
+{{ section_title('Most watched shows') }}
+<div class="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-6">
+  {% for s in user.top_shows %}{{ poster_card(s.title, s.rating_key, s.thumb, (s.play_s | duration(True)) ~ ' · ' ~ s.plays ~ ' plays') }}{% endfor %}
+</div>
+{% endif %}
+{% if user.top_movies %}
+{{ section_title('Most watched films') }}
+<div class="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-6">
+  {% for m in user.top_movies %}{{ poster_card(m.title, m.rating_key, m.thumb, (m.year or '') ~ (' · ' if m.year else '') ~ (m.play_s | duration(True))) }}{% endfor %}
+</div>
+{% endif %}
+
+<div class="mt-8 grid gap-6 lg:grid-cols-3">
+  <div class="lg:col-span-2">
+    {{ section_title('Recent plays') }}
+    {% if rows %}
+    <div class="card overflow-hidden">
+      <table class="w-full">
+        <thead class="border-b border-border bg-surface-2/40"><tr>
+          <th class="th">Title</th><th class="th hidden md:table-cell">User</th><th class="th hidden lg:table-cell">Device</th>
+          <th class="th hidden sm:table-cell">When</th><th class="th text-right">Watched</th><th class="th hidden md:table-cell">Stream</th>
+        </tr></thead>
+        {% include "partials/history_rows.html" %}
+      </table>
+    </div>
+    {% if more %}<a href="{{ url_for('ui.history_page', user=user.id) }}" class="btn-ghost mt-3">All of {{ user.name }}'s history</a>{% endif %}
+    {% else %}
+    {{ empty_state('No plays yet', 'Nothing recorded for this user.', 'history') }}
+    {% endif %}
+  </div>
+  <div>
+    {{ section_title('Devices') }}
+    {% if user.devices %}
+    <div class="card divide-y divide-border">
+      {% for d in user.devices %}
+      <div class="flex items-center gap-3 px-4 py-3">
+        <span class="text-faint">{{ icon('device', 'h-5 w-5') }}</span>
+        <div class="min-w-0 flex-1"><div class="truncate text-sm font-medium">{{ d.player_title or 'Unknown' }}</div>
+          <div class="truncate text-xs text-muted">{{ d.product or d.platform or '' }}</div></div>
+        <div class="text-right text-xs text-muted"><div class="tabular-nums">{{ d.plays }} plays</div><div>{{ d.last_used | relative }}</div></div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}<div class="card p-4 text-sm text-muted">No devices yet.</div>{% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% from "macros/ui.html" import page_header, empty_state, avatar %}
+{% block title %}Users · Binge Stats{% endblock %}
+{% block content %}
+{% call page_header('Users', 'Everyone with access to your server, and anyone who has ever played something.') %}
+<a href="{{ url_for('ui.users_page', all=None if show_all else '1') }}" class="btn-ghost">{{ 'Hide removed users' if show_all else 'Show removed users' }}</a>
+{% endcall %}
+{% if not users %}
+  {{ empty_state('No users yet', 'Users appear after the first sync with Plex, or the first time someone plays something.', 'users') }}
+{% else %}
+<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+  {% for u in users %}
+  <a href="{{ url_for('ui.user_page', user_id=u.id) }}" class="card group flex items-center gap-4 p-4 transition hover:border-accent/50 {{ 'opacity-60' if not u.is_active }}">
+    {{ avatar(u.id, u.name, 'h-12 w-12 text-base') }}
+    <div class="min-w-0 flex-1">
+      <div class="flex items-center gap-2">
+        <span class="truncate font-semibold group-hover:text-accent">{{ u.name }}</span>
+        {% if u.is_owner %}<span class="badge-stream">Owner</span>{% elif u.is_home %}<span class="badge-muted">Home</span>{% endif %}
+        {% if not u.is_active %}<span class="badge-muted">Removed</span>{% endif %}
+      </div>
+      <div class="mt-0.5 truncate text-xs text-muted">
+        {% if u.last_played %}Last played {{ u.last_played | relative }}{% else %}Never played anything{% endif %}
+      </div>
+    </div>
+    <div class="shrink-0 text-right">
+      <div class="text-sm font-semibold tabular-nums">{{ '{:,}'.format(u.plays) }}</div>
+      <div class="text-xs text-muted">{{ u.play_s | duration(True) }}</div>
+    </div>
+  </a>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

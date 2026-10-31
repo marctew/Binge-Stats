@@ -293,3 +293,96 @@ def parse_sessions(sessions_json: dict) -> list[tuple[PlexSession, dict]]:
         if s is not None:
             out.append((s, meta))
     return out
+
+
+# -- library sync -------------------------------------------------------------------
+
+# Plex type numbers for /library/sections/{id}/all?type=
+TYPE_NUMBERS = {"movie": 1, "show": 2, "season": 3, "episode": 4, "artist": 8, "album": 9, "track": 10}
+# What we store per library type, parents before children.
+LIBRARY_TYPES = {"movie": ["movie"], "show": ["show", "episode"], "artist": ["artist", "album", "track"]}
+
+
+def parse_sections(sections_json: dict) -> list[dict]:
+    out = []
+    for d in (sections_json.get("MediaContainer") or {}).get("Directory") or []:
+        sid = _int(d.get("key"))
+        if sid is None:
+            continue
+        out.append({"id": sid, "name": d.get("title") or f"Library {sid}", "type": d.get("type") or "unknown"})
+    return out
+
+
+def parse_page(page_json: dict) -> tuple[list[dict], int]:
+    """Items on one page of /library/sections/{id}/all, and the library total."""
+    mc = page_json.get("MediaContainer") or {}
+    total = _int(mc.get("totalSize")) or _int(mc.get("size")) or 0
+    return [parse_library_item(m) for m in mc.get("Metadata") or []], total
+
+
+def parse_library_item(m: dict) -> dict:
+    t = m.get("type") or "unknown"
+    medias = m.get("Media") or []
+    media = medias[0] if medias else {}
+    size = sum(_int(p.get("size")) or 0 for md in medias[:1] for p in md.get("Part") or []) or None
+    item = {
+        "rating_key": _int(m.get("ratingKey")),
+        "type": t,
+        "guid": _s(m.get("guid")),
+        "parent_rating_key": _int(m.get("parentRatingKey")),
+        "grandparent_rating_key": _int(m.get("grandparentRatingKey")),
+        "title": _s(m.get("title")) or "Unknown",
+        "parent_title": _s(m.get("parentTitle")),
+        "grandparent_title": _s(m.get("grandparentTitle")),
+        "season_index": _int(m.get("parentIndex")) if t == "episode" else None,
+        "episode_index": _int(m.get("index")) if t in ("episode", "track") else None,
+        "year": _int(m.get("year")) or _int(m.get("parentYear")),
+        "duration_s": _ms_to_s(m.get("duration")),
+        "added_at": _int(m.get("addedAt")),
+        "originally_available_at": _s(m.get("originallyAvailableAt")),
+        "thumb": _s(m.get("thumb")),
+        "art": _s(m.get("art")) or _s(m.get("grandparentArt")),
+        "size_bytes": size,
+        "video_codec": _s(media.get("videoCodec")),
+        "video_resolution": _media_resolution(media) if media.get("videoCodec") else None,
+        "video_dynamic_range": None,   # needs per-item metadata; filled from plays where known
+        "audio_codec": _s(media.get("audioCodec")),
+        "audio_channels": _int(media.get("audioChannels")),
+        "container": _s(media.get("container")),
+        "bitrate_kbps": _int(media.get("bitrate")),
+    }
+    return item
+
+
+# -- users (plex.tv) ----------------------------------------------------------------
+
+def parse_owner(user_json: dict) -> dict:
+    return {"id": _int(user_json.get("id")), "username": _s(user_json.get("username")) or _s(user_json.get("title")),
+            "email": _s(user_json.get("email")), "thumb_url": _s(user_json.get("thumb")),
+            "is_owner": True, "is_home": bool(user_json.get("home"))}
+
+
+def parse_home_users(home_json: dict) -> list[dict]:
+    out = []
+    for u in home_json.get("users") or []:
+        uid = _int(u.get("id"))
+        if uid is None:
+            continue
+        out.append({"id": uid, "username": _s(u.get("username")) or _s(u.get("title")),
+                    "friendly_name": _s(u.get("friendlyName")), "email": _s(u.get("email")),
+                    "thumb_url": _s(u.get("thumb")), "is_owner": bool(u.get("admin")), "is_home": True})
+    return out
+
+
+def parse_shared_users(xml_text: str) -> list[dict]:
+    """plex.tv/api/users is XML only (the JSON /api/v2/friends returns 410 Gone)."""
+    import xml.etree.ElementTree as ET
+    out = []
+    root = ET.fromstring(xml_text)
+    for u in root.iter("User"):
+        uid = _int(u.get("id"))
+        if uid is None:
+            continue
+        out.append({"id": uid, "username": u.get("username") or u.get("title"), "email": u.get("email") or None,
+                    "thumb_url": u.get("thumb") or None, "is_owner": False, "is_home": u.get("home") == "1"})
+    return out

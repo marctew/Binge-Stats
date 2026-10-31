@@ -17,6 +17,7 @@ from .. import db
 from ..plex.client import PlexAuthError, PlexClient
 from ..plex.ws import PlexNudger
 from ..services import settings
+from .jobs_runner import JobRunner, schedule_due
 from .poller import Poller
 
 log = logging.getLogger("bingestats.worker")
@@ -48,6 +49,8 @@ class Worker:
         self.poller: Poller | None = None
         self.nudger: PlexNudger | None = None
         self._plex_key: tuple | None = None
+        self.job_wake = threading.Event()
+        self.jobs = JobRunner(cfg, self.stop, self.job_wake)
 
     def _setup_plex(self) -> bool:
         url = settings.get(self.conn, "plex.url")
@@ -83,6 +86,7 @@ class Worker:
 
     def run(self) -> None:
         log.info("Worker started")
+        self.jobs.start()
         while not self.stop.is_set():
             error = ""
             try:
@@ -99,8 +103,10 @@ class Worker:
                 error = f"{e.__class__.__name__}: {e}"
             try:
                 self.heartbeat(error)
+                if schedule_due(self.conn):
+                    self.job_wake.set()
             except Exception:  # noqa: BLE001
-                log.exception("heartbeat failed")
+                log.exception("heartbeat or scheduling failed")
             interval = settings.get(self.conn, "poll.interval_s")
             # A websocket nudge cuts the wait short, debounced by 1 s so a burst
             # of notifications becomes one poll.
@@ -121,6 +127,7 @@ def main(data_dir: str | None = None) -> None:
     def _stop(*_a):
         worker.stop.set()
         worker.nudge.set()
+        worker.job_wake.set()
 
     signal.signal(signal.SIGTERM, _stop)
     signal.signal(signal.SIGINT, _stop)

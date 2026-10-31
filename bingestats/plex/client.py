@@ -87,6 +87,30 @@ class PlexClient:
     def sections(self) -> dict:
         return self._request("/library/sections")
 
+    # Tag elements we never use; newer PMS drops them, older ones ignore the param.
+    LEAN = "Role,Director,Writer,Producer,Genre,Country,Image,UltraBlurColors,Guid,Rating,Collection,Label"
+
+    def section_items(self, section_id: int, plex_type: int, start: int, size: int) -> dict:
+        return self._request(f"/library/sections/{int(section_id)}/all", {
+            "type": plex_type, "X-Plex-Container-Start": start, "X-Plex-Container-Size": size,
+            "excludeElements": self.LEAN,
+        }, timeout=60)
+
+    # -- plex.tv (account-level, uses the same token) --------------------------
+
+    def plextv(self, path: str, accept: str = "application/json"):
+        headers = plex_headers(self.client_id, self.token)
+        headers["Accept"] = accept
+        try:
+            r = self.http.get(f"https://plex.tv{path}", headers=headers, timeout=15)
+        except requests.RequestException as e:
+            raise PlexError(f"plex.tv{path}: {e.__class__.__name__}") from e
+        if r.status_code == 401:
+            raise PlexAuthError("plex.tv rejected the token (401)")
+        if r.status_code >= 400:
+            raise PlexError(f"plex.tv{path}: HTTP {r.status_code}")
+        return r.json() if accept == "application/json" else r.text
+
     def terminate(self, session_id: str, reason: str) -> None:
         self._request("/status/sessions/terminate",
                       {"sessionId": session_id, "reason": reason or "Stream stopped"})

@@ -93,6 +93,15 @@ def channels(value) -> str:
     return {1: "Mono", 2: "Stereo", 6: "5.1", 8: "7.1"}.get(int(value), f"{value}ch")
 
 
+def filesize(n) -> str:
+    n = float(n or 0)
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if n < 1024 or unit == "TB":
+            return f"{n:.0f} {unit}" if unit in ("B", "KB", "MB") else f"{n:.1f} {unit}"
+        n /= 1024
+    return f"{n:.1f} TB"
+
+
 def bandwidth(kbps) -> str:
     if not kbps:
         return "0 Mbps"
@@ -138,7 +147,7 @@ def media_subtitle(p) -> str:
 def register(app) -> None:
     for name, fn in {
         "duration": duration, "clock": clock, "localtime": localtime, "relative": relative,
-        "resolution": resolution, "codec": codec, "channels": channels, "bandwidth": bandwidth,
+        "resolution": resolution, "codec": codec, "channels": channels, "bandwidth": bandwidth, "filesize": filesize,
         "decision_label": decision_label, "reason_label": reason_label,
         "media_title": media_title, "media_subtitle": media_subtitle,
     }.items():

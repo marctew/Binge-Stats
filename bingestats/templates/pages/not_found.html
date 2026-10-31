@@ -1,0 +1,3 @@
+{% extends "base.html" %}
+{% from "macros/ui.html" import empty_state %}
+{% block content %}{{ empty_state('Not found', "That " ~ what ~ " doesn't exist, or it hasn't been seen yet.", 'search') }}{% endblock %}

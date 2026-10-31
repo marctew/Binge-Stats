@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% from "macros/ui.html" import page_header %}
+{% from "macros/icons.html" import icon %}
+{% block title %}Import from Tautulli · Binge Stats{% endblock %}
+{% block content %}
+{% call page_header('Import from Tautulli', 'Bring your play history across. Safe to run more than once: nothing is imported twice.') %}{% endcall %}
+<div class="grid gap-6 lg:grid-cols-3">
+  <section class="card p-5 lg:col-span-2">
+    <h2 class="font-semibold">Tautulli database</h2>
+    <p class="mt-1 text-sm text-muted">Point this at <code class="text-text">tautulli.db</code> as the worker container sees it. Mount Tautulli's data folder read-only (for example at <code class="text-text">/import</code>) or copy the file into <code class="text-text">data/import/</code>. Tautulli can keep running.</p>
+    <form method="post" class="mt-5 space-y-4">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div><label class="label" for="path">Path</label>
+        <input id="path" name="path" class="input font-mono text-xs" value="{{ (last_check.params.path if last_check else default_path) }}"></div>
+      <div class="flex flex-wrap gap-2">
+        <button name="action" value="check" class="btn-ghost">{{ icon('search', 'h-4 w-4') }} Check first</button>
+        <button name="action" value="import" class="btn-primary">{{ icon('upload', 'h-4 w-4') }} Import</button>
+      </div>
+    </form>
+  </section>
+  <section class="card p-5">
+    <h2 class="font-semibold">So far</h2>
+    <dl class="mt-4 space-y-3 text-sm">
+      <div><dt class="label">Imported plays</dt><dd class="text-2xl font-semibold tabular-nums">{{ '{:,}'.format(imported) }}</dd></div>
+      {% if last_check %}<div><dt class="label">Last check</dt><dd><a class="underline" href="{{ url_for('ui.job_page', job_id=last_check.id) }}">{{ last_check.created_at | relative }} · {{ last_check.status }}</a></dd></div>{% endif %}
+      {% if last_import %}<div><dt class="label">Last import</dt><dd><a class="underline" href="{{ url_for('ui.job_page', job_id=last_import.id) }}">{{ last_import.created_at | relative }} · {{ last_import.status }}</a></dd></div>{% endif %}
+    </dl>
+  </section>
+</div>
+{% endblock %}

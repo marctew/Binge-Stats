@@ -19,7 +19,37 @@
     <a href="{{ url_for('ui.setup_plex') }}" class="btn-ghost mt-5 w-full">Change connection</a>
   </section>
 
-  <section class="card p-5 lg:col-span-2">
+  <section class="card p-5 lg:col-span-1">
+    <h2 class="flex items-center gap-2 font-semibold">{{ icon('refresh', 'h-4 w-4 text-accent') }} Sync</h2>
+    <p class="mt-1 text-sm text-muted">Libraries and users sync from Plex automatically. Last library sync: {{ last_library_sync | relative }}.</p>
+    <div class="mt-4 flex flex-wrap gap-2">
+      {% for kind, label in [('library_sync', 'Sync libraries'), ('user_sync', 'Sync users')] %}
+      <form method="post" action="{{ url_for('ui.settings_sync') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="kind" value="{{ kind }}">
+        <button class="btn-ghost">{{ label }}</button>
+      </form>
+      {% endfor %}
+    </div>
+    <h3 class="mt-6 text-sm font-semibold">Import</h3>
+    <p class="mt-1 text-sm text-muted">Bring your history across from Tautulli.</p>
+    <a href="{{ url_for('ui.import_page') }}" class="btn-ghost mt-3 w-full">{{ icon('upload', 'h-4 w-4') }} Import from Tautulli</a>
+  </section>
+
+  <section class="card p-5 lg:col-span-1">
+    <h2 class="font-semibold">Recent jobs</h2>
+    {% if recent_jobs %}
+    <ul class="mt-3 divide-y divide-border text-sm">
+      {% for j in recent_jobs %}
+      <li><a href="{{ url_for('ui.job_page', job_id=j.id) }}" class="flex items-center justify-between gap-3 py-2 hover:text-accent">
+        <span class="truncate">{{ j.label }}</span>
+        <span class="shrink-0 text-xs {{ 'text-danger' if j.status == 'failed' else ('text-play' if j.status == 'done' else 'text-muted') }}">{{ j.status }} · {{ j.created_at | relative }}</span>
+      </a></li>
+      {% endfor %}
+    </ul>
+    {% else %}<p class="mt-3 text-sm text-muted">Nothing yet.</p>{% endif %}
+  </section>
+
+  <section class="card p-5 lg:col-span-3">
     <h2 class="font-semibold">Recording</h2>
     <p class="mt-1 text-sm text-muted">Changes apply on the worker's next poll.</p>
     <form method="post" class="mt-5 grid gap-4 sm:grid-cols-2">

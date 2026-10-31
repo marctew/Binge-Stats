@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% from "macros/ui.html" import poster, avatar, decision_badge, stat_tile, empty_state, progress %}
+{% from "macros/media.html" import section_title %}
+{% block title %}{{ item.title }} · Binge Stats{% endblock %}
+{% block content %}
+{% set t = item.type %}
+<section class="card relative mb-6 overflow-hidden">
+  {% if item.art %}<img src="{{ url_for('img.plex_image', path=item.art, w=1200, shape='art') }}" alt="" class="absolute inset-0 h-full w-full object-cover opacity-30" onerror="this.remove()">{% endif %}
+  <div class="absolute inset-0 bg-gradient-to-r from-surface via-surface/85 to-surface/40"></div>
+  <div class="relative flex flex-col gap-5 p-5 sm:flex-row sm:p-8">
+    {{ poster(item.show_thumb if t in ('season',) and item.show_thumb else item.thumb, item.title, 'w-32 sm:w-44', 'square' if t in ('artist', 'album', 'track') else 'poster', 600) }}
+    <div class="min-w-0 flex-1">
+      <div class="text-xs font-medium uppercase tracking-wide text-muted">{{ {'movie': 'Film', 'show': 'Show', 'season': 'Season', 'episode': 'Episode', 'artist': 'Artist', 'album': 'Album', 'track': 'Track'}.get(t, t) }}</div>
+      {% if t == 'episode' and item.grandparent_title %}
+        <a href="{{ url_for('ui.item_page', rating_key=item.grandparent_rating_key or 0) }}" class="mt-1 block text-lg text-muted hover:text-accent">{{ item.grandparent_title }}</a>
+        <h1 class="text-2xl font-semibold tracking-tight sm:text-3xl">{% if item.season_index is not none %}S{{ '%02d' % item.season_index }}E{{ '%02d' % (item.episode_index or 0) }} · {% endif %}{{ item.title }}</h1>
+      {% else %}
+        <h1 class="mt-1 text-2xl font-semibold tracking-tight sm:text-4xl">{{ item.title }}</h1>
+        {% if item.grandparent_title %}<a href="{{ url_for('ui.item_page', rating_key=item.grandparent_rating_key or 0) }}" class="text-muted hover:text-accent">{{ item.grandparent_title }}</a>{% endif %}
+      {% endif %}
+      <div class="mt-3 flex flex-wrap gap-2 text-sm text-muted">
+        {% if item.year %}<span class="badge-muted">{{ item.year }}</span>{% endif %}
+        {% if item.duration_s %}<span class="badge-muted">{{ item.duration_s | duration(True) }}</span>{% endif %}
+        {% if item.video_resolution %}<span class="badge-muted">{{ item.video_resolution | resolution }} {{ item.video_codec | codec }}</span>{% endif %}
+        {% if item.audio_codec %}<span class="badge-muted">{{ item.audio_codec | codec }} {{ item.audio_channels | channels }}</span>{% endif %}
+        {% if item.size_bytes %}<span class="badge-muted">{{ item.size_bytes | filesize }}</span>{% endif %}
+        {% if item.episodes %}<span class="badge-muted">{{ item.episodes }} episodes in library</span>{% endif %}
+        {% if item.added_at %}<span class="badge-muted">Added {{ item.added_at | localtime('%d %b %Y') }}</span>{% endif %}
+        {% if not item.is_present %}<span class="badge-transcode">No longer in Plex</span>{% endif %}
+      </div>
+      <div class="mt-6 grid max-w-xl grid-cols-3 gap-4">
+        <div><div class="text-xs text-muted">Plays</div><div class="text-xl font-semibold tabular-nums">{{ '{:,}'.format(item.stats.plays) }}</div></div>
+        <div><div class="text-xs text-muted">Watch time</div><div class="text-xl font-semibold">{{ item.stats.play_s | duration(True) }}</div></div>
+        <div><div class="text-xs text-muted">Last played</div><div class="text-xl font-semibold">{{ item.stats.last_played | relative }}</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="grid gap-6 lg:grid-cols-3">
+  <div>
+    {{ section_title('Who watched') }}
+    {% if item.watchers %}
+    <div class="card divide-y divide-border">
+      {% for w in item.watchers %}
+      <a href="{{ url_for('ui.user_page', user_id=w.user_id) }}" class="flex items-center gap-3 px-4 py-3 transition hover:bg-surface-2/40">
+        {{ avatar(w.user_id, w.name, 'h-8 w-8') }}
+        <div class="min-w-0 flex-1">
+          <div class="truncate text-sm font-medium">{{ w.name }}</div>
+          <div class="truncate text-xs text-muted">
+            {% if t == 'show' and item.episodes %}{{ w.watched_items }} of {{ item.episodes }} episodes watched{% elif t in ('show', 'season', 'artist', 'album') %}{{ w.watched_items }} watched{% else %}{{ 'Finished' if w.watched else 'Not finished' }}{% endif %}
+            · {{ w.last_played | relative }}
+          </div>
+          {% if t == 'show' and item.episodes %}{{ progress([w.watched_items / item.episodes * 100, 100] | min, 'mt-1.5') }}{% endif %}
+        </div>
+        <span class="text-xs text-muted">{{ w.play_s | duration(True) }}</span>
+      </a>
+      {% endfor %}
+    </div>
+    {% else %}{{ empty_state('Nobody yet', 'No plays recorded for this.', 'users') }}{% endif %}
+  </div>
+  <div class="lg:col-span-2">
+    {{ section_title('History', 'latest 50' if item.history | length == 50 else None) }}
+    {% if item.history %}
+    <div class="card divide-y divide-border">
+      {% for p in item.history %}
+      <div class="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 text-sm">
+        <a href="{{ url_for('ui.user_page', user_id=p.user_id) }}" class="flex w-32 items-center gap-2 hover:text-accent">{{ avatar(p.user_id, p.user_name) }}<span class="truncate">{{ p.user_name }}</span></a>
+        {% if t in ('show', 'season', 'artist', 'album') %}<span class="min-w-0 flex-1 truncate">{{ p | media_subtitle }}</span>{% else %}<span class="flex-1"></span>{% endif %}
+        <span class="text-xs text-muted">{{ p.started_at | localtime('%d %b %Y, %H:%M') }}</span>
+        <span class="w-16 text-right tabular-nums">{{ p.play_s | duration(True) }}</span>
+        <span class="hidden w-28 md:block">{{ decision_badge(p.decision) }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}{{ empty_state('No history', 'Nothing played yet.', 'history') }}{% endif %}
+  </div>
+</div>
+{% endblock %}

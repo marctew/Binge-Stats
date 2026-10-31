@@ -1,0 +1,17 @@
+{# Poster grid and list helpers shared by library, user and item pages. #}
+{% from "macros/ui.html" import poster %}
+
+{% macro poster_card(title, rating_key, thumb, sub=None, shape='poster') -%}
+<a href="{{ url_for('ui.item_page', rating_key=rating_key or 0) }}" class="group block min-w-0">
+  {{ poster(thumb, title, 'w-full transition group-hover:ring-accent/60', shape, 300) }}
+  <div class="mt-2 truncate text-sm font-medium group-hover:text-accent">{{ title }}</div>
+  {% if sub %}<div class="truncate text-xs text-muted">{{ sub }}</div>{% endif %}
+</a>
+{%- endmacro %}
+
+{% macro section_title(title, sub=None) -%}
+<div class="mb-3 mt-8 flex items-baseline justify-between gap-3">
+  <h2 class="text-lg font-semibold">{{ title }}</h2>
+  {% if sub %}<span class="text-sm text-muted">{{ sub }}</span>{% endif %}
+</div>
+{%- endmacro %}

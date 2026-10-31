@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% from "macros/ui.html" import page_header, stat_tile, empty_state, poster %}
+{% from "macros/media.html" import poster_card, section_title %}
+{% block title %}{{ lib.name }} · Binge Stats{% endblock %}
+{% block content %}
+{% call page_header(lib.name, ('Synced ' ~ (lib.synced_at | relative)) if lib.synced_at else 'Not synced yet') %}{% endcall %}
+{% set top = {'movie': 'Films', 'show': 'Shows', 'artist': 'Artists'}.get(lib.type, 'Items') %}
+<div class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+  {{ stat_tile(top, '{:,}'.format(lib.item_count or 0), ('{:,} '.format(lib.child_count) ~ ('episodes' if lib.type == 'show' else 'tracks')) if lib.child_count else None, 'stack', 'accent') }}
+  {{ stat_tile('Size', (lib.total_size_bytes or 0) | filesize, None, 'chip', 'stream') }}
+  {{ stat_tile('Plays', '{:,}'.format(lib.stats.plays), lib.stats.users ~ ' people', 'play', 'play') }}
+  {{ stat_tile('Watch time', lib.stats.play_s | duration(True), None, 'history', 'transcode') }}
+</div>
+
+{% if lib.recently_added %}
+{{ section_title('Recently added') }}
+<div class="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-6">
+  {% for i in lib.recently_added %}{{ poster_card(i.title, i.rating_key, i.thumb, (i.parent_title ~ ' · ' if lib.type == 'artist' and i.parent_title else '') ~ (i.added_at | relative), 'square' if lib.type == 'artist' else 'poster') }}{% endfor %}
+</div>
+{% endif %}
+
+{{ section_title('Most played') }}
+{% if lib.most_played %}
+<div class="card divide-y divide-border">
+  {% for m in lib.most_played %}
+  <a href="{{ url_for('ui.item_page', rating_key=m.rating_key or 0) }}" class="flex items-center gap-3 px-4 py-2.5 transition hover:bg-surface-2/40">
+    <span class="w-6 text-right text-sm tabular-nums text-faint">{{ loop.index }}</span>
+    {{ poster(m.thumb, m.title, 'w-8', 'square' if lib.type == 'artist' else 'poster', 150) }}
+    <span class="min-w-0 flex-1 truncate text-sm font-medium">{{ m.title }}</span>
+    <span class="hidden text-xs text-muted sm:inline">{{ m.users }} {{ 'person' if m.users == 1 else 'people' }}</span>
+    <span class="w-20 text-right text-xs text-muted">{{ m.play_s | duration(True) }}</span>
+    <span class="w-16 text-right text-sm font-semibold tabular-nums">{{ '{:,}'.format(m.plays) }}</span>
+  </a>
+  {% endfor %}
+</div>
+{% else %}{{ empty_state('Nothing played yet', 'Plays from this library will rank here.', 'play') }}{% endif %}
+{% endblock %}

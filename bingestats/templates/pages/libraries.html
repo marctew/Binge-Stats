@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% from "macros/ui.html" import page_header, empty_state %}
+{% from "macros/icons.html" import icon %}
+{% block title %}Libraries · Binge Stats{% endblock %}
+{% block content %}
+{% call page_header('Libraries', ('Synced ' ~ (last_sync | relative)) if last_sync else 'Not synced yet') %}
+<form method="post" action="{{ url_for('ui.settings_sync') }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="kind" value="library_sync">
+  <button class="btn-ghost">{{ icon('refresh', 'h-4 w-4') }} Sync now</button>
+</form>
+{% endcall %}
+{% if not libraries %}
+  {% if sync_job and sync_job.status in ('queued', 'running') %}
+  {{ empty_state('First sync running', 'Reading your libraries from Plex. Big libraries take a few minutes.', 'refresh') }}
+  {% else %}
+  {{ empty_state('No libraries yet', 'They appear after the first sync with Plex.', 'stack') }}
+  {% endif %}
+{% else %}
+<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+  {% for l in libraries %}
+  {% set kind = {'movie': ('film', 'films', None), 'show': ('tv', 'shows', 'episodes'), 'artist': ('music', 'artists', 'tracks')}.get(l.type, ('stack', 'items', None)) %}
+  <a href="{{ url_for('ui.library_page', library_id=l.id) }}" class="card group relative block overflow-hidden transition hover:border-accent/50">
+    {% if l.cover_art %}<img src="{{ url_for('img.plex_image', path=l.cover_art, w=600, shape='art') }}" alt="" class="absolute inset-0 h-full w-full object-cover opacity-25 transition group-hover:opacity-35" onerror="this.remove()">{% endif %}
+    <div class="absolute inset-0 bg-gradient-to-t from-surface via-surface/80 to-surface/30"></div>
+    <div class="relative p-5">
+      <div class="flex items-center gap-3">
+        <span class="rounded-xl bg-accent/15 p-2 text-accent">{{ icon(kind[0], 'h-5 w-5') }}</span>
+        <h2 class="truncate text-lg font-semibold group-hover:text-accent">{{ l.name }}</h2>
+      </div>
+      <dl class="mt-8 grid grid-cols-3 gap-2 text-sm">
+        <div><dt class="text-xs text-muted">{{ kind[1] | capitalize }}</dt><dd class="font-semibold tabular-nums">{{ '{:,}'.format(l.item_count or 0) }}</dd></div>
+        {% if kind[2] %}<div><dt class="text-xs text-muted">{{ kind[2] | capitalize }}</dt><dd class="font-semibold tabular-nums">{{ '{:,}'.format(l.child_count or 0) }}</dd></div>
+        {% else %}<div><dt class="text-xs text-muted">Size</dt><dd class="font-semibold tabular-nums">{{ (l.total_size_bytes or 0) | filesize }}</dd></div>{% endif %}
+        <div><dt class="text-xs text-muted">Plays (30d)</dt><dd class="font-semibold tabular-nums">{{ '{:,}'.format(l.plays_30d or 0) }}</dd></div>
+      </dl>
+      <div class="mt-3 text-xs text-muted">{% if kind[2] %}{{ (l.total_size_bytes or 0) | filesize }} · {% endif %}{{ '{:,}'.format(l.plays) }} plays all time{% if l.last_played %} · last {{ l.last_played | relative }}{% endif %}</div>
+    </div>
+  </a>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

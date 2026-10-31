@@ -24,6 +24,8 @@ DEFAULTS: dict[str, Any] = {
     "abandoned.days": 60,
     "library.sync_h": 6,
     "library.stale_months": 12,
+    "library.last_sync_at": 0,
+    "users.last_sync_at": 0,
     "geo.enabled": True,
     "ui.timezone": "Europe/London",
     "ui.theme": "dark",
@@ -54,6 +56,7 @@ BOUNDS: dict[str, tuple[int, int]] = {
     "ingest.watched_pct.episode": (1, 100),
     "ingest.watched_pct.track": (1, 100),
     "ingest.group_resume_h": (0, 168),
+    "library.sync_h": (1, 168),
 }
 
 

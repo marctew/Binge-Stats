@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% from "macros/ui.html" import page_header %}
+{% block title %}{{ job.label }} · Binge Stats{% endblock %}
+{% block content %}
+{% call page_header(job.label, 'Started ' ~ (job.created_at | relative)) %}{% endcall %}
+{% include "partials/job_body.html" %}
+{% endblock %}
