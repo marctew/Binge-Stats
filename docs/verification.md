@@ -96,3 +96,25 @@ Checked 2026-10-31 against Tautulli **v2.18.2**, `/opt/Tautulli/tautulli.db` on 
 - **Attributes:** the Active streams attributes list each session (user, title, player, progress).
 - **Stop button:** pressed in HA for an idle user. The worker logged the command within a second ("stopped 0 stream(s)"), so the command path works end to end. It wasn't tested against someone else's real stream.
 - **Not yet seen live:** a stream limit or sharing alert firing on real traffic. Both are covered by tests with real session fixtures.
+
+## Insights on real data (M6), 2026-10-31
+
+- **Show matching:**
+  - 1,375 imported episode plays had no show guid. They came from shows that had been re-added to Plex (new rating keys), and most also from before Plex's agent change (legacy `com.plexapp.agents.thetvdb://` episode guids).
+  - The backfill recovered them in three steps: through the episode guid, then by unique show title, then the episode guid by season and episode number. 29 are left, all from shows no longer in the library.
+  - Without this, Desperate Housewives (now 187 plays, 126 h) and Pretty Little Liars read as never watched.
+- **Binges:** 587 across three people.
+  - Sarah leads, with a longest of 39 episodes of The Bill on 4 June (29 h, which looks like autoplay overnight).
+  - Most binged shows: Desperate Housewives, Pretty Little Liars, Gilmore Girls, Gossip Girl.
+  - The rebuild takes under a second.
+- **Library health:** 122.8 TB across 5,560 films and shows.
+  - Stale (nothing played in 12 months, added before that): 2,917 items, 38.4 TB.
+  - Never watched (added 90+ days ago): 4,656 items, 84.0 TB.
+  - The biggest stale items are Life Below Zero (740 GB), Gilmore Girls (698 GB, last watched by Sarah) and House (570 GB).
+  - The worst GB per hour watched is On Patrol: Live, at 1.97 TB never watched.
+  - The page computes in 0.2 s.
+- **Transcodes, last 90 days:** 60 of 535 plays (11 %).
+  - 93 % of them are "because of the file", but nearly all of those are audio: EAC3, AC3 and DTS.
+  - Plex Web transcodes 79 % of its plays; Apple TV transcodes 4 %.
+  - The five re-encode candidates are all EAC3/AC3 episodes. The real fix is the client, since browsers can't play EAC3, rather than re-encoding the files.
+- **Completion:** the heaviest viewer has 20 shows finished and several abandoned, e.g. What We Do in the Shadows (17 of 61) and The Bill (200 of 289).
