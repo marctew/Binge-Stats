@@ -118,3 +118,23 @@ Checked 2026-10-31 against Tautulli **v2.18.2**, `/opt/Tautulli/tautulli.db` on 
   - Plex Web transcodes 79 % of its plays; Apple TV transcodes 4 %.
   - The five re-encode candidates are all EAC3/AC3 episodes. The real fix is the client, since browsers can't play EAC3, rather than re-encoding the files.
 - **Completion:** the heaviest viewer has 20 shows finished and several abandoned, e.g. What We Do in the Shadows (17 of 61) and The Bill (200 of 289).
+
+## Wrapped (M7), 2026-10-31
+
+- **Daily job:** the `wrapped` job ran on deploy and cached 2026 for the server and four people. Each computes in 0.03–0.21 s, so a cache miss is fine to serve live.
+- **Server-wide 2026:** 1,217.6 h ("55 trips London → Sydney").
+  - Top shows: The Bill, Made in Chelsea, Gossip Girl.
+  - Longest binge: The Bill, 39 episodes.
+  - Busiest day: 17 October, 15.8 h.
+  - 22 shows finished.
+- **Per person:**
+  - Sarah: #1 of 4, 689.7 h, 6 shows finished.
+  - Marc: #2, 474.5 h, top show Police Interceptors, longest binge Letterkenny ×10, 16 shows finished.
+- **Share link, tested from the LAN with no login:**
+  - The page is 200, 59 KB, 0.06 s, with no CSRF token in it.
+  - Its own poster through the scoped proxy is 200 (`image/jpeg`, 37 KB). Any other artwork path is 404.
+  - The admin page without login redirects to the login page (302).
+  - After revoke, both the page and its image return 404.
+- **Not checked from here:**
+  - opening a share link on a real phone, from outside the LAN;
+  - whether the server's real posters look right in the hero collage.
