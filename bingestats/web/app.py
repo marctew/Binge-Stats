@@ -81,4 +81,17 @@ def build_app(data_dir: str | None = None, *, testing: bool = False) -> Flask:
     app.register_blueprint(insights_bp)
     app.register_blueprint(wrapped_bp)
     app.register_blueprint(me_bp)
+
+    @app.get("/healthz")
+    def healthz():
+        """Homelab app standard: up, and the jobs a restart now would cut short (scripts/update.sh asks)."""
+        conn = app.get_db()
+        busy = [r[0] for r in conn.execute("SELECT DISTINCT kind FROM jobs WHERE status = 'running'")]
+        return {"ok": True, "busy": busy}
+
+    try:  # the Design system card in Settings; du_flask.py is copied in by the design updater
+        from ..du_flask import init_design
+        init_design(app, Path(cfg.data_dir) / "design", version=__version__)
+    except ImportError:
+        pass
     return app

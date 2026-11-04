@@ -47,6 +47,21 @@
 
 @layer components {
   .card { @apply rounded-2xl border border-border bg-surface; }
+  /* The same layout and text helpers as uniform.css, so shared partials (design_card.html) work in both. */
+  .card-pad { @apply p-4 sm:p-5; }
+  .stack > * + * { @apply mt-3; }
+  .row { @apply flex flex-wrap items-center gap-2; }
+  .row-between { @apply flex flex-wrap items-center justify-between gap-2; }
+  .check { @apply flex items-start gap-2 text-sm; }
+  .check input { @apply mt-0.5 accent-accent; }
+  .h2 { @apply text-base font-semibold; }
+  .small { @apply text-xs; }
+  .muted { @apply text-muted; }
+  .hint { @apply text-xs text-faint; }
+  .tabular { @apply tabular-nums; }
+  .banner { @apply flex items-start gap-3 rounded-2xl px-4 py-3 text-sm; }
+  .banner-warning { @apply border border-warning/30 bg-warning/10; }
+  .banner-danger { @apply border border-danger/30 bg-danger/10; }
   .btn { @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition
          focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:opacity-50; }
   .btn-primary { @apply btn bg-accent text-on-accent hover:bg-accent/90 shadow-lg shadow-accent/20; }
@@ -97,3 +112,29 @@
 .overflow-x-auto::-webkit-scrollbar-thumb { border-width: 2px; }
 
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: 0ms !important; animation-duration: 0ms !important; } }
+
+/* Plain-CSS helpers for the shared sidebar footer and About partials (7.15) */
+/* Sidebar footer (7.15): Sign out, theme switch, version line. Same place in every app. */
+.sidebar-foot { margin-top: 24px; padding-top: 16px; border-top: 1px solid rgb(var(--border)); }
+.sidebar-foot form { margin: 0; }
+.sidebar-foot .nav-link { border: 0; background: none; }
+.version-link { display: block; margin-top: 12px; padding: 0 12px; font-size: 12px; line-height: 16px; color: rgb(var(--faint)); }
+.version-link:hover { color: rgb(var(--muted)); }
+
+/* About page (7.15) */
+.about-grid { display: grid; gap: 24px; }
+@media (min-width: 1024px) { .about-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.about-id { display: flex; align-items: center; gap: 12px; }
+.about-id img { width: 40px; height: 40px; border-radius: var(--r-sm); }
+.about-name { font-size: 18px; line-height: 28px; font-weight: 600; }
+.kv-list { margin: 20px 0 0; font-size: 14px; line-height: 20px; }
+.card-pad > .h2 + .kv-list { margin-top: 16px; }
+.kv-list > div { display: flex; justify-content: space-between; gap: 16px; }
+.kv-list > div + div { margin-top: 8px; }
+.kv-list dt { color: rgb(var(--muted)); }
+.kv-list dd { margin: 0; text-align: right; }
+.about-list { margin: 16px 0 0; padding: 0; list-style: none; font-size: 14px; line-height: 20px; color: rgb(var(--muted)); }
+.about-list li + li { margin-top: 6px; }
+.about-list a { text-decoration: underline; }
+.about-list a:hover { color: rgb(var(--text)); }
+.about-note { margin-top: 16px; }

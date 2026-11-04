@@ -1,10 +1,32 @@
 #!/usr/bin/env bash
-# Pull the latest code and rebuild/restart the containers.
+# Pull the latest code and rebuild/restart the containers (homelab app standard, section 6).
+#   scripts/update.sh            pull; rebuild and restart if what's running isn't HEAD
+#   scripts/update.sh --force    rebuild and restart anyway, even if a job is running
+#   scripts/update.sh --if-idle  as normal, but if an import or backup is running, leave it for the
+#                                next update and still succeed (the design updater uses this)
+# --pull is accepted too: Binge always pulls, because the published image is built from GitHub.
 # Safe to run as root or as the repo's owner: git always runs as the owner
 # (so the working tree never ends up with root-owned files), docker as root.
 #   sudo ln -sf /opt/binge-stats/scripts/update.sh /usr/local/bin/binge-update
 set -euo pipefail
 cd "$(dirname "$(readlink -f "$0")")/.."
+FORCE=0 IDLE=0
+for a in "$@"; do
+  case "$a" in
+    --force) FORCE=1 ;;
+    --if-idle) IDLE=1 ;;
+    --pull) ;;
+    *) echo "Unknown option: $a" >&2; exit 2 ;;
+  esac
+done
+HEALTH=http://127.0.0.1:8181/healthz
+busy() {   # /healthz's busy list, or nothing (Python, not curl, as the standard says)
+  python3 - "$HEALTH" <<'EOF' 2>/dev/null || true
+import json, sys, urllib.request
+with urllib.request.urlopen(sys.argv[1], timeout=5) as r:
+    print(", ".join(json.load(r).get("busy", [])))
+EOF
+}
 
 owner=$(stat -c %U .)
 as_owner() {
@@ -20,9 +42,18 @@ running=$(as_root docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' 
           | sed -n 's/^GIT_SHA=//p')
 as_owner git pull --ff-only --quiet
 sha=$(as_owner git rev-parse --short HEAD)
-if [ "$running" = "$sha" ] && [ "${1:-}" != "--force" ]; then
+if [ "$running" = "$sha" ] && [ "$FORCE" = 0 ]; then
   echo "Already up to date ($sha). Use --force to rebuild anyway."
   exit 0
+fi
+jobs=$(busy)
+if [ -n "$jobs" ] && [ "$FORCE" = 0 ]; then
+  if [ "$IDLE" = 1 ]; then
+    echo "Busy ($jobs), so not rebuilding now. The next update picks it up."
+    exit 0
+  fi
+  echo "Busy ($jobs). Try again when it's finished, or use --force." >&2
+  exit 1
 fi
 echo "Updating ${running:-unknown} -> $sha"
 if [ -n "$running" ] && as_owner git cat-file -e "$running" 2>/dev/null; then
@@ -38,7 +69,7 @@ for attempt in 1 2 3; do
 done
 as_root env GIT_SHA="$sha" docker compose up -d
 for _ in $(seq 1 20); do
-  if curl -fsS http://127.0.0.1:8181/api/v1/health >/dev/null 2>&1; then
+  if python3 -c "import urllib.request,sys; urllib.request.urlopen(sys.argv[1], timeout=3)" "$HEALTH" 2>/dev/null; then
     echo "Binge Stats $sha is up."
     exit 0
   fi

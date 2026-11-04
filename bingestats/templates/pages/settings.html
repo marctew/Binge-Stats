@@ -240,5 +240,10 @@
       <div class="sm:col-span-2"><button class="btn-primary">Save</button></div>
     </form>
   </section>
+
+  {% if design_status is defined %}
+  <div class="lg:col-span-3">{% include "partials/design_card.html" %}</div>
+  {% endif %}
 </div>
+{% if design_status is defined %}<script src="{{ url_for('static', filename='design/design-card.js') }}" defer></script>{% endif %}
 {% endblock %}
