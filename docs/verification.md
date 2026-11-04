@@ -193,3 +193,14 @@ API shapes were checked against the live apps before building: Sonarr 4.0.19, Ra
   - 45 files are below the quality cutoff.
 - **Downloads:** 3.89 TB in the last 30 days. Biggest day was 27 Sep 2026, at 2.78 TB.
 - **Speed:** each query computes in under 0.1 s. The sync takes about 20 s.
+
+## Live downloads, 2026-11-04
+
+- **Matching:** checked against Sonarr 4 and Radarr 6.
+  - Their `/api/v3/queue` records carry `downloadId`, which is SABnzbd's `nzo_id`, so a SAB job matches exactly; no name parsing.
+  - Their download-client settings name the SABnzbd categories they use: Sonarr `tv`, Radarr `movies`.
+- **Posters:** `/api/v3/mediacover/<id>/poster-250.jpg` answers with a JPEG when sent the API key header, so posters work for downloads that aren't in Plex yet.
+- **Live, after deploying:**
+  - The watcher reads SABnzbd's queue every 3 s while it's busy: 200 jobs in detail, 1,401 in the header, about 108 MB/s.
+  - Nothing in the queue was from Sonarr or Radarr. Everything was in another category, so the page showed "Nothing downloading" with 1,401 jobs counted and hidden. No names appeared on Downloads or Download stats.
+- **Not seen live yet:** a Sonarr/Radarr grab moving through the page. That flow is covered by tests that use Sonarr and Radarr queue records shaped like the real ones.
