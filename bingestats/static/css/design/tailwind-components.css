@@ -113,6 +113,10 @@
 
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: 0ms !important; animation-duration: 0ms !important; } }
 
+/* hidden always wins, as in uniform.css: component classes like .banner set display, which would
+   otherwise show an element the page has hidden (the Design system card's empty warning). */
+[hidden] { display: none !important; }
+
 /* Plain-CSS helpers for the shared sidebar footer and About partials (7.15) */
 /* Sidebar footer (7.15): Sign out, theme switch, version line. Same place in every app. */
 .sidebar-foot { margin-top: 24px; padding-top: 16px; border-top: 1px solid rgb(var(--border)); }

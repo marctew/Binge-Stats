@@ -588,7 +588,7 @@ state_dir = "/var/lib/hmm-browser/design"  # status.json, prefs.json and the Che
 channel = "stable"                     # or a tag like "v1.1" to pin
 deploy = "scripts/update.sh --if-idle" # optional; the app's own deploy (APP-STANDARD.md 6)
 health = "http://127.0.0.1:8765/healthz" # anything below 500 counts as up
-# state_owner = "1000"                 # Docker apps: the container's user, so it can write the flags
+# state_owner = "claude"               # the user the app runs as, by name (Docker: whoever has the container's uid)
 # push = false                         # commit only
 
 [files]                                # release path = where it goes in the repo; a trailing / copies a folder
@@ -610,6 +610,7 @@ health = "http://127.0.0.1:8765/healthz" # anything below 500 counts as up
 | 2026-11-04 | Added the updater (`tools/du_sync.py`), the Design system card (7.14) and releases from GitHub (18.1). Added `.row`, `.row-between` and the plain-CSS helpers to the Tailwind entry. | – |
 | 2026-11-04 | Added `confirm_button` and the `.confirm` popover (7.10), which replace `window.confirm()`. `md` and `xl` are allowed for grid and table columns only (6). Listed the allowed hard-coded colours (13). | Binge Stats |
 | 2026-11-04 | Added `js/confirm.js` (7.10), the inline confirm for plain forms, and the `image` glyph. | Vital Signs |
+| 2026-11-04 | The Tailwind entry makes `[hidden]` always win, as uniform.css does, so a hidden banner stays hidden. | Binge Stats |
 | 2026-11-04 | The sidebar footer and About page (7.15), from Binge Stats: `partials/sidebar_foot.html`, `partials/about.html`, and `du_flask` now provides `app_version`, `app_sha()` and `runtime_facts()`. | The Back Room, Vital Signs, PodBridge |
 | 2026-11-04 | `duConfirm(button, question, yes)` in `js/confirm.js`: the inline confirm for click handlers, in place of `window.confirm()`. The `star`, `tag` and `headset` glyphs, and The Back Room's icon. | The Back Room |
 | 2026-11-04 | The Design system card sends a CSRF token (`data-csrf`, as `X-CSRF-Token`) for apps that check one on every POST. White text on a dark scrim over artwork is an allowed hard-coded colour (13). | PodBridge |
