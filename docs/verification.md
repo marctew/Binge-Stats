@@ -236,3 +236,6 @@ I moved a job deep in the "other" part of the queue and put it back.
 - **The refresh.** The two moves left one `downloads_refresh` job, which the worker ran: the snapshot showed a full read 7 s old straight afterwards.
 - **SortableJS is served** from `/static/vendor/sortable.min.js`. `sabnzbd.allow_moves` is on.
 - **Not checked live yet:** dragging on Marc's phone. A real drag was tested in Chromium against a fake SABnzbd that copies 5.1.3's switch behaviour. That covered dropping above a group, Move to top and bottom, the High-priority note, and a SABnzbd error putting the card back.
+- **Dropping above the top group failed at first.** Marc's drops above the top "Other items" group came back 400: "The queue has changed under you". That group starts with the job being downloaded, which at about 100 MB/s often finishes between the page's read and the drop.
+  - **Fix:** a drop with nothing above it now means "move to top", whatever's first now.
+  - **Checked live:** I dropped a job (position 1,315) at the top with an already-finished neighbour. It landed at position 0, as High, the top job's priority. It was then restored between its old neighbours, at Normal.
