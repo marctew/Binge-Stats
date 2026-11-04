@@ -699,6 +699,19 @@ def test_a_vanished_neighbour_still_lands_right(queue):
         arr.plan_move(N("x"), N("gone"), None, [N("x")])
 
 
+def test_dropping_at_the_top_works_when_the_downloading_job_has_finished(queue):
+    """The top group starts with the job that's downloading; it can finish before the drop."""
+    c, fq, _w = queue
+    fq.jobs = fq.jobs[1:]                                              # o1 done since the page was read
+    res = run(fq, lambda: arr.move_job(c, N("film"), above=None, below=N("o1")))
+    assert fq.order()[0] == N("film") and res["moved"] == 1
+    fq.jobs = [j for j in fq.jobs if j["nzo_id"] not in (N("o3"), N("o4"))]   # both neighbours gone
+    run(fq, lambda: arr.move_job(c, N("tv2"), above=N("o3"), below=N("o4")))
+    assert fq.order()[0] == N("tv2")
+    run(fq, lambda: arr.move_job(c, N("tv1"), above=N("gone"), below=None))  # the bottom is the bottom
+    assert fq.order()[-1] == N("tv1")
+
+
 def test_moving_onto_a_high_job_says_so_and_queues_one_refresh(queue):
     c, fq, _w = queue
     res = run(fq, lambda: arr.move(c, N("film"), to="top"))

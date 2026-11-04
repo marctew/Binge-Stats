@@ -489,9 +489,17 @@ def move_job(conn: sqlite3.Connection, nzo_id: str, *, above: str | None = None,
         raise ValueError("Say where to move it")
     if nzo_id in (above, below):
         return {"moved": 0}
+    # The ends are ends, whatever's there now: the top group starts with whatever's downloading,
+    # which can finish between the page's read and the drop.
+    if above is None:
+        return move_to_end(conn, nzo_id)
+    if below is None:
+        return move_to_end(conn, nzo_id, bottom=True)
     order = _present(sab, [i for i in (above, nzo_id, below) if i])
     if nzo_id not in order:
         raise ValueError("That job has left the queue")
+    if above not in order and below not in order:
+        return move_to_end(conn, nzo_id)          # both finished: jobs finish from the top, so that's the top now
     targets = plan_move(nzo_id, above, below, order)
     res: dict = {}
     for t in targets:
