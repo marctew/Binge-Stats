@@ -226,3 +226,13 @@ I moved a job deep in the "other" part of the queue and put it back.
 - **The job takes the target's priority.** Moving a Normal job onto a High one made it High at position 0. Moving it back made it Normal.
 - **Indexes drift between reads** as jobs at the top finish (by one during the test), so a target has to be an nzo_id, not a position.
 - **The test job is back in its original place**, between the same neighbours, at Normal priority.
+
+## Moving jobs from Downloads, 2026-11-04 (SABnzbd 5.1.3, 1,338 jobs, 38 on show)
+
+- **Job ids are UUIDs on SABnzbd 5** (`61fb3d9a-5559-4480-9e2c-dc9b97d3369e`), not `SABnzbd_nzo_…`. The first deploy's id check refused them before anything was sent. It now accepts letters, digits, `-` and `_`, 6–64 characters.
+- **Moving and restoring a real job.** I took the last job on show (queue position 1,330):
+  - I moved it to just above the job on show before it, through `move_job`. It landed exactly there, with one switch, in about 10 ms.
+  - I moved it back between its original neighbours. It landed exactly there, still Normal priority.
+- **The refresh.** The two moves left one `downloads_refresh` job, which the worker ran: the snapshot showed a full read 7 s old straight afterwards.
+- **SortableJS is served** from `/static/vendor/sortable.min.js`. `sabnzbd.allow_moves` is on.
+- **Not checked live yet:** dragging on Marc's phone. A real drag was tested in Chromium against a fake SABnzbd that copies 5.1.3's switch behaviour. That covered dropping above a group, Move to top and bottom, the High-priority note, and a SABnzbd error putting the card back.
