@@ -69,7 +69,7 @@ for attempt in 1 2 3; do
 done
 as_root env GIT_SHA="$sha" docker compose up -d
 for _ in $(seq 1 20); do
-  if python3 -c "import urllib.request,sys; urllib.request.urlopen(sys.argv[1], timeout=3)" "$HEALTH" 2>/dev/null; then
+  if python3 -c "import json,sys,urllib.request; sys.exit(not json.load(urllib.request.urlopen(sys.argv[1], timeout=3)).get('ok'))" "$HEALTH" 2>/dev/null; then
     echo "Binge Stats $sha is up."
     exit 0
   fi
