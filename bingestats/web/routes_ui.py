@@ -588,4 +588,4 @@ def item_page(rating_key: int):
     item = libraries.get_item(_db(), rating_key)
     if item is None:
         return render_template("pages/not_found.html", what="item"), 404
-    return render_template("pages/item.html", item=item)
+    return render_template("pages/item.html", item=item, links=arr.item_links(_db(), item))

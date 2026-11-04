@@ -21,7 +21,8 @@ def series(s: dict) -> dict:
                 "files": (x.get("statistics") or {}).get("episodeFileCount", 0),
                 "episodes": (x.get("statistics") or {}).get("episodeCount", 0),
                 "total": (x.get("statistics") or {}).get("totalEpisodeCount", 0)} for x in s.get("seasons") or []]
-    return {"id": s["id"], "title": s.get("title"), "year": s.get("year") or None, "tvdb_id": s.get("tvdbId") or None,
+    return {"id": s["id"], "title": s.get("title"), "title_slug": s.get("titleSlug") or None,
+            "year": s.get("year") or None, "tvdb_id": s.get("tvdbId") or None,
             "imdb_id": s.get("imdbId") or None, "status": s.get("status"), "ended": int(bool(s.get("ended"))),
             "monitored": int(bool(s.get("monitored"))), "size_bytes": st.get("sizeOnDisk") or 0,
             "episode_count": st.get("episodeCount") or 0, "episode_file_count": st.get("episodeFileCount") or 0,

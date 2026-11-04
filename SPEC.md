@@ -559,6 +559,7 @@ Optional, set up in **Settings → Sonarr, Radarr and SABnzbd** (URL and API key
   - **Insights → Downloads:** today, 7 days, 30 days and all time; GB per day for 90 days and per month for all history; the current queue; failed downloads.
   - **Home Assistant:** "Download queue" and "Download speed" sensors, only while SABnzbd is connected.
   - **API:** `GET /api/v1/insights/arr`, `/insights/downloads`, `/insights/downloads/series?days=`.
+  - **Item pages:** "Open in Plex" (app.plex.tv with the server's machine id) on anything still in the library; "Open in Sonarr" on a show, season or episode whose show Sonarr has (by TVDB id, using Sonarr's title slug, migration v9); "Open in Radarr" on a film Radarr has (Radarr's page is `/movie/<tmdb id>`). The Sonarr and Radarr links use the URL in Settings, so they work wherever that address does.
 
 ---
 

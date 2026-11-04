@@ -16,7 +16,7 @@ SON, RAD, SAB = "http://sonarr.test:8989", "http://radarr.test:7878", "http://sa
 
 
 def series_json(i, title, tvdb, *, ended, files, episodes, seasons):
-    return {"id": i, "title": title, "year": 2010, "tvdbId": tvdb, "imdbId": f"tt{i}", "status": "ended" if ended else "continuing",
+    return {"id": i, "title": title, "titleSlug": title.lower().replace(" ", "-"), "year": 2010, "tvdbId": tvdb, "imdbId": f"tt{i}", "status": "ended" if ended else "continuing",
             "ended": ended, "monitored": True, "added": "2024-01-01T00:00:00Z", "previousAiring": "2026-10-01T20:00:00Z",
             "statistics": {"episodeFileCount": files, "episodeCount": episodes, "totalEpisodeCount": episodes, "sizeOnDisk": files * 10**9},
             "seasons": [{"seasonNumber": n, "monitored": True,
@@ -309,3 +309,50 @@ def test_migration_8(tmp_path, monkeypatch):
     assert db.migrate(c) == db.LATEST
     assert c.execute("SELECT tvdb_id FROM media_items").fetchone()[0] is None
     assert c.execute("SELECT COUNT(*) FROM sonarr_series").fetchone()[0] == 0
+
+
+
+# -- "open in" links --------------------------------------------------------------------------
+
+def test_item_links(synced):
+    c = synced
+    c.execute("UPDATE servers SET machine_id = 'abc123' WHERE id = 1")
+    c.execute("INSERT INTO media_items (rating_key, server_id, type, title, grandparent_rating_key) "
+              "VALUES (11, 1, 'episode', 'E1', 10)")
+    show = dict(c.execute("SELECT * FROM media_items WHERE rating_key = 10").fetchone())
+    links = {l["app"]: l["url"] for l in arr.item_links(c, show)}
+    assert links["plex"] == "https://app.plex.tv/desktop/#!/server/abc123/details?key=%2Flibrary%2Fmetadata%2F10"
+    assert links["sonarr"] == f"{SON}/series/nearly-there"
+    episode = dict(c.execute("SELECT * FROM media_items WHERE rating_key = 11").fetchone())
+    assert {l["app"] for l in arr.item_links(c, episode)} == {"plex", "sonarr"}       # via its show
+    film = dict(c.execute("SELECT * FROM media_items WHERE rating_key = 20").fetchone())
+    assert {l["app"]: l["url"] for l in arr.item_links(c, film)}["radarr"] == f"{RAD}/movie/501"
+    c.execute("INSERT INTO media_items (rating_key, server_id, type, title, tmdb_id) VALUES (21, 1, 'movie', 'Not In Radarr', 777)")
+    other = dict(c.execute("SELECT * FROM media_items WHERE rating_key = 21").fetchone())
+    assert [l["app"] for l in arr.item_links(c, other)] == ["plex"]
+    assert arr.item_links(c, {**film, "is_present": 0}) == [{"app": "radarr", "label": "Open in Radarr", "url": f"{RAD}/movie/501"}]
+    arr.save(c, {"clear_radarr": "on"})
+    assert [l["app"] for l in arr.item_links(c, film)] == ["plex"]                     # not connected: no button
+
+
+def test_item_page_buttons(logged_in, app_conn):
+    connect(app_conn)
+    plex_items(app_conn)
+    app_conn.execute("UPDATE servers SET machine_id = 'abc123' WHERE id = 1")
+    with responses.RequestsMock() as rsps:
+        mock_all(rsps)
+        arr_sync.run(app_conn, now=NOW)
+    body = logged_in.get("/item/10").data.decode()
+    assert "Open in Plex" in body and f"{SON}/series/nearly-there" in body and 'target="_blank"' in body
+    assert f"{RAD}/movie/501" in logged_in.get("/item/20").data.decode()
+
+
+def test_migration_9(tmp_path, monkeypatch):
+    c = db.connect(tmp_path / "v8.db")
+    monkeypatch.setattr(db, "MIGRATIONS", db.MIGRATIONS[:8])
+    monkeypatch.setattr(db, "LATEST", 8)
+    db.migrate(c)
+    c.execute("INSERT INTO sonarr_series (id, title) VALUES (1, 'Old')")
+    monkeypatch.undo()
+    assert db.migrate(c) == db.LATEST
+    assert c.execute("SELECT title_slug FROM sonarr_series").fetchone()[0] is None

@@ -284,3 +284,35 @@ def to_csv(kind: str, rows: list[dict]) -> str:
         for r in rows:
             w.writerow([r["title"], r["year"] or "", r["status"] or "", r["tmdb_id"] or "", r["imdb_id"] or ""])
     return out.getvalue()
+
+
+# -- "open in" links -------------------------------------------------------------------------
+
+def item_links(conn: sqlite3.Connection, item: dict) -> list[dict]:
+    """Buttons for an item page: Plex always; Sonarr for a show (or its seasons and
+    episodes) and Radarr for a film, when they're connected and know the item."""
+    from urllib.parse import quote
+    links = []
+    srv = conn.execute("SELECT machine_id FROM servers ORDER BY id LIMIT 1").fetchone()
+    if srv and srv["machine_id"] and item.get("rating_key") and item.get("is_present", 1):
+        key = quote(f"/library/metadata/{item['rating_key']}", safe="")
+        links.append({"app": "plex", "label": "Open in Plex",
+                      "url": f"https://app.plex.tv/desktop/#!/server/{srv['machine_id']}/details?key={key}"})
+    t = item.get("type")
+    if t in ("show", "season", "episode") and configured(conn)["sonarr"]:
+        tvdb = item.get("tvdb_id") if t == "show" else None
+        if tvdb is None:
+            show_rk = item.get("rating_key") if t == "show" else item.get("grandparent_rating_key") or item.get("parent_rating_key")
+            row = conn.execute("SELECT tvdb_id FROM media_items WHERE rating_key = ? AND type = 'show'", (show_rk,)).fetchone()
+            tvdb = row["tvdb_id"] if row else None
+        s = conn.execute("SELECT title_slug FROM sonarr_series WHERE tvdb_id = ? AND title_slug IS NOT NULL",
+                         (tvdb,)).fetchone() if tvdb else None
+        if s:
+            links.append({"app": "sonarr", "label": "Open in Sonarr",
+                          "url": f"{settings.get(conn, 'sonarr.url').rstrip('/')}/series/{quote(s['title_slug'])}"})
+    if t == "movie" and configured(conn)["radarr"] and item.get("tmdb_id"):
+        m = conn.execute("SELECT 1 FROM radarr_movies WHERE tmdb_id = ?", (item["tmdb_id"],)).fetchone()
+        if m:                                   # Radarr's page slug is the TMDB id
+            links.append({"app": "radarr", "label": "Open in Radarr",
+                          "url": f"{settings.get(conn, 'radarr.url').rstrip('/')}/movie/{item['tmdb_id']}"})
+    return links

@@ -332,7 +332,12 @@ def _m8(conn: sqlite3.Connection) -> None:
             conn.execute(stmt)
 
 
-MIGRATIONS = [_m1, _m2, _m3, _m4, _m5, _m6, _m7, _m8]
+def _m9(conn: sqlite3.Connection) -> None:
+    """Sonarr's title slug, for "Open in Sonarr" links (filled on the next sync)."""
+    conn.execute("ALTER TABLE sonarr_series ADD COLUMN title_slug TEXT")
+
+
+MIGRATIONS = [_m1, _m2, _m3, _m4, _m5, _m6, _m7, _m8, _m9]
 LATEST = len(MIGRATIONS)
 
 

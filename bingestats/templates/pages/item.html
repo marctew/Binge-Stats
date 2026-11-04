@@ -28,6 +28,14 @@
         {% if item.added_at %}<span class="badge-muted">Added {{ item.added_at | localtime('%d %b %Y') }}</span>{% endif %}
         {% if not item.is_present %}<span class="badge-transcode">No longer in Plex</span>{% endif %}
       </div>
+      {% if links %}
+      <div class="mt-4 flex flex-wrap gap-2">
+        {% for l in links %}
+        <a href="{{ l.url }}" target="_blank" rel="noopener noreferrer" class="btn-ghost">
+          <span class="h-2.5 w-2.5 rounded-full {{ {'plex': 'bg-[#e5a00d]', 'sonarr': 'bg-[#35c5f4]', 'radarr': 'bg-[#ffc230]'}[l.app] }}"></span>{{ l.label }} ↗</a>
+        {% endfor %}
+      </div>
+      {% endif %}
       <div class="mt-6 grid max-w-xl grid-cols-3 gap-4">
         <div><div class="text-xs text-muted">Plays</div><div class="text-xl font-semibold tabular-nums">{{ '{:,}'.format(item.stats.plays) }}</div></div>
         <div><div class="text-xs text-muted">Watch time</div><div class="text-xl font-semibold">{{ item.stats.play_s | duration(True) }}</div></div>
