@@ -204,3 +204,15 @@ API shapes were checked against the live apps before building: Sonarr 4.0.19, Ra
   - The watcher reads SABnzbd's queue every 3 s while it's busy: 200 jobs in detail, 1,401 in the header, about 108 MB/s.
   - Nothing in the queue was from Sonarr or Radarr. Everything was in another category, so the page showed "Nothing downloading" with 1,401 jobs counted and hidden. No names appeared on Downloads or Download stats.
 - **Not seen live yet:** a Sonarr/Radarr grab moving through the page. That flow is covered by tests that use Sonarr and Radarr queue records shaped like the real ones.
+
+## Big SABnzbd queues, 2026-11-04 (SABnzbd 5.1.3)
+
+- **The whole queue is slow while SABnzbd is busy.** With 1,405 jobs, `mode=queue&limit=0` took 40 s (past the 20 s timeout), then 15 s, then 0.05 s. The watcher's first read timed out and was logged at debug level only, so the page sat on "read 138 s ago" with no rows.
+- **`cat=` filters but renumbers.** With `cat=tv`, only `tv` jobs come back. But `index` starts again at 0, and `timeleft` only counts the filtered jobs. So it can't place a job in the full queue.
+- **`nzo_ids=` filters, and quickly:** 5 ids in about 5 ms. `noofslots_total` is still the whole queue.
+- **What the watcher does now:**
+  - It reads the whole queue at start, once a minute, when jobs are added (10 s apart at most) and when the category setting changes. That read uses a 90 s timeout.
+  - In between, it asks only for the jobs on show, by `nzo_ids`.
+  - Whatever else was downloaded since comes off the "Other items" groups, front first. ETAs are the MB ahead over the speed.
+  - If a read fails, it logs one warning and keeps the last snapshot.
+- **Live, after deploying:** the queue grouped as 117 other jobs, then The Bad Batch, then 1,259 other jobs, then the films.

@@ -1,10 +1,21 @@
 """Live download queue: SABnzbd's jobs, named by Sonarr and Radarr.
 
-A thread in the worker. While SABnzbd is busy it reads the queue every few
-seconds (every 30 s when idle) and the last few history entries, for jobs
-being verified or unpacked. Sonarr's and Radarr's own queues say what each
-job is: their downloadId *is* SABnzbd's nzo_id, so the match is exact. Those
-are only re-read when a new job appears, or once a minute while busy.
+A thread in the worker. The whole queue (1,400+ jobs on a busy server, and
+SABnzbd can take 40 s to list them while it's downloading flat out) is read
+only now and then: at start, once a minute, when jobs are added and when the
+category setting changes. That read decides the rows: the jobs to show, and
+the runs of other jobs between them, grouped.
+
+Every few seconds in between, only the jobs on show are asked for, by
+nzo_id, which is instant. What SABnzbd has downloaded since the full read
+that wasn't one of those jobs comes off the groups, front of the queue first,
+and every row's ETA is worked out again from the MB ahead of it and the
+current speed, the same sum SABnzbd does.
+
+Sonarr's and Radarr's own queues say what each job is: their downloadId *is*
+SABnzbd's nzo_id, so the match is exact. Those are only re-read when a new job
+appears, or once a minute while busy. The last few history entries give jobs
+being verified or unpacked.
 
 The snapshot goes into arr_status (app 'sabnzbd', info.live) for the
 Downloads page; nothing is kept once a job leaves the queue.
@@ -25,6 +36,9 @@ from ..services import arr as arr_svc
 log = logging.getLogger("bingestats.downloads")
 
 BUSY_S, IDLE_S, ARR_REFRESH_S = 3, 30, 60
+FULL_EVERY_S = 60          # the whole queue, at most this far apart
+FULL_AFTER_ADD_S = 10      # sooner when jobs are added, but not on every tick of a burst
+FULL_TIMEOUT_S = 90        # SABnzbd is slow to list a big queue while it's busy
 MAX_ROWS = 400             # after grouping; a pathological queue still stays a sensible size
 
 
@@ -56,39 +70,101 @@ def group_rows(slots: list[dict], show) -> list[dict]:
     return rows
 
 
-def snapshot(conn, clients: dict, known: dict, checked: set, now: float, arr_read_at: float):
-    """Read SAB (and Sonarr/Radarr when a job appears that hasn't been looked up yet, or once a
-    minute while busy). Returns (live, known map, checked ids, when Sonarr/Radarr were last read).
-    Jobs neither app knows about stay 'checked', so they don't cause a lookup every few seconds."""
+def refresh(base: list[dict], header: dict, fresh: dict, base_mb_left: float) -> list[dict]:
+    """The rows from the last full read, brought up to date. `fresh` is the jobs on show as
+    SABnzbd has them now (by nzo_id); one that's gone has finished or been removed. Whatever
+    else has been downloaded since comes off the groups, front first. ETAs are the MB ahead
+    (this row included) over the current speed."""
+    rows, job_done = [], 0.0
+    for r in base:
+        if r["kind"] != "job":
+            rows.append(dict(r))
+            continue
+        s = fresh.get(r["nzo_id"])
+        job_done += r["mb_left"] - (s["mb_left"] if s else 0.0)
+        if s:
+            rows.append({**r, **s, "kind": "job"})
+    other_done = max(0.0, base_mb_left - header["mb_left"] - job_done)
+    for g in rows:
+        if other_done <= 0:
+            break
+        if g["kind"] == "other" and g["mb_left"] > 0:
+            took = min(g["mb_left"], other_done)
+            g["mb_left"] -= took
+            other_done -= took
+            g["downloading"] = True
+    rows = [r for r in rows if r["kind"] == "job" or r["mb_left"] > 0.05]
+    mbps = header["kbps"] / 1024
+    ahead = 0.0
+    for r in rows:
+        ahead += r["mb_left"]
+        if r["kind"] == "other" or r.get("status") != "Paused":
+            r["eta_s"] = int(ahead / mbps) if mbps > 0 and not header["paused"] else None
+    return rows
+
+
+def _lookup(clients: dict, ids: set) -> dict:
+    """What Sonarr and Radarr say each of these downloads is."""
+    found: dict[str, list] = {}
+    for app, inc in (("sonarr", {"includeSeries": "true", "includeEpisode": "true"}),
+                     ("radarr", {"includeMovie": "true"})):
+        if app in clients:
+            try:
+                for r in clients[app].paged("queue", page_size=500, max_pages=4, **inc):
+                    rec = parse.arr_queue_record(r, app)
+                    if rec["download_id"]:
+                        found.setdefault(rec["download_id"], []).append(rec)
+            except ArrError as e:
+                log.warning("%s queue: %s", app, e)
+    return found
+
+
+def snapshot(conn, clients: dict, st: dict, now: float) -> dict:
+    """One read; `st` is the watcher's state between reads (see DownloadWatcher). Returns the
+    snapshot for the page. Raises ArrError when SABnzbd can't be read at all."""
     sab = clients["sabnzbd"]
-    q = sab.get("queue", limit=0).get("queue") or {}       # the whole queue: ~0.6 MB for 1,400 jobs
-    header = parse.sab_queue(q)
-    slots = [parse.sab_slot(s) for s in q.get("slots") or []]
+    cats = arr_svc.visible_categories(conn)
     hist = (sab.get("history", limit=20).get("history") or {}).get("slots") or []
     pp = [parse.sab_pp(h) for h in hist if h.get("status") in parse.PP_STATES]
     recent = [parse.sab_pp(h) for h in hist if h.get("status") in ("Completed", "Failed")
               and (int(h.get("completed") or 0) >= now - 6 * 3600)][:10]
-    ids = {s["nzo_id"] for s in slots} | {p["nzo_id"] for p in pp} | {r["nzo_id"] for r in recent}
-    if ids and ((ids - checked) or now - arr_read_at >= ARR_REFRESH_S):
-        found: dict[str, list] = {}
-        for app, inc in (("sonarr", {"includeSeries": "true", "includeEpisode": "true"}),
-                         ("radarr", {"includeMovie": "true"})):
-            if app in clients:
-                try:
-                    for r in clients[app].paged("queue", page_size=500, max_pages=4, **inc):
-                        rec = parse.arr_queue_record(r, app)
-                        if rec["download_id"]:
-                            found.setdefault(rec["download_id"], []).append(rec)
-                except ArrError as e:
-                    log.debug("%s queue: %s", app, e)
-        known = {k: v for k, v in {**known, **found}.items() if k in ids}
-        arr_read_at = now
-    else:
-        known = {k: v for k, v in known.items() if k in ids}
-    cats = arr_svc.visible_categories(conn)
-    show = lambda s: cats is None or (s.get("cat") or "").lower() in cats or s.get("nzo_id") in known  # noqa: E731
-    live = {"header": header, "rows": group_rows(slots, show), "pp": pp, "recent": recent, "at": int(now)}
-    return live, known, ids, arr_read_at
+
+    fresh = None
+    if st.get("base") is not None and cats == st.get("cats") and now - st["full_at"] < FULL_EVERY_S:
+        ids = [r["nzo_id"] for r in st["base"] if r["kind"] == "job"]
+        q = sab.get("queue", limit=0 if ids else 1, **({"nzo_ids": ",".join(ids)} if ids else {})).get("queue") or {}
+        header = parse.sab_queue(q)
+        if header["total"] > st["total"] and now - st["full_at"] >= FULL_AFTER_ADD_S:
+            fresh = None                                    # jobs were added: time for a full read
+        else:
+            wanted = set(ids)
+            fresh = {s["nzo_id"]: s for s in map(parse.sab_slot, q.get("slots") or []) if s["nzo_id"] in wanted}
+    if fresh is None:
+        try:
+            q = sab.get("queue", limit=0, timeout=FULL_TIMEOUT_S).get("queue") or {}
+        except ArrError:
+            if st.get("base") is not None:
+                st["full_at"] = now                         # keep the rows we have; try again in a minute
+            raise
+        header = parse.sab_queue(q)
+        slots = [parse.sab_slot(s) for s in q.get("slots") or []]
+        ids = {s["nzo_id"] for s in slots} | {p["nzo_id"] for p in pp} | {r["nzo_id"] for r in recent}
+        known = st.get("known", {})
+        if ids and ((ids - st.get("checked", set())) or now - st.get("arr_read_at", 0.0) >= ARR_REFRESH_S):
+            known = {**known, **_lookup(clients, ids)}
+            st["arr_read_at"] = now
+        st["known"] = {k: v for k, v in known.items() if k in ids}
+        st["checked"] = ids
+        show = lambda s: cats is None or (s.get("cat") or "").lower() in cats or s.get("nzo_id") in st["known"]  # noqa: E731
+        st.update(base=group_rows(slots, show), base_mb_left=header["mb_left"], total=header["total"],
+                  full_at=now, cats=cats)
+        fresh = {s["nzo_id"]: s for s in slots}
+    elif {p["nzo_id"] for p in pp} - st.get("checked", set()):
+        st["known"] = {**st.get("known", {}), **_lookup(clients, {p["nzo_id"] for p in pp})}
+        st["checked"] = st.get("checked", set()) | {p["nzo_id"] for p in pp}
+
+    rows = refresh(st["base"], header, fresh, st["base_mb_left"])
+    return {"header": header, "rows": rows, "pp": pp, "recent": recent, "at": int(now)}
 
 
 def store(conn, live: dict, known: dict) -> None:
@@ -104,9 +180,14 @@ class DownloadWatcher(threading.Thread):
     def __init__(self, db_path: Path, stop: threading.Event):
         super().__init__(name="downloads", daemon=True)
         self.db_path, self.stop_event = db_path, stop
-        self.known: dict = {}
-        self.checked: set = set()
-        self.arr_read_at = 0.0
+        # known: nzo_id -> Sonarr/Radarr records; checked: ids already looked up; base: rows from the
+        # last full read, with base_mb_left and total (SABnzbd's MB left and job count then).
+        self.st: dict = {"known": {}, "checked": set(), "arr_read_at": 0.0, "base": None, "full_at": 0.0}
+        self.failing = False
+
+    @property
+    def known(self) -> dict:
+        return self.st["known"]
 
     def tick(self, conn, now: float | None = None) -> bool:
         """One read. Returns True while SABnzbd has work, so the next read comes sooner."""
@@ -115,11 +196,15 @@ class DownloadWatcher(threading.Thread):
             return False
         now = now or time.time()
         try:
-            live, self.known, self.checked, self.arr_read_at = snapshot(conn, clients, self.known, self.checked, now,
-                                                                         self.arr_read_at)
+            live = snapshot(conn, clients, self.st, now)
         except ArrError as e:
-            log.debug("SABnzbd queue: %s", e)
-            return False
+            if not self.failing:
+                log.warning("SABnzbd queue: %s (keeping the last snapshot)", e)
+            self.failing = True
+            return self.st.get("base") is not None
+        if self.failing:
+            log.info("SABnzbd queue: reading again")
+        self.failing = False
         store(conn, live, self.known)
         return bool(live["rows"] or live["pp"])
 

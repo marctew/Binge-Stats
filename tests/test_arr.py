@@ -2,6 +2,7 @@
 import json
 
 import pytest
+import requests
 import responses
 
 from bingestats import db
@@ -377,13 +378,17 @@ def slot(nzo, name, cat, pct=40, mb=1000.0, left=600.0, status="Downloading", tl
             "mb": str(mb), "mbleft": str(left), "timeleft": tl, "priority": "Normal"}
 
 
-def mock_live(rsps, slots, *, sonarr_calls=None):
+def mock_live(rsps, slots, *, sonarr_calls=None, sab_calls=None, mb_left="9999"):
     def sab(request):
         mode = request.params["mode"]
         if mode == "queue":
-            return (200, {}, json.dumps({"queue": {"status": "Downloading", "paused": False, "noofslots": len(slots) + 5,
-                                                   "kbpersec": "51200", "mbleft": "9999", "timeleft": "1:00:00",
-                                                   "slots": slots}}))
+            if sab_calls is not None:
+                sab_calls.append(dict(request.params))
+            ids = request.params.get("nzo_ids")
+            shown = [s for s in slots if s["nzo_id"] in ids.split(",")] if ids else slots
+            return (200, {}, json.dumps({"queue": {"status": "Downloading", "paused": False, "noofslots": len(shown),
+                                                   "noofslots_total": len(slots) + 5, "kbpersec": "51200",
+                                                   "mbleft": mb_left, "timeleft": "1:00:00", "slots": shown}}))
         return (200, {}, json.dumps({"history": {"slots": [
             {"nzo_id": FILM_ID, "name": "Quiet.Two.2020.1080p.BluRay", "category": "movies", "status": "Extracting",
              "bytes": 8 * 10**9, "action_line": "Unpacking 3/10", "completed": 0},
@@ -435,21 +440,23 @@ def test_watcher_looks_up_new_jobs_and_shows_all_when_asked(synced):
         w.tick(c, now=NOW)
     with responses.RequestsMock(assert_all_requests_are_fired=False) as rsps:
         mock_live(rsps, [slot(TV_ID, "a", "tv"), slot(NEW_ID, "Brand.New.Film.2026.1080p", "other")], sonarr_calls=calls)
-        w.tick(c, now=NOW + 3)
-    assert len(calls) == 2                                       # a new job: looked up again
-    assert [r["kind"] for r in arr.download_queue(c, now=NOW + 3)["rows"]] == ["job", "other"]
+        w.tick(c, now=NOW + 3)                                   # too soon after the last full read
+        assert len(calls) == 1
+        w.tick(c, now=NOW + 15)
+    assert len(calls) == 2                                       # a new job: the whole queue read, and looked up
+    assert [r["kind"] for r in arr.download_queue(c, now=NOW + 15)["rows"]] == ["job", "other"]
 
     def retick(t):
         with responses.RequestsMock(assert_all_requests_are_fired=False) as rsps:
             mock_live(rsps, [slot(TV_ID, "a", "tv"), slot(NEW_ID, "Brand.New.Film.2026.1080p", "other")])
             w.tick(c, now=t)
     settings.set(c, "sabnzbd.categories", "*")
-    retick(NOW + 6)                                              # grouping is decided when the queue is read
-    q = arr.download_queue(c, now=NOW + 6)
+    retick(NOW + 18)                                             # a new setting: the whole queue is read again
+    q = arr.download_queue(c, now=NOW + 18)
     assert [i["title"] for i in q["items"]] == ["Way Behind", "Brand New Film 2026 1080p"]   # unmatched: tidied name
     settings.set(c, "sabnzbd.categories", "other")
-    retick(NOW + 9)
-    assert [i["title"] for i in arr.download_queue(c, now=NOW + 9)["items"]] == ["Way Behind", "Brand New Film 2026 1080p"]
+    retick(NOW + 21)
+    assert [i["title"] for i in arr.download_queue(c, now=NOW + 21)["items"]] == ["Way Behind", "Brand New Film 2026 1080p"]
 
 
 def test_not_configured_and_idle(conn):
@@ -522,3 +529,37 @@ def test_sab_seconds_and_eta_filter():
     assert parse.sab_seconds("0:04:12") == 252 and parse.sab_seconds("6:22:40") == 22960
     assert parse.sab_seconds("1:06:22:40") == 109360 and parse.sab_seconds("x") is None
     assert [eta(x) for x in (45, 60, 1320, 3720, 22960, 109360)] == ["45 secs", "1 min", "22 mins", "1h 02m", "6h 22m", "1d 6h"]
+
+
+def test_between_full_reads_only_the_jobs_on_show_are_asked_for(synced, caplog):
+    c = synced
+    w = dl.DownloadWatcher(None, None)
+    others = [slot(f"o{i}", f"Other.{i}", "hmm", mb=1024.0, left=1024.0) for i in range(3)]
+    tv = slot(TV_ID, "Way.Behind.S02.1080p.WEB.h264-GRP", "tv", mb=2048.0, left=2048.0)
+    calls = []
+    with responses.RequestsMock(assert_all_requests_are_fired=False) as rsps:
+        mock_live(rsps, others + [tv], sab_calls=calls, mb_left=str(3 * 1024 + 2048))
+        w.tick(c, now=NOW)
+    [g, job] = w.st["base"]
+    assert g["count"] == 3 and "nzo_ids" not in calls[0]
+    # 2 GB of the other jobs done since; the TV job's half done. 50 MB/s.
+    done_others = [slot(f"o{i}", f"Other.{i}", "hmm", mb=1024.0, left=1024.0 if i == 2 else 0.0) for i in range(3)]
+    tv_now = slot(TV_ID, "Way.Behind.S02.1080p.WEB.h264-GRP", "tv", mb=2048.0, left=1024.0)
+    calls.clear()
+    with responses.RequestsMock(assert_all_requests_are_fired=False) as rsps:
+        mock_live(rsps, done_others + [tv_now], sab_calls=calls, mb_left=str(1024 + 1024))
+        w.tick(c, now=NOW + 3)
+    assert [x.get("nzo_ids") for x in calls] == [TV_ID] and calls[0].get("timeout") is None
+    rows = arr.download_queue(c, now=NOW + 3)["rows"]
+    assert rows[0]["kind"] == "other" and rows[0]["count"] == 3 and rows[0]["mb_left"] == 1024.0
+    assert rows[0]["eta_s"] == 20 and rows[1]["eta_s"] == 40           # MB ahead / (51200 KB/s = 50 MB/s)
+    assert rows[1]["mb_left"] == 1024.0
+
+    # SABnzbd stops answering: the last snapshot stays, with one warning
+    with responses.RequestsMock(assert_all_requests_are_fired=False) as rsps:
+        rsps.add(responses.GET, f"{SAB}/api", body=requests.ConnectionError("down"))
+        with caplog.at_level("WARNING", logger="bingestats.downloads"):
+            assert w.tick(c, now=NOW + 6) is True
+            w.tick(c, now=NOW + 9)
+    assert len([r for r in caplog.records if "SABnzbd queue" in r.getMessage()]) == 1
+    assert arr.download_queue(c, now=NOW + 9)["rows"][1]["mb_left"] == 1024.0

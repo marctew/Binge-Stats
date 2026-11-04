@@ -66,12 +66,12 @@ class SabClient:
         self.timeout = timeout
         self.http = http or requests.Session()
 
-    def get(self, mode: str, **params) -> Any:
+    def get(self, mode: str, *, timeout: float | None = None, **params) -> Any:
         if mode not in self.READ_MODES:
             raise ArrError(f"SABnzbd mode {mode} isn't allowed (read-only)")
         try:
             r = self.http.get(f"{self.url}/api", params={"mode": mode, "output": "json", "apikey": self.api_key, **params},
-                              timeout=self.timeout)
+                              timeout=timeout or self.timeout)
         except requests.RequestException as e:
             raise ArrError(f"Can't reach {self.url}: {e.__class__.__name__}") from e
         if r.status_code >= 400:

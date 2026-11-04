@@ -84,6 +84,7 @@ def sab_queue(q: dict) -> dict:
         except (TypeError, ValueError):
             return 0.0
     return {"status": q.get("status"), "paused": bool(q.get("paused")), "items": int(q.get("noofslots") or 0),
+            "total": int(q.get("noofslots_total") or q.get("noofslots") or 0),
             "kbps": f(q.get("kbpersec")), "mb_left": f(q.get("mbleft")), "time_left": q.get("timeleft")}
 
 
