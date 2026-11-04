@@ -644,13 +644,17 @@ def test_sab_client_only_moves_when_allowed_and_never_writes_otherwise():
             sab.get(mode)
     with pytest.raises(ArrError, match="turned off"):
         sab.move(N("a"), N("b"), allowed=False)
-    with pytest.raises(ArrError, match="job id"):
-        sab.move("a&mode=delete", N("b"), allowed=True)
+    for bad in ("a&mode=delete", "x", "a b c d e f", ""):
+        with pytest.raises(ArrError, match="job id"):
+            sab.move(bad, N("b"), allowed=True)
     with responses.RequestsMock() as rsps:
         rsps.add(responses.GET, f"{SAB}/api", json={"result": {"position": 3, "priority": 1}})
         assert sab.move(N("a"), N("b"), allowed=True) == {"position": 3, "priority": 1}
         q = rsps.calls[0].request.params
         assert (q["mode"], q["value"], q["value2"]) == ("switch", N("a"), N("b"))
+    with responses.RequestsMock() as rsps:                      # SABnzbd 5's ids are UUIDs
+        rsps.add(responses.GET, f"{SAB}/api", json={"result": {"position": 0, "priority": 0}})
+        sab.move("61fb3d9a-5559-4480-9e2c-dc9b97d3369e", "5a089378-fa98-4b8b-ae75-369ca7863c3a", allowed=True)
     with responses.RequestsMock() as rsps:
         rsps.add(responses.GET, f"{SAB}/api", json={"result": {"position": -1, "priority": -1}})
         with pytest.raises(ArrError, match="didn't move"):

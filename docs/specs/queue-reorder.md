@@ -38,7 +38,7 @@ These were checked by moving a real job deep in the queue and putting it back. R
 
 - Add `SabClient.move(nzo_id: str, target_nzo_id: str) -> dict`. It returns `{"position": int, "priority": int}`.
 - It is the only method that sends a mode outside `READ_MODES`. Use a separate constant, `WRITE_MODES = {"switch"}`, and keep `get()` refusing anything that isn't a read mode.
-- Validate both ids against `^SABnzbd_nzo_[A-Za-z0-9_]+$` before sending.
+- Validate both ids against `^[A-Za-z0-9_-]{6,64}$` before sending. SABnzbd 5 ids are UUIDs (`61fb3d9a-5559-…`); older versions use `SABnzbd_nzo_…`.
 - `move()` checks the setting itself, through a flag passed in by the service, so a stray caller can't bypass the switch.
 - Timeout: 15 s.
 

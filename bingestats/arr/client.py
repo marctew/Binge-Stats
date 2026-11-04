@@ -57,7 +57,8 @@ class ArrClient:
         return out
 
 
-NZO_ID = re.compile(r"^SABnzbd_nzo_[A-Za-z0-9_]+$")
+# SABnzbd 5 uses a UUID ("61fb3d9a-5559-..."); older versions "SABnzbd_nzo_abc123".
+NZO_ID = re.compile(r"^[A-Za-z0-9_-]{6,64}$")
 
 
 class SabClient:
