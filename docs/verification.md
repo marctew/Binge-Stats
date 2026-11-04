@@ -216,3 +216,13 @@ API shapes were checked against the live apps before building: Sonarr 4.0.19, Ra
   - Whatever else was downloaded since comes off the "Other items" groups, front first. ETAs are the MB ahead over the speed.
   - If a read fails, it logs one warning and keeps the last snapshot.
 - **Live, after deploying:** the queue grouped as 117 other jobs, then The Bad Batch, then 1,259 other jobs, then the films.
+
+## SABnzbd `mode=switch`, 2026-11-04 (SABnzbd 5.1.3, checked before building queue moves)
+
+I moved a job deep in the "other" part of the queue and put it back.
+
+- **`value2` takes another job's `nzo_id`.** The answer is `{"result": {"position": N, "priority": P}}`.
+- **Moving up** lands the job just before the target. **Moving down** lands it just after: SABnzbd removes the job, then inserts it at the target's old index.
+- **The job takes the target's priority.** Moving a Normal job onto a High one made it High at position 0. Moving it back made it Normal.
+- **Indexes drift between reads** as jobs at the top finish (by one during the test), so a target has to be an nzo_id, not a position.
+- **The test job is back in its original place**, between the same neighbours, at Normal priority.
