@@ -559,6 +559,12 @@ Optional, set up in **Settings → Sonarr, Radarr and SABnzbd** (URL and API key
   - **Insights → Downloads:** today, 7 days, 30 days and all time; GB per day for 90 days and per month for all history; the current queue; failed downloads.
   - **Home Assistant:** "Download queue" and "Download speed" sensors, only while SABnzbd is connected.
   - **API:** `GET /api/v1/insights/arr`, `/insights/downloads`, `/insights/downloads/series?days=`.
+  - **Downloads page** (`/downloads`, in the sidebar once SABnzbd is set up): the live queue, refreshed every 2 s.
+    - A worker thread (`worker/downloads.py`) reads SABnzbd's queue (the first 200 jobs in detail) and the last 20 history entries every 3 s while it's busy, and every 30 s when idle.
+    - Each job is matched to what it is through Sonarr's and Radarr's own queues: their `downloadId` is SABnzbd's `nzo_id`, so the match is exact. Those queues are only re-read when a job appears that hasn't been looked up, or once a minute while busy.
+    - Shown per job: poster (from Sonarr/Radarr via `/img/arr/<app>/<id>`), show and episode (or season pack and episode count) or film and year, quality, progress, size, time left, and the NZB name small underneath. Unmatched jobs show a tidied file name.
+    - Jobs being verified or unpacked show under "Finishing up"; jobs completed or failed in the last 6 h show under "Finished".
+    - **Categories:** only Sonarr's and Radarr's SABnzbd categories show by default (read from their download-client settings, else `tv` and `movies`). Other categories are hidden and only counted. `sabnzbd.categories` can list categories to show, or be `*` for all. The same filter applies to failed downloads on Download stats.
   - **Item pages:** "Open in Plex" (app.plex.tv with the server's machine id) on anything still in the library; "Open in Sonarr" on a show, season or episode whose show Sonarr has (by TVDB id, using Sonarr's title slug, migration v9); "Open in Radarr" on a film Radarr has (Radarr's page is `/movie/<tmdb id>`). The Sonarr and Radarr links use the optional "Link address" from Settings (e.g. a tunnel hostname), falling back to the URL Binge Stats reads from.
 
 ---

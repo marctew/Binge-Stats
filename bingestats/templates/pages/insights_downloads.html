@@ -5,7 +5,7 @@
 {% block title %}Downloads · Binge Stats{% endblock %}
 {% block head %}{{ chart_scripts() }}{% endblock %}
 {% block content %}
-{% call page_header('Insights', 'What SABnzbd has pulled down') %}{% endcall %}
+{% call page_header('Insights', 'What SABnzbd has pulled down over time') %}{% endcall %}
 {{ insights_tabs('downloads') }}
 {% if not configured %}
 <div class="card p-8 text-center">
@@ -25,13 +25,10 @@
 </div>
 
 {% if q['items'] %}
-<section class="card mt-4 p-4 sm:p-5">
-  <div class="flex flex-wrap items-baseline justify-between gap-3">
-    <h2 class="text-sm font-semibold">Downloading now</h2>
-    <span class="text-sm text-muted">{{ '%.1f' % (q.kbps * 8 / 1000) }} Mbit/s · {{ '%.1f' % (q.mb_left / 1000) }} GB left · {{ q.time_left }}</span>
-  </div>
-  <ul class="mt-2 space-y-1 text-sm">{% for n in q.names %}<li class="truncate text-muted">{{ n }}</li>{% endfor %}</ul>
-</section>
+<a href="{{ url_for('ui.downloads_page') }}" class="card mt-4 flex items-center justify-between gap-3 p-4 transition hover:ring-1 hover:ring-accent/50">
+  <span class="text-sm"><span class="font-semibold">Downloading now</span> <span class="text-muted">· {{ '%.1f' % (q.kbps / 1024) }} MB/s</span></span>
+  <span class="text-sm text-muted">See the queue →</span>
+</a>
 {% endif %}
 
 <div class="mt-4 grid gap-4 lg:grid-cols-5">

@@ -173,7 +173,11 @@
           <input id="{{ a.app }}_key" name="{{ a.app }}.api_key" type="password" class="input" autocomplete="off" placeholder="{{ 'Saved – leave blank to keep' if a.has_key else 'Paste the API key' }}">
           {% if a.url or a.has_key %}<label class="mt-1.5 flex items-center gap-2 text-xs text-muted"><input type="checkbox" name="clear_{{ a.app }}" class="rounded"> Disconnect {{ a.name }}</label>{% endif %}
         </div>
-        {% if a.app != 'sabnzbd' %}
+        {% if a.app == 'sabnzbd' %}
+        <div class="sm:col-start-2 sm:col-span-2"><label class="label" for="sab_cats">Show on the Downloads page <span class="normal-case text-faint">(optional)</span></label>
+          <input id="sab_cats" name="sabnzbd.categories" class="input" value="{{ sab_categories }}" placeholder="Blank: only Sonarr's and Radarr's categories">
+          <p class="mt-1 text-xs text-faint">Blank shows the categories Sonarr and Radarr download to; other categories are hidden and only counted. List categories (e.g. <code>tv, movies, music</code>) to choose, or <code>*</code> for everything.</p></div>
+        {% else %}
         <div class="sm:col-start-2"><label class="label" for="{{ a.app }}_link">Link address <span class="normal-case text-faint">(optional)</span></label>
           <input id="{{ a.app }}_link" name="{{ a.app }}.link_url" class="input" value="{{ a.link_url or '' }}" placeholder="https://{{ a.app }}.example.com">
           <p class="mt-1 text-xs text-faint">Used by the "Open in {{ a.name }}" buttons, e.g. your tunnel hostname. Blank uses the URL above.</p></div>

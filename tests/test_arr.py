@@ -172,15 +172,6 @@ def test_resync_replaces_and_keeps_old_sab_days(synced):
     assert c.execute("SELECT bytes FROM sab_daily WHERE day = '2024-01-01'").fetchone()[0] == 7
 
 
-def test_queue_tick(synced, conn):
-    with responses.RequestsMock(assert_all_requests_are_fired=False) as rsps:
-        mock_all(rsps)
-        q = arr_sync.queue_tick(synced, now=NOW + 60)
-    assert q["status"] == "Downloading" and q["kbps"] == 12500.0
-    settings.set(synced, "sabnzbd.url", "")
-    assert arr_sync.queue_tick(synced) is None                              # not set up: nothing to do
-
-
 def test_job_and_schedule(conn, tmp_path):
     for k in ("backup.last_run_at", "arr.last_sync_at"):
         settings.set(conn, k, 0)
@@ -371,3 +362,130 @@ def test_links_use_the_public_address(synced):
     assert settings.get(c, "sonarr.url") == SON                               # the sync still reads the LAN address
     with pytest.raises(ValueError, match="link address"):
         arr.save(c, {"sonarr.url": SON, "sonarr.link_url": "sonarr.example.co.uk"})
+
+
+
+# -- live downloads ---------------------------------------------------------------------------
+
+from bingestats.worker import downloads as dl  # noqa: E402
+
+TV_ID, FILM_ID, HIDDEN_ID, NEW_ID = "SABnzbd_nzo_tv", "SABnzbd_nzo_film", "SABnzbd_nzo_x", "SABnzbd_nzo_new"
+
+
+def slot(nzo, name, cat, pct=40, mb=1000.0, left=600.0, status="Downloading", tl="0:01:00"):
+    return {"nzo_id": nzo, "filename": name, "cat": cat, "status": status, "percentage": str(pct),
+            "mb": str(mb), "mbleft": str(left), "timeleft": tl, "priority": "Normal"}
+
+
+def mock_live(rsps, slots, *, sonarr_calls=None):
+    def sab(request):
+        mode = request.params["mode"]
+        if mode == "queue":
+            return (200, {}, json.dumps({"queue": {"status": "Downloading", "paused": False, "noofslots": len(slots) + 5,
+                                                   "kbpersec": "51200", "mbleft": "9999", "timeleft": "1:00:00",
+                                                   "slots": slots}}))
+        return (200, {}, json.dumps({"history": {"slots": [
+            {"nzo_id": FILM_ID, "name": "Quiet.Two.2020.1080p.BluRay", "category": "movies", "status": "Extracting",
+             "bytes": 8 * 10**9, "action_line": "Unpacking 3/10", "completed": 0},
+            {"nzo_id": "SABnzbd_nzo_done", "name": "Some.Thing", "category": "tv", "status": "Completed",
+             "bytes": 10**9, "completed": NOW - 600}]}}))
+    rsps.add_callback(responses.GET, f"{SAB}/api", callback=sab)
+
+    def sonarr_q(request):
+        if sonarr_calls is not None:
+            sonarr_calls.append(1)
+        recs = [{"downloadId": TV_ID, "seriesId": 2, "series": {"title": "Way Behind", "year": 2010, "tvdbId": 222},
+                 "episode": {"seasonNumber": 2, "episodeNumber": e, "title": f"Ep {e}"},
+                 "quality": {"quality": {"name": "WEBDL-1080p"}}, "trackedDownloadState": "downloading"} for e in (1, 2)]
+        return (200, {}, json.dumps({"page": 1, "totalRecords": 2, "records": recs}))
+    rsps.add_callback(responses.GET, f"{SON}/api/v3/queue", callback=sonarr_q)
+    rsps.add(responses.GET, f"{RAD}/api/v3/queue", json={"page": 1, "totalRecords": 1, "records": [
+        {"downloadId": FILM_ID, "movieId": 2, "movie": {"title": "Quiet Two", "year": 2020, "tmdbId": 502},
+         "quality": {"quality": {"name": "Bluray-1080p"}}}]})
+
+
+def test_watcher_matches_by_download_id_and_hides_other_categories(synced):
+    c = synced
+    calls = []
+    w = dl.DownloadWatcher(None, None)
+    with responses.RequestsMock(assert_all_requests_are_fired=False) as rsps:
+        mock_live(rsps, [slot(TV_ID, "Way.Behind.S02.1080p.WEB.h264-GRP", "tv"),
+                         slot(HIDDEN_ID, "Private.Thing.2160p", "hmm")], sonarr_calls=calls)
+        assert w.tick(c, now=NOW) is True
+        assert w.tick(c, now=NOW + 3) is True
+        assert len(calls) == 1                                   # nothing new: Sonarr isn't asked again
+    q = arr.download_queue(c, now=NOW + 3)
+    [item] = q["items"]
+    assert item["title"] == "Way Behind" and item["sub"] == "Season 2 · 2 episodes" and item["quality"] == "WEBDL-1080p"
+    assert item["app"] == "sonarr" and item["pct"] == 40 and item["mb_left"] == 600.0
+    assert q["hidden"] == 6 and q["categories"] == ["movies", "tv"]   # 1 'hmm' slot + 5 beyond the detail limit
+    [pp] = q["pp"]
+    assert pp["title"] == "Quiet Two" and pp["sub"] == "2020" and pp["status"] == "Extracting"
+    assert [r["status"] for r in q["recent"]] == ["Completed"]
+    assert "Private" not in json.dumps(q)
+
+
+def test_watcher_looks_up_new_jobs_and_shows_all_when_asked(synced):
+    c = synced
+    calls = []
+    w = dl.DownloadWatcher(None, None)
+    with responses.RequestsMock(assert_all_requests_are_fired=False) as rsps:
+        mock_live(rsps, [slot(TV_ID, "a", "tv")], sonarr_calls=calls)
+        w.tick(c, now=NOW)
+    with responses.RequestsMock(assert_all_requests_are_fired=False) as rsps:
+        mock_live(rsps, [slot(TV_ID, "a", "tv"), slot(NEW_ID, "Brand.New.Film.2026.1080p", "other")], sonarr_calls=calls)
+        w.tick(c, now=NOW + 3)
+    assert len(calls) == 2                                       # a new job: looked up again
+    settings.set(c, "sabnzbd.categories", "*")
+    q = arr.download_queue(c, now=NOW + 3)
+    assert [i["title"] for i in q["items"]] == ["Way Behind", "Brand New Film 2026 1080p"]   # unmatched: tidied name
+    settings.set(c, "sabnzbd.categories", "other")
+    assert [i["title"] for i in arr.download_queue(c, now=NOW + 3)["items"]] == ["Way Behind", "Brand New Film 2026 1080p"]
+
+
+def test_not_configured_and_idle(conn):
+    assert arr.download_queue(conn) is None
+    assert dl.DownloadWatcher(None, None).tick(conn) is False
+    connect(conn)
+    assert arr.download_queue(conn) == {"ready": False}
+
+
+def test_downloads_page(logged_in, app_conn, app):
+    assert "Downloads" not in logged_in.get("/").data.decode().split("<main")[0]      # no nav entry yet
+    assert "Connect SABnzbd" in logged_in.get("/downloads").data.decode()
+    connect(app_conn)
+    plex_items(app_conn)
+    with responses.RequestsMock(assert_all_requests_are_fired=False) as rsps:
+        mock_all(rsps)
+        arr_sync.run(app_conn, now=NOW)
+    with responses.RequestsMock(assert_all_requests_are_fired=False) as rsps:
+        mock_live(rsps, [slot(TV_ID, "Way.Behind.S02.1080p.WEB.h264-GRP", "tv"), slot(HIDDEN_ID, "Private.Thing", "hmm")])
+        dl.DownloadWatcher(None, None).tick(app_conn)
+    body = logged_in.get("/downloads").data.decode()
+    assert "Way Behind" in body and "Season 2 · 2 episodes" in body and "WEBDL-1080p" in body
+    assert "in other categories, hidden" in body and "Private" not in body
+    assert "/img/arr/sonarr/2" in body and 'hx-trigger="every 2s' in body
+    assert "Finishing up" in logged_in.get("/downloads/live").data.decode()
+    assert 'href="/downloads"' in logged_in.get("/").data.decode()                     # in the nav now
+    stats = logged_in.get("/insights/downloads").data.decode()
+    assert "Private" not in stats and "See the queue" in stats
+
+
+def test_arr_poster_proxy(logged_in, app_conn):
+    connect(app_conn)
+    with responses.RequestsMock() as rsps:
+        rsps.add(responses.GET, f"{SON}/api/v3/mediacover/2/poster-250.jpg", body=b"\xff\xd8jpeg",
+                 content_type="image/jpeg")
+        r = logged_in.get("/img/arr/sonarr/2")
+        assert r.status_code == 200 and r.data == b"\xff\xd8jpeg"
+        assert rsps.calls[0].request.headers["X-Api-Key"] == "sonarr-key"
+    assert logged_in.get("/img/arr/sonarr/2").status_code == 200            # from the disk cache now
+    assert logged_in.get("/img/arr/plex/2").status_code == 404
+
+
+def test_settings_categories(conn):
+    arr.save(conn, {"sabnzbd.categories": " tv ,movies,, music "})
+    assert settings.get(conn, "sabnzbd.categories") == "tv, movies, music"
+    assert arr.visible_categories(conn) == {"tv", "movies", "music"}
+    arr.save(conn, {"sabnzbd.categories": "*"})
+    assert arr.visible_categories(conn) is None

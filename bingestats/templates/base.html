@@ -23,6 +23,7 @@
                ('notify.index', 'Notifications', 'bell', ['notify.index', 'notify.rule_new', 'notify.rule_edit']),
                ('ui.settings_page', 'Settings', 'settings', ['ui.settings_page', 'ui.import_page', 'ui.job_page'])] %}
 {% set viewer = session.get('viewer') %}
+{% if sab_configured and not viewer %}{% set nav = nav[:2] + [('ui.downloads_page', 'Downloads', 'download', ['ui.downloads_page'])] + nav[2:] %}{% endif %}
 {% set home_ep = 'me.home' if viewer else 'ui.index' %}
 {% if viewer %}
 {% set nav = [('me.home', 'Home', 'home', ['me.home']), ('me.history_page', 'History', 'history', ['me.history_page']),

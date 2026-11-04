@@ -77,6 +77,30 @@ def plex_image_response(src: str, shape: str, width: str | None):
     return _serve(cached)
 
 
+@bp.route("/arr/<app>/<int:item_id>")
+def arr_poster(app: str, item_id: int):
+    """A poster from Sonarr (series id) or Radarr (movie id), so downloads that aren't in
+    Plex yet still get one. The API key stays here, like the Plex token."""
+    if app not in ("sonarr", "radarr"):
+        abort(404)
+    cached = _cache_path(f"arr|{app}|{item_id}")
+    if cached.exists():
+        return _serve(cached)
+    from ..services import arr
+    client = arr.clients(current_app.get_db()).get(app)
+    if client is None:
+        abort(404)
+    try:
+        r = client.http.get(f"{client.url}/api/v3/mediacover/{item_id}/poster-250.jpg",
+                            headers={"X-Api-Key": client.api_key}, timeout=10)
+    except Exception:  # noqa: BLE001 - any failure is just "no poster"
+        abort(404)
+    if r.status_code != 200 or not r.headers.get("Content-Type", "").startswith("image/"):
+        abort(404)
+    _store(cached, r.content)
+    return _serve(cached)
+
+
 @bp.route("/user/<int:user_id>")
 def user_avatar(user_id: int):
     row = current_app.get_db().execute("SELECT thumb_url FROM users WHERE id = ?", (user_id,)).fetchone()

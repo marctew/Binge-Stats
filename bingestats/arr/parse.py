@@ -84,5 +84,46 @@ def sab_queue(q: dict) -> dict:
         except (TypeError, ValueError):
             return 0.0
     return {"status": q.get("status"), "paused": bool(q.get("paused")), "items": int(q.get("noofslots") or 0),
-            "kbps": f(q.get("kbpersec")), "mb_left": f(q.get("mbleft")), "time_left": q.get("timeleft"),
-            "names": [s.get("filename") for s in (q.get("slots") or [])[:5]]}
+            "kbps": f(q.get("kbpersec")), "mb_left": f(q.get("mbleft")), "time_left": q.get("timeleft")}
+
+
+def _f(v) -> float:
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def sab_slot(s: dict) -> dict:
+    """One queued job."""
+    return {"nzo_id": s.get("nzo_id"), "name": s.get("filename"), "cat": s.get("cat"), "status": s.get("status"),
+            "pct": int(_f(s.get("percentage"))), "mb": _f(s.get("mb")), "mb_left": _f(s.get("mbleft")),
+            "time_left": s.get("timeleft"), "priority": s.get("priority")}
+
+
+# SABnzbd history states while a finished download is still being worked on.
+PP_STATES = {"Queued", "QuickCheck", "Verifying", "Repairing", "Fetching", "Extracting", "Moving", "Running"}
+
+
+def sab_pp(slot: dict) -> dict:
+    """A history entry that's post-processing (or just finished)."""
+    return {"nzo_id": slot.get("nzo_id"), "name": slot.get("name"), "cat": slot.get("category"),
+            "status": slot.get("status"), "mb": round(int(slot.get("bytes") or 0) / 1e6, 1),
+            "action": slot.get("action_line") or "", "completed_at": int(slot.get("completed") or 0) or None,
+            "fail_message": slot.get("fail_message") or None}
+
+
+def arr_queue_record(r: dict, app: str) -> dict:
+    """A Sonarr/Radarr queue record: what a download *is*. downloadId is SABnzbd's nzo_id."""
+    q = ((r.get("quality") or {}).get("quality") or {}).get("name")
+    if app == "sonarr":
+        s, e = r.get("series") or {}, r.get("episode") or {}
+        return {"download_id": r.get("downloadId"), "app": "sonarr", "item_id": r.get("seriesId"),
+                "title": s.get("title"), "year": s.get("year"), "tvdb_id": s.get("tvdbId"),
+                "season": e.get("seasonNumber"), "episode": e.get("episodeNumber"), "episode_title": e.get("title"),
+                "quality": q, "state": r.get("trackedDownloadState"), "error": r.get("errorMessage")}
+    m = r.get("movie") or {}
+    return {"download_id": r.get("downloadId"), "app": "radarr", "item_id": r.get("movieId"),
+            "title": m.get("title"), "year": m.get("year"), "tmdb_id": m.get("tmdbId"), "season": None,
+            "episode": None, "episode_title": None, "quality": q, "state": r.get("trackedDownloadState"),
+            "error": r.get("errorMessage")}

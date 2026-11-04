@@ -49,6 +49,9 @@ def save(conn: sqlite3.Connection, form) -> list[str]:
     """Save URL + key per app. A blank key keeps the saved one; 'clear_<app>' removes the connection.
     Returns the apps that changed (so the caller can queue a sync)."""
     changed = []
+    if "sabnzbd.categories" in form:
+        settings.set(conn, "sabnzbd.categories", ", ".join(
+            c.strip() for c in (form.get("sabnzbd.categories") or "").split(",") if c.strip()))
     for app in APPS:
         if form.get(f"clear_{app}") == "on":
             settings.set(conn, f"{app}.url", "")
@@ -243,7 +246,13 @@ def downloads(conn: sqlite3.Connection, now: float | None = None) -> dict:
             "busiest": max(daily.items(), key=lambda kv: kv[1]) if daily else None,
             "months": sorted(months.items()), "queue": info.get("queue"), "queue_at": info.get("queue_at"),
             "failed": [dict(r) for r in conn.execute(
-                "SELECT * FROM sab_history WHERE status = 'Failed' ORDER BY completed_at DESC LIMIT 20")]}
+                "SELECT * FROM sab_history WHERE status = 'Failed' ORDER BY completed_at DESC LIMIT 100")
+                if _cat_ok(conn, r["category"])][:20]}
+
+
+def _cat_ok(conn, cat: str | None) -> bool:
+    cats = visible_categories(conn)
+    return cats is None or (cat or "").lower() in cats
 
 
 def downloads_series(conn: sqlite3.Connection, days: int = 90, now: float | None = None) -> dict:
@@ -325,3 +334,80 @@ def item_links(conn: sqlite3.Connection, item: dict) -> list[dict]:
             links.append({"app": "radarr", "label": "Open in Radarr",
                           "url": f"{base('radarr')}/movie/{item['tmdb_id']}"})
     return links
+
+
+# -- live downloads ---------------------------------------------------------------------------
+
+def visible_categories(conn: sqlite3.Connection) -> set[str] | None:
+    """Categories shown on the Downloads page. None means all of them."""
+    setting = (settings.get(conn, "sabnzbd.categories") or "").strip()
+    if setting == "*":
+        return None
+    if setting:
+        return {c.strip().lower() for c in setting.split(",") if c.strip()}
+    cats = set()
+    for r in conn.execute("SELECT info FROM arr_status WHERE app IN ('sonarr', 'radarr')"):
+        cats |= {c.lower() for c in json.loads(r["info"] or "{}").get("categories") or []}
+    return cats or {"tv", "movies"}
+
+
+def _pretty(name: str | None) -> str:
+    return (name or "Unknown").replace(".", " ").replace("_", " ").strip()
+
+
+def _describe(recs: list[dict], plex_shows: dict, plex_movies: dict) -> dict:
+    """What a download is, from its Sonarr/Radarr queue records (several for a season pack)."""
+    r = recs[0]
+    if r["app"] == "sonarr":
+        eps = sorted({(x["season"], x["episode"]) for x in recs if x["season"] is not None})
+        if len(eps) == 1:
+            s, e = eps[0]
+            sub = f"S{s:02d}E{e:02d}" + (f" · {r['episode_title']}" if r.get("episode_title") and r["episode_title"] != "TBA" else "")
+        elif eps:
+            seasons = sorted({s for s, _e in eps})
+            sub = (f"Season {seasons[0]}" if len(seasons) == 1 else f"Seasons {seasons[0]}–{seasons[-1]}") + f" · {len(eps)} episodes"
+        else:
+            sub = ""
+        p = plex_shows.get(r.get("tvdb_id"))
+    else:
+        sub = str(r["year"]) if r.get("year") else ""
+        p = plex_movies.get(r.get("tmdb_id"))
+    return {"app": r["app"], "item_id": r["item_id"], "title": r["title"] or "Unknown", "sub": sub,
+            "quality": r.get("quality"), "rating_key": p["rating_key"] if p else None,
+            "warning": next((x["error"] for x in recs if x.get("error")), None)}
+
+
+def download_queue(conn: sqlite3.Connection, now: float | None = None) -> dict | None:
+    """The live queue for the Downloads page, or None if SABnzbd isn't connected."""
+    if not configured(conn)["sabnzbd"]:
+        return None
+    now = now or time.time()
+    row = conn.execute("SELECT info FROM arr_status WHERE app = 'sabnzbd'").fetchone()
+    info = json.loads(row["info"]) if row else {}
+    live, known = info.get("live"), info.get("live_map") or {}
+    if not live:
+        return {"ready": False}
+    cats = visible_categories(conn)
+    show = (lambda j: cats is None or (j.get("cat") or "").lower() in cats or j.get("nzo_id") in known)  # noqa: E731
+    plex_shows = {r["tvdb_id"]: r for r in conn.execute(
+        "SELECT rating_key, tvdb_id FROM media_items WHERE type = 'show' AND is_present = 1 AND tvdb_id IS NOT NULL")}
+    plex_movies = {r["tmdb_id"]: r for r in conn.execute(
+        "SELECT rating_key, tmdb_id FROM media_items WHERE type = 'movie' AND is_present = 1 AND tmdb_id IS NOT NULL")}
+
+    def enrich(j: dict) -> dict:
+        recs = known.get(j.get("nzo_id"))
+        d = _describe(recs, plex_shows, plex_movies) if recs else {
+            "app": None, "item_id": None, "title": _pretty(j.get("name")), "sub": "", "quality": None,
+            "rating_key": None, "warning": None}
+        return {**j, **d}
+
+    header = live.get("header") or {}
+    slots = live.get("slots") or []
+    items = [enrich(s) for s in slots if show(s)]
+    hidden = (header.get("items") or len(slots)) - len(items)
+    return {"ready": True, "at": live.get("at"), "stale": now - (live.get("at") or 0) > 120,
+            "status": header.get("status"), "paused": header.get("paused"), "kbps": header.get("kbps") or 0,
+            "items": items, "hidden": max(0, hidden), "categories": sorted(cats) if cats is not None else None,
+            "mb_left": sum(i["mb_left"] for i in items),
+            "pp": [enrich(p) for p in live.get("pp") or [] if show(p)],
+            "recent": [enrich(p) for p in live.get("recent") or [] if show(p)]}

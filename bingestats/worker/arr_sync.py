@@ -39,6 +39,21 @@ def _status(conn, app: str, ok: bool, now: int, *, error: str | None = None, ver
                  "info = excluded.info", (app, int(ok), error, version, now if ok else None, json.dumps(merged)))
 
 
+def _categories(client: ArrClient, field: str) -> list[str]:
+    """The SABnzbd categories this app sends its downloads to (from its download client settings)."""
+    try:
+        clients = client.get("downloadclient")
+    except ArrError:
+        return []
+    out = set()
+    for c in clients or []:
+        if c.get("implementation") == "Sabnzbd" and c.get("enable", True):
+            for f in c.get("fields") or []:
+                if f.get("name") == field and f.get("value"):
+                    out.add(str(f["value"]))
+    return sorted(out)
+
+
 def sync_sonarr(conn: sqlite3.Connection, client: ArrClient, now: float) -> dict:
     version = (client.get("system/status") or {}).get("version")
     series = [parse.series(s) for s in client.get("series")]
@@ -56,7 +71,8 @@ def sync_sonarr(conn: sqlite3.Connection, client: ArrClient, now: float) -> dict
                                          for e in missing if e["series_id"] is not None])
         _insert(conn, "sonarr_upcoming", [e for e in upcoming if e["series_id"] is not None])
         _insert(conn, "arr_cutoff", cutoff)
-        info = {"series": len(series), "missing": len(missing), "cutoff": len(cutoff), "upcoming": len(upcoming)}
+        info = {"series": len(series), "missing": len(missing), "cutoff": len(cutoff), "upcoming": len(upcoming),
+                "categories": _categories(client, "tvCategory")}
         _status(conn, "sonarr", True, int(now), version=version, info=info)
     return info
 
@@ -77,7 +93,7 @@ def sync_radarr(conn: sqlite3.Connection, client: ArrClient, now: float) -> dict
         _insert(conn, "arr_cutoff", [{"app": "radarr", "item_id": m["id"], "series_id": None, "season": None,
                                       "episode": None, "title": m["title"], "year": m["year"], "quality": m["quality"]}
                                      for m in movies if m["cutoff_not_met"]])
-        info = {"movies": len(movies), "collections": len(collections),
+        info = {"movies": len(movies), "collections": len(collections), "categories": _categories(client, "movieCategory"),
                 "missing": sum(1 for m in movies if m["monitored"] and m["is_available"] and not m["has_file"])}
         _status(conn, "radarr", True, int(now), version=version, info=info)
     return info
@@ -121,22 +137,3 @@ def run(conn: sqlite3.Connection, progress=None, now: float | None = None, clien
     if configured and len(errors) == len(configured):
         raise ArrError("; ".join(f"{a}: {m}" for a, m in errors.items()))
     return {"synced": results, "errors": errors}
-
-
-def queue_tick(conn: sqlite3.Connection, now: float | None = None, client: SabClient | None = None) -> dict | None:
-    """Refresh SABnzbd's queue (called every minute or so by the worker loop)."""
-    client = client or arr_svc.clients(conn).get("sabnzbd")
-    if client is None:
-        return None
-    now = now or time.time()
-    try:
-        queue = parse.sab_queue(client.get("queue").get("queue") or {})
-    except ArrError as e:
-        log.debug("SAB queue: %s", e)
-        return None
-    with db.transaction(conn):
-        row = conn.execute("SELECT info FROM arr_status WHERE app = 'sabnzbd'").fetchone()
-        info = {**(json.loads(row["info"]) if row else {}), "queue": queue, "queue_at": int(now)}
-        conn.execute("INSERT INTO arr_status (app, ok, info) VALUES ('sabnzbd', 1, ?) "
-                     "ON CONFLICT(app) DO UPDATE SET info = excluded.info", (json.dumps(info),))
-    return queue

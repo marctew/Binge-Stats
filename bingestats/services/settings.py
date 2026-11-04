@@ -51,6 +51,7 @@ DEFAULTS: dict[str, Any] = {
     "sonarr.url": "", "sonarr.api_key": "", "sonarr.link_url": "",   # link_url: address for "Open in" buttons
     "radarr.url": "", "radarr.api_key": "", "radarr.link_url": "",
     "sabnzbd.url": "", "sabnzbd.api_key": "",
+    "sabnzbd.categories": "",      # which to show on Downloads: "" = Sonarr's and Radarr's, "*" = all, or "tv, movies"
     "arr.sync_h": 3,
     "arr.last_sync_at": 0,
     "backup.keep": 7,

@@ -34,8 +34,12 @@ def _layout_context():
         status = activity.worker_status(_db())
     except Exception:  # noqa: BLE001 - no db yet (e.g. error pages)
         status = {"alive": True, "error": "", "plex_configured": True}
+    try:
+        sab = arr.configured(_db())["sabnzbd"]
+    except Exception:  # noqa: BLE001
+        sab = False
     return {"worker": status, "app_version": current_app.config["BS_VERSION"],
-            "app_sha": current_app.config["BS_SHA"]}
+            "app_sha": current_app.config["BS_SHA"], "sab_configured": sab}
 
 
 OSM_TILES = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -338,7 +342,8 @@ def _render_settings(conn, **extra):
                            recent_jobs=jobs.recent(conn, 8), ha=homeassistant.view(conn),
                            backup_list=backups.list_backups(current_app.config["BS_CONFIG"].data_dir),
                            backup_keep=settings.get(conn, "backup.keep"),
-                           backup_last=settings.get(conn, "backup.last_run_at"), arr_apps=arr.view(conn))
+                           backup_last=settings.get(conn, "backup.last_run_at"), arr_apps=arr.view(conn),
+                           sab_categories=settings.get(conn, "sabnzbd.categories"))
 
 
 @bp.route("/settings/homeassistant", methods=["POST"])
@@ -405,6 +410,16 @@ def settings_backup_download(name: str):
     if path is None:
         return render_template("pages/not_found.html", what="backup"), 404
     return send_file(path, as_attachment=True, download_name=name, mimetype="application/vnd.sqlite3")
+
+
+@bp.route("/downloads")
+def downloads_page():
+    return render_template("pages/downloads.html", q=arr.download_queue(_db()))
+
+
+@bp.route("/downloads/live")
+def downloads_live():
+    return render_template("partials/downloads_live.html", q=arr.download_queue(_db()))
 
 
 @bp.route("/settings/arr", methods=["POST"])
