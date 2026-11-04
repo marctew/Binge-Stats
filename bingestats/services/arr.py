@@ -38,6 +38,7 @@ def view(conn: sqlite3.Connection) -> list[dict]:
     for app, name in APPS.items():
         st = rows.get(app) or {}
         out.append({"app": app, "name": name, "url": settings.get(conn, f"{app}.url"),
+                    "link_url": settings.get(conn, f"{app}.link_url") if app != "sabnzbd" else None,
                     "has_key": bool(settings.get(conn, f"{app}.api_key")), "ok": bool(st.get("ok")),
                     "error": st.get("error"), "version": st.get("version"), "last_sync_at": st.get("last_sync_at"),
                     "info": json.loads(st.get("info") or "{}")})
@@ -59,6 +60,11 @@ def save(conn: sqlite3.Connection, form) -> list[str]:
         key = (form.get(f"{app}.api_key") or "").strip()
         if url and not url.startswith(("http://", "https://")):
             raise ValueError(f"{APPS[app]}: the URL should start with http:// or https://")
+        if app != "sabnzbd" and f"{app}.link_url" in form:
+            link = (form.get(f"{app}.link_url") or "").strip().rstrip("/")
+            if link and not link.startswith(("http://", "https://")):
+                raise ValueError(f"{APPS[app]}: the link address should start with http:// or https://")
+            settings.set(conn, f"{app}.link_url", link)
         if url != settings.get(conn, f"{app}.url") or key:
             settings.set(conn, f"{app}.url", url)
             if key:
@@ -293,6 +299,9 @@ def item_links(conn: sqlite3.Connection, item: dict) -> list[dict]:
     episodes) and Radarr for a film, when they're connected and know the item."""
     from urllib.parse import quote
     links = []
+
+    def base(app: str) -> str:            # the public address if set, else the one Binge Stats reads from
+        return (settings.get(conn, f"{app}.link_url") or settings.get(conn, f"{app}.url")).rstrip("/")
     srv = conn.execute("SELECT machine_id FROM servers ORDER BY id LIMIT 1").fetchone()
     if srv and srv["machine_id"] and item.get("rating_key") and item.get("is_present", 1):
         key = quote(f"/library/metadata/{item['rating_key']}", safe="")
@@ -309,10 +318,10 @@ def item_links(conn: sqlite3.Connection, item: dict) -> list[dict]:
                          (tvdb,)).fetchone() if tvdb else None
         if s:
             links.append({"app": "sonarr", "label": "Open in Sonarr",
-                          "url": f"{settings.get(conn, 'sonarr.url').rstrip('/')}/series/{quote(s['title_slug'])}"})
+                          "url": f"{base('sonarr')}/series/{quote(s['title_slug'])}"})
     if t == "movie" and configured(conn)["radarr"] and item.get("tmdb_id"):
         m = conn.execute("SELECT 1 FROM radarr_movies WHERE tmdb_id = ?", (item["tmdb_id"],)).fetchone()
         if m:                                   # Radarr's page slug is the TMDB id
             links.append({"app": "radarr", "label": "Open in Radarr",
-                          "url": f"{settings.get(conn, 'radarr.url').rstrip('/')}/movie/{item['tmdb_id']}"})
+                          "url": f"{base('radarr')}/movie/{item['tmdb_id']}"})
     return links

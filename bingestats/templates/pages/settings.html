@@ -160,7 +160,7 @@
     <form method="post" action="{{ url_for('ui.settings_arr') }}" class="mt-5 space-y-4">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       {% for a in arr_apps %}
-      <div class="grid gap-3 rounded-xl border border-border bg-surface-2/30 p-4 sm:grid-cols-[9rem_1fr_1fr] sm:items-end">
+      <div class="grid gap-3 rounded-xl border border-border bg-surface-2/30 p-4 sm:grid-cols-[9rem_1fr_1fr] sm:items-start">
         <div>
           <div class="font-medium">{{ a.name }}</div>
           <div class="mt-1 text-xs {{ 'text-play' if a.ok else ('text-danger' if a.error else 'text-muted') }}">
@@ -173,6 +173,11 @@
           <input id="{{ a.app }}_key" name="{{ a.app }}.api_key" type="password" class="input" autocomplete="off" placeholder="{{ 'Saved – leave blank to keep' if a.has_key else 'Paste the API key' }}">
           {% if a.url or a.has_key %}<label class="mt-1.5 flex items-center gap-2 text-xs text-muted"><input type="checkbox" name="clear_{{ a.app }}" class="rounded"> Disconnect {{ a.name }}</label>{% endif %}
         </div>
+        {% if a.app != 'sabnzbd' %}
+        <div class="sm:col-start-2"><label class="label" for="{{ a.app }}_link">Link address <span class="normal-case text-faint">(optional)</span></label>
+          <input id="{{ a.app }}_link" name="{{ a.app }}.link_url" class="input" value="{{ a.link_url or '' }}" placeholder="https://{{ a.app }}.example.com">
+          <p class="mt-1 text-xs text-faint">Used by the "Open in {{ a.name }}" buttons, e.g. your tunnel hostname. Blank uses the URL above.</p></div>
+        {% endif %}
       </div>
       {% endfor %}
       <div class="flex flex-wrap gap-2">

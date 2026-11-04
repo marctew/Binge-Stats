@@ -356,3 +356,18 @@ def test_migration_9(tmp_path, monkeypatch):
     monkeypatch.undo()
     assert db.migrate(c) == db.LATEST
     assert c.execute("SELECT title_slug FROM sonarr_series").fetchone()[0] is None
+
+
+
+def test_links_use_the_public_address(synced):
+    c = synced
+    c.execute("UPDATE servers SET machine_id = 'abc123' WHERE id = 1")
+    arr.save(c, {"sonarr.url": SON, "sonarr.link_url": "https://sonarr.example.co.uk/",
+                 "radarr.url": RAD, "radarr.link_url": "https://radarr.example.co.uk"})
+    show = dict(c.execute("SELECT * FROM media_items WHERE rating_key = 10").fetchone())
+    film = dict(c.execute("SELECT * FROM media_items WHERE rating_key = 20").fetchone())
+    assert {l["app"]: l["url"] for l in arr.item_links(c, show)}["sonarr"] == "https://sonarr.example.co.uk/series/nearly-there"
+    assert {l["app"]: l["url"] for l in arr.item_links(c, film)}["radarr"] == "https://radarr.example.co.uk/movie/501"
+    assert settings.get(c, "sonarr.url") == SON                               # the sync still reads the LAN address
+    with pytest.raises(ValueError, match="link address"):
+        arr.save(c, {"sonarr.url": SON, "sonarr.link_url": "sonarr.example.co.uk"})

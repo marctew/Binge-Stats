@@ -48,8 +48,8 @@ DEFAULTS: dict[str, Any] = {
     "mqtt.base_topic": "bingestats",
     "mqtt.discovery_prefix": "homeassistant",
     "mqtt.tracked_users": [],      # user ids that get a "watching" sensor and a stop button
-    "sonarr.url": "", "sonarr.api_key": "",
-    "radarr.url": "", "radarr.api_key": "",
+    "sonarr.url": "", "sonarr.api_key": "", "sonarr.link_url": "",   # link_url: address for "Open in" buttons
+    "radarr.url": "", "radarr.api_key": "", "radarr.link_url": "",
     "sabnzbd.url": "", "sabnzbd.api_key": "",
     "arr.sync_h": 3,
     "arr.last_sync_at": 0,
