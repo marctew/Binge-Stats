@@ -712,13 +712,14 @@ def test_dropping_at_the_top_works_when_the_downloading_job_has_finished(queue):
     assert fq.order()[-1] == N("tv1")
 
 
-def test_moving_onto_a_high_job_says_so_and_queues_one_refresh(queue):
+def test_moving_onto_a_high_job_says_so_and_marks_the_move(queue):
     c, fq, _w = queue
     res = run(fq, lambda: arr.move(c, N("film"), to="top"))
-    assert fq.order()[0] == N("film") and res["priority_name"] == "High" and res["at"]
+    assert fq.order()[0] == N("film") and res["priority_name"] == "High"
+    assert abs(settings.get(c, "sabnzbd.moved_at") - res["at"]) < 0.01
     run(fq, lambda: arr.move(c, N("tv2"), to="bottom"))
     assert fq.order()[-1] == N("tv2")
-    assert c.execute("SELECT COUNT(*) FROM jobs WHERE kind = 'downloads_refresh' AND status = 'queued'").fetchone()[0] == 1
+    assert not c.execute("SELECT COUNT(*) FROM jobs").fetchone()[0]          # no job hop: the watcher reads the setting
 
 
 def test_shown_first_keeps_their_order(queue):
@@ -745,16 +746,18 @@ def test_moves_refused_when_off_or_not_on_show(queue):
     assert not [x for x in fq.calls if x["mode"] == "switch"]
 
 
-def test_refresh_job_makes_the_next_read_a_full_one(queue):
+def test_a_move_makes_the_next_read_a_full_one(queue):
     c, fq, w = queue
-    from bingestats.worker.jobs_runner import run_job
     full = lambda: [x for x in fq.calls if x["mode"] == "queue" and "nzo_ids" not in x and x.get("limit") == "0"]  # noqa: E731
     n = len(full())
     run(fq, lambda: w.tick(c, now=NOW + 3))
-    assert len(full()) == n                                            # a fast read
-    run_job(c, None, {"id": 0, "kind": "downloads_refresh", "params": {}})
-    run(fq, lambda: w.tick(c, now=NOW + 6))
-    assert len(full()) == n + 1 and not dl.REFRESH.is_set()
+    assert len(full()) == n and not dl.moved_since(c, w.st)            # a fast read
+    run(fq, lambda: arr.move(c, N("film"), to="top"))
+    assert dl.moved_since(c, w.st)                                     # what the wait between reads looks for
+    run(fq, lambda: w.tick(c, now=NOW + 4))
+    assert len(full()) == n + 1 and not dl.moved_since(c, w.st)
+    live = json.loads(c.execute("SELECT info FROM arr_status WHERE app = 'sabnzbd'").fetchone()["info"])["live"]
+    assert live["full_at"] == NOW + 4 and live["rows"][0]["nzo_id"] == N("film")
 
 
 def test_move_routes(logged_in, app_conn, app):

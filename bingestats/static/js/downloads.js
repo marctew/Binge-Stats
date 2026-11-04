@@ -2,12 +2,15 @@
 //
 // Drag a TV/film card by its grip, or use its menu (top / bottom), or "TV & films
 // first". The server works out SABnzbd's calls from the jobs either side of the drop.
-// The page polls every 2 s; polling pauses while dragging, and after a move the page
-// keeps what you see until a snapshot from a full queue read after the move arrives,
-// so the card doesn't jump back to where it was for a few seconds.
+// The page polls every 2 s; polling pauses while dragging. Every move shows straight
+// away (menu moves and "TV & films first" reorder the cards here too); then the page
+// polls every half second, keeping what you see until a snapshot from a full queue
+// read after the move arrives, so nothing jumps back to where it was.
 (() => {
   const HOLD_MS = 60000;
+  const FAST_MS = 500;
   let sortable = null;
+  let fast = null;          // quick polling while waiting for the read after a move
   let movedAt = 0;          // server time of the last move
   let holdUntil = 0;        // client time to stop waiting for a fresh read
   window.bsDragging = false;
@@ -37,11 +40,35 @@
     }
   }
 
+  // Poll every half second until the read after the move arrives (or the hold runs out).
+  function pollFast() {
+    clearInterval(fast);
+    fast = setInterval(() => {
+      if (!movedAt || Date.now() > holdUntil || !host()) { clearInterval(fast); fast = null; return; }
+      if (!window.bsDragging) window.htmx.trigger(host(), "bs-refresh");
+    }, FAST_MS);
+  }
+
+  // Show a menu move or "TV & films first" now, before SABnzbd's answer and the reread.
+  function moveCards(to, card) {
+    const list = document.getElementById("dl-list");
+    if (!list) return;
+    if (to === "front") {
+      [...list.querySelectorAll(".dl-row[data-id]")].reverse().forEach((c) => { c.classList.add("dl-moving"); list.prepend(c); });
+    } else if (card) {
+      if (to === "top") list.prepend(card); else list.append(card);
+    }
+  }
+
+  // Put the page back to what the server says (after a failed move we can't undo by hand).
+  function resync() { movedAt = 0; if (host()) window.htmx.trigger(host(), "bs-refresh"); }
+
   // After a move: say so, and hold the page until a full read after it has landed.
   function after(res, card, revert) {
     if (res.ok && res.moved) {
       movedAt = res.at || 0;
       holdUntil = Date.now() + HOLD_MS;
+      pollFast();
       const was = card && card.dataset.priority;
       if (res.priority_name && was && res.priority_name !== was) {
         toast(`Moved. It's ${res.priority_name} priority now, so it can sit there.`, "ok");
@@ -49,11 +76,11 @@
         toast(`Moved ${res.moved} jobs to the front.`, "ok");
       }
     } else if (!res.ok) {
-      if (revert) revert();
+      if (revert) revert(); else resync();
       if (card) card.classList.remove("dl-moving");
       toast(res.error || "SABnzbd didn't move it", "error");
-    } else if (card) {
-      card.classList.remove("dl-moving");              // nothing to do: it was already there
+    } else {
+      document.querySelectorAll(".dl-moving").forEach((c) => c.classList.remove("dl-moving"));   // already there
     }
     window.bsDragging = false;
   }
@@ -61,7 +88,7 @@
   document.addEventListener("htmx:beforeSwap", (e) => {
     if (e.detail.target !== host() || !movedAt) return;
     if (Date.now() > holdUntil) { movedAt = 0; return; }
-    const m = /data-full-at="(\d+)"/.exec(e.detail.serverResponse || "");
+    const m = /data-full-at="([\d.]+)"/.exec(e.detail.serverResponse || "");
     if (m && Number(m[1]) >= movedAt) { movedAt = 0; return; }
     e.detail.shouldSwap = false;                         // still the order from before the move
   });
@@ -86,7 +113,7 @@
         const below = next ? (next.dataset.id || next.dataset.first || "") : "";
         card.classList.add("dl-moving");
         post(host().dataset.moveUrl, { nzo_id: card.dataset.id, above, below }).then((res) => {
-          if (res.ok) card.classList.remove("dl-moving");
+          if (res.ok) card.classList.remove("dl-moving");      // dropped where it belongs already
           after(res, card, () => sortable && sortable.sort(order, true));
         });
       },
@@ -100,6 +127,7 @@
     if (btn.hasAttribute("data-move-front")) {
       btn.disabled = true;
       window.bsDragging = true;
+      moveCards("front");
       post(host().dataset.frontUrl).then((res) => { btn.disabled = false; after(res, null); });
       return;
     }
@@ -107,6 +135,7 @@
     if (!card) return;
     card.classList.add("dl-moving");
     window.bsDragging = true;
+    moveCards(btn.dataset.moveTo, card);
     post(host().dataset.moveUrl, { nzo_id: card.dataset.id, to: btn.dataset.moveTo }).then((res) => after(res, card));
   });
 

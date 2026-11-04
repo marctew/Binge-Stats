@@ -32,6 +32,7 @@ from .. import db
 from ..arr import parse
 from ..arr.client import ArrError
 from ..services import arr as arr_svc
+from ..services import settings
 
 log = logging.getLogger("bingestats.downloads")
 
@@ -41,8 +42,7 @@ FULL_AFTER_ADD_S = 10      # sooner when jobs are added, but not on every tick o
 FULL_TIMEOUT_S = 90        # SABnzbd is slow to list a big queue while it's busy
 MAX_ROWS = 400             # after grouping; a pathological queue still stays a sensible size
 
-# Set by the downloads_refresh job (queued by the web process after a move): read everything now.
-REFRESH = threading.Event()
+MOVE_CHECK_S = 0.5         # how often the wait between reads looks for a move made from the page
 
 
 def group_rows(slots: list[dict], show) -> list[dict]:
@@ -136,9 +136,10 @@ def snapshot(conn, clients: dict, st: dict, now: float) -> dict:
               and (int(h.get("completed") or 0) >= now - 6 * 3600)][:10]
 
     fresh = None
-    if REFRESH.is_set():
-        REFRESH.clear()
-        st["full_at"] = 0.0
+    moved = moved_since(conn, st)
+    if moved:
+        st["moved_seen"] = moved
+        st["full_at"] = 0.0                                 # a job was moved from the page: read everything now
     if st.get("base") is not None and cats == st.get("cats") and now - st["full_at"] < FULL_EVERY_S:
         ids = [r["nzo_id"] for r in st["base"] if r["kind"] == "job"]
         q = sab.get("queue", limit=0 if ids else 1, **({"nzo_ids": ",".join(ids)} if ids else {})).get("queue") or {}
@@ -173,7 +174,13 @@ def snapshot(conn, clients: dict, st: dict, now: float) -> dict:
         st["checked"] = st.get("checked", set()) | {p["nzo_id"] for p in pp}
 
     rows = refresh(st["base"], header, fresh, st["base_mb_left"])
-    return {"header": header, "rows": rows, "pp": pp, "recent": recent, "at": int(now), "full_at": int(st["full_at"])}
+    return {"header": header, "rows": rows, "pp": pp, "recent": recent, "at": int(now), "full_at": round(st["full_at"], 3)}
+
+
+def moved_since(conn, st: dict) -> float:
+    """When a job was last moved from the Downloads page, if it's since the last full read."""
+    moved = float(settings.get(conn, "sabnzbd.moved_at") or 0)
+    return moved if moved > st.get("moved_seen", 0.0) else 0.0
 
 
 def store(conn, live: dict, known: dict) -> None:
@@ -225,7 +232,8 @@ class DownloadWatcher(threading.Thread):
                 busy = self.tick(conn)
             except Exception:  # noqa: BLE001 - never take the worker down over a status page
                 log.exception("download watcher failed")
-            REFRESH.wait(BUSY_S if busy else IDLE_S)     # a move wakes it early
-            if self.stop_event.is_set():
-                break
+            deadline = time.monotonic() + (BUSY_S if busy else IDLE_S)
+            while not self.stop_event.wait(MOVE_CHECK_S) and time.monotonic() < deadline:
+                if moved_since(conn, self.st):
+                    break                                # a move: read again now, not in up to 3 s
         conn.close()

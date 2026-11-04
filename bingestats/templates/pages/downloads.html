@@ -10,7 +10,7 @@
 {% call page_header('Downloads', 'What SABnzbd is fetching, named by Sonarr and Radarr') %}
 <a href="{{ url_for('insights.downloads_page') }}" class="btn-ghost">{{ icon('chart', 'h-4 w-4') }} Download stats</a>
 {% endcall %}
-<div id="downloads-live" hx-get="{{ url_for('ui.downloads_live') }}" hx-trigger="every 2s [!document.hidden && !window.bsDragging]" hx-swap="innerHTML"
+<div id="downloads-live" hx-get="{{ url_for('ui.downloads_live') }}" hx-trigger="every 2s [!document.hidden && !window.bsDragging], bs-refresh" hx-swap="innerHTML"
      {% if q and q.can_move %}data-move-url="{{ url_for('ui.downloads_move') }}" data-front-url="{{ url_for('ui.downloads_front') }}"{% endif %}>
   {% include "partials/downloads_live.html" %}
 </div>

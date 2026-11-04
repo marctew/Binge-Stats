@@ -4,6 +4,10 @@ Status: built on 2026-11-04.
 
 One change from the plan below: there's no stored full-queue order (`info.live_order`). A drop sends both neighbours, and the service asks SABnzbd for their present order by `nzo_ids` (about 5 ms) before choosing the target. That copes with two quick drags in a row and with a neighbour that has just finished. See `plan_move` in `services/arr.py`.
 
+A second change, after Marc found "TV & films first" took 5–6 s to show: there's no `downloads_refresh` job. That route waited on three loops (the job runner's 2 s, the watcher, and the page's 2 s).
+- The web process sets the `sabnzbd.moved_at` setting instead, and the watcher's wait between reads checks it every 0.5 s.
+- The browser moves the cards straight away and polls every 0.5 s until the confirming read arrives.
+
 ## Why
 
 The Downloads page shows TV and films from SABnzbd, with runs of other jobs grouped into "Other items" between them. TV and films often sit behind 1,000+ other jobs. Marc wants to drag a job to a new place in the queue from Binge Stats, without opening SABnzbd.

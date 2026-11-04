@@ -53,6 +53,7 @@ DEFAULTS: dict[str, Any] = {
     "sabnzbd.url": "", "sabnzbd.api_key": "",
     "sabnzbd.categories": "",      # which to show on Downloads: "" = Sonarr's and Radarr's, "*" = all, or "tv, movies"
     "sabnzbd.allow_moves": False,  # drag jobs in SABnzbd's queue from Downloads (the one write to SABnzbd)
+    "sabnzbd.moved_at": 0.0,       # set by the web process after a move; the download watcher rereads the queue
     "arr.sync_h": 3,
     "arr.last_sync_at": 0,
     "backup.keep": 7,

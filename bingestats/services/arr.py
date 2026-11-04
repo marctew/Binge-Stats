@@ -466,9 +466,9 @@ def plan_move(me: str, above: str | None, below: str | None, order: list[str]) -
 
 
 def _moved(conn, res: dict, count: int = 1) -> dict:
-    from . import jobs
-    jobs.ensure(conn, "downloads_refresh")
-    return {"moved": count, "position": res.get("position"), "at": int(time.time()),
+    now = time.time()
+    settings.set(conn, "sabnzbd.moved_at", now)     # the download watcher sees this within half a second
+    return {"moved": count, "position": res.get("position"), "at": round(now, 3),
             "priority_name": PRIORITY_NAMES.get(res.get("priority"), "Normal")}
 
 
