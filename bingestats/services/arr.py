@@ -49,7 +49,8 @@ def save(conn: sqlite3.Connection, form) -> list[str]:
     """Save URL + key per app. A blank key keeps the saved one; 'clear_<app>' removes the connection.
     Returns the apps that changed (so the caller can queue a sync)."""
     changed = []
-    if "sabnzbd.categories" in form:
+    if "sabnzbd.categories" in form:                 # the Settings card, which also has the moves switch
+        settings.set(conn, "sabnzbd.allow_moves", form.get("sabnzbd.allow_moves") == "on")
         settings.set(conn, "sabnzbd.categories", ", ".join(
             c.strip() for c in (form.get("sabnzbd.categories") or "").split(",") if c.strip()))
     for app in APPS:
@@ -404,10 +405,146 @@ def download_queue(conn: sqlite3.Connection, now: float | None = None) -> dict |
     header = live.get("header") or {}
     rows = [enrich(r) if r["kind"] == "job" else r for r in live.get("rows") or []]
     items = [r for r in rows if r["kind"] == "job"]
-    return {"ready": True, "at": live.get("at"), "stale": now - (live.get("at") or 0) > 120,
+    return {"ready": True, "at": live.get("at"), "full_at": live.get("full_at") or 0, "can_move": moves_allowed(conn),
+            "stale": now - (live.get("at") or 0) > 120,
             "status": header.get("status"), "paused": header.get("paused"), "kbps": header.get("kbps") or 0,
             "rows": rows, "items": items, "hidden": sum(r["count"] for r in rows if r["kind"] == "other"),
             "categories": sorted(cats) if cats is not None else None,
             "mb_left": sum(i["mb_left"] for i in items), "total_mb_left": header.get("mb_left") or 0,
             "pp": [enrich(p) for p in live.get("pp") or [] if show(p)],
             "recent": [enrich(p) for p in live.get("recent") or [] if show(p)]}
+
+
+# -- moving jobs in SABnzbd's queue (the one write to SABnzbd; see DESIGN.md section 1) ------
+
+PRIORITY_NAMES = {-1: "Low", 0: "Normal", 1: "High", 2: "Force"}
+MAX_FRONT = 100
+
+
+def moves_allowed(conn: sqlite3.Connection) -> bool:
+    return bool(settings.get(conn, "sabnzbd.allow_moves")) and configured(conn)["sabnzbd"]
+
+
+def _mover(conn: sqlite3.Connection):
+    if not moves_allowed(conn):
+        raise PermissionError("Moving jobs is turned off in Settings")
+    return clients(conn)["sabnzbd"]
+
+
+def _on_show(conn: sqlite3.Connection) -> list[str]:
+    """nzo_ids of the jobs on the Downloads page, in queue order (as of the last read)."""
+    row = conn.execute("SELECT info FROM arr_status WHERE app = 'sabnzbd'").fetchone()
+    live = (json.loads(row["info"]) if row else {}).get("live") or {}
+    return [r["nzo_id"] for r in live.get("rows") or [] if r.get("kind") == "job"]
+
+
+def _check_ids(*ids) -> None:
+    from ..arr.client import NZO_ID
+    for i in ids:
+        if i is not None and not NZO_ID.match(i):
+            raise ValueError("Not a SABnzbd job id")
+
+
+def plan_move(me: str, above: str | None, below: str | None, order: list[str]) -> list[str]:
+    """The targets to switch `me` onto, so it ends up between `above` and `below` (neighbours
+    on the page; either is None at an end, or gone if it has just finished). `order` is the
+    present ones as SABnzbd has them now. SABnzbd puts a job just before its target when
+    moving up and just after it when moving down, so: up past `below` is one move onto it,
+    down past `above` is one move onto it. With only one neighbour left, two moves onto it
+    land on the right side whichever way the first one went."""
+    pos = {x: i for i, x in enumerate(order)}
+    if below in pos and pos[me] > pos[below]:
+        return [below]
+    if above in pos and pos[me] < pos[above]:
+        return [above]
+    if above in pos and below in pos:
+        return []                                       # already between them
+    t = below if below in pos else (above if above in pos else None)
+    if t is None:
+        raise ValueError("The queue has changed under you: try again in a few seconds")
+    return [t, t]
+
+
+def _moved(conn, res: dict, count: int = 1) -> dict:
+    from . import jobs
+    jobs.ensure(conn, "downloads_refresh")
+    return {"moved": count, "position": res.get("position"), "at": int(time.time()),
+            "priority_name": PRIORITY_NAMES.get(res.get("priority"), "Normal")}
+
+
+def _present(sab, ids: list[str]) -> list[str]:
+    q = sab.get("queue", nzo_ids=",".join(ids), limit=0).get("queue") or {}
+    return [s.get("nzo_id") for s in q.get("slots") or []]
+
+
+def move_job(conn: sqlite3.Connection, nzo_id: str, *, above: str | None = None, below: str | None = None) -> dict:
+    """Move a job on the Downloads page to between `above` and `below` (the jobs either side of
+    where it was dropped). Raises PermissionError when moves are off, ValueError for a bad
+    request and ArrError when SABnzbd says no."""
+    sab = _mover(conn)
+    _check_ids(nzo_id, above, below)
+    if nzo_id not in _on_show(conn):
+        raise ValueError("That job isn't on the Downloads page")
+    if above is None and below is None:
+        raise ValueError("Say where to move it")
+    if nzo_id in (above, below):
+        return {"moved": 0}
+    order = _present(sab, [i for i in (above, nzo_id, below) if i])
+    if nzo_id not in order:
+        raise ValueError("That job has left the queue")
+    targets = plan_move(nzo_id, above, below, order)
+    res: dict = {}
+    for t in targets:
+        res = sab.move(nzo_id, t, allowed=True)
+    return _moved(conn, res, 1 if targets else 0) if targets else {"moved": 0}
+
+
+def _end(sab, last: bool) -> str | None:
+    q = sab.get("queue", limit=1).get("queue") or {}
+    if last:
+        total = int(q.get("noofslots_total") or q.get("noofslots") or 0)
+        if total < 1:
+            return None
+        q = sab.get("queue", start=total - 1, limit=1).get("queue") or {}
+    slots = q.get("slots") or []
+    return slots[0].get("nzo_id") if slots else None
+
+
+def move_to_end(conn: sqlite3.Connection, nzo_id: str, *, bottom: bool = False) -> dict:
+    """Move a job to the very top of SABnzbd's queue, or the very bottom."""
+    sab = _mover(conn)
+    _check_ids(nzo_id)
+    if nzo_id not in _on_show(conn):
+        raise ValueError("That job isn't on the Downloads page")
+    target = _end(sab, bottom)
+    if target is None or target == nzo_id:
+        return {"moved": 0}
+    return _moved(conn, sab.move(nzo_id, target, allowed=True))
+
+
+def shown_first(conn: sqlite3.Connection) -> dict:
+    """Every job on the Downloads page to the front of the queue, in the order they're in now."""
+    sab = _mover(conn)
+    ids = _on_show(conn)
+    if len(ids) > MAX_FRONT:
+        raise ValueError(f"That's {len(ids)} jobs; move them in SABnzbd (the limit here is {MAX_FRONT})")
+    target = _end(sab, False)
+    if not ids or target is None:
+        return {"moved": 0}
+    res, n = {}, 0
+    for j in reversed(ids):
+        if j != target:
+            res = sab.move(j, target, allowed=True)
+            n += 1
+        target = j
+    return _moved(conn, res, n) if n else {"moved": 0}
+
+
+def move(conn: sqlite3.Connection, nzo_id: str, *, to: str | None = None, above: str | None = None,
+         below: str | None = None) -> dict:
+    """One entry point for the UI and the API: to='top' / 'bottom', or between above and below."""
+    if to in ("top", "bottom"):
+        return move_to_end(conn, nzo_id, bottom=to == "bottom")
+    if to:
+        raise ValueError("'to' is top or bottom")
+    return move_job(conn, nzo_id, above=above or None, below=below or None)

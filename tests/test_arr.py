@@ -9,7 +9,7 @@ from bingestats import db
 from bingestats.arr import parse
 from bingestats.arr.client import ArrClient, ArrError, SabClient
 from bingestats.plex.parse import external_ids, parse_library_item
-from bingestats.services import arr, jobs, settings
+from bingestats.services import api_tokens, arr, jobs, settings
 from bingestats.worker import arr_sync, jobs_runner
 
 NOW = 1_793_500_000          # 2026-11-01-ish
@@ -563,3 +563,215 @@ def test_between_full_reads_only_the_jobs_on_show_are_asked_for(synced, caplog):
             w.tick(c, now=NOW + 9)
     assert len([r for r in caplog.records if "SABnzbd queue" in r.getMessage()]) == 1
     assert arr.download_queue(c, now=NOW + 9)["rows"][1]["mb_left"] == 1024.0
+
+
+# -- moving jobs in SABnzbd's queue -----------------------------------------------------------
+
+PRIO = {"Low": -1, "Normal": 0, "High": 1, "Force": 2}
+
+
+class FakeQueue:
+    """SABnzbd's queue as it behaved on 5.1.3: switch takes the job out, then inserts it at the
+    target's old index (so before the target moving up, after it moving down), and the job
+    takes the target's priority. nzo_ids and start/limit filter the slots, renumbering index."""
+
+    def __init__(self, jobs):            # [(nzo_id, cat, priority)]
+        self.jobs = [{"nzo_id": n, "cat": c, "priority": p} for n, c, p in jobs]
+        self.calls: list[dict] = []
+
+    def order(self):
+        return [j["nzo_id"] for j in self.jobs]
+
+    def __call__(self, request):
+        p = dict(request.params)
+        self.calls.append(p)
+        if p["mode"] == "switch":
+            ids = self.order()
+            if p["value"] not in ids or p["value2"] not in ids:
+                return (200, {}, json.dumps({"result": {"position": -1, "priority": -1}}))
+            job, target = self.jobs[ids.index(p["value"])], self.jobs[ids.index(p["value2"])]
+            at = ids.index(p["value2"])
+            self.jobs.remove(job)
+            job["priority"] = target["priority"]
+            self.jobs.insert(at, job)
+            return (200, {}, json.dumps({"result": {"position": at, "priority": PRIO[job["priority"]]}}))
+        if p["mode"] == "history":
+            return (200, {}, json.dumps({"history": {"slots": []}}))
+        js = self.jobs
+        if p.get("nzo_ids"):
+            js = [j for j in js if j["nzo_id"] in p["nzo_ids"].split(",")]
+        start, limit = int(p.get("start", 0)), int(p.get("limit", 0))
+        js = js[start:start + limit] if limit else js[start:]
+        slots = [slot(j["nzo_id"], j["nzo_id"], j["cat"], left=100.0, tl="0:00:10") | {"priority": j["priority"], "index": i}
+                 for i, j in enumerate(js)]
+        return (200, {}, json.dumps({"queue": {"status": "Downloading", "paused": False, "noofslots": len(slots),
+                                               "noofslots_total": len(self.jobs), "kbpersec": "1024",
+                                               "mbleft": str(100.0 * len(self.jobs)), "timeleft": "0:10:00",
+                                               "slots": slots}}))
+
+
+def N(x):
+    return f"SABnzbd_nzo_{x}"
+
+
+@pytest.fixture
+def queue(synced):
+    """Two runs of other jobs and three TV/film jobs, read once by the watcher; moves allowed."""
+    c = synced
+    settings.set(c, "sabnzbd.allow_moves", True)
+    fq = FakeQueue([(N("o1"), "hmm", "High"), (N("o2"), "hmm", "Normal"), (N("tv1"), "tv", "Normal"),
+                    (N("o3"), "hmm", "Normal"), (N("o4"), "hmm", "Normal"), (N("film"), "movies", "Normal"),
+                    (N("tv2"), "tv", "Normal"), (N("o5"), "hmm", "Normal")])
+    w = dl.DownloadWatcher(None, None)
+    with responses.RequestsMock(assert_all_requests_are_fired=False) as rsps:
+        rsps.add_callback(responses.GET, f"{SAB}/api", callback=fq)
+        rsps.add(responses.GET, f"{SON}/api/v3/queue", json={"page": 1, "totalRecords": 0, "records": []})
+        rsps.add(responses.GET, f"{RAD}/api/v3/queue", json={"page": 1, "totalRecords": 0, "records": []})
+        w.tick(c, now=NOW)
+    return c, fq, w
+
+
+def run(fq, fn):
+    with responses.RequestsMock(assert_all_requests_are_fired=False) as rsps:
+        rsps.add_callback(responses.GET, f"{SAB}/api", callback=fq)
+        return fn()
+
+
+def test_sab_client_only_moves_when_allowed_and_never_writes_otherwise():
+    sab = SabClient(SAB, "k")
+    for mode in ("switch", "delete", "pause", "change_cat", "priority"):
+        with pytest.raises(ArrError):
+            sab.get(mode)
+    with pytest.raises(ArrError, match="turned off"):
+        sab.move(N("a"), N("b"), allowed=False)
+    with pytest.raises(ArrError, match="job id"):
+        sab.move("a&mode=delete", N("b"), allowed=True)
+    with responses.RequestsMock() as rsps:
+        rsps.add(responses.GET, f"{SAB}/api", json={"result": {"position": 3, "priority": 1}})
+        assert sab.move(N("a"), N("b"), allowed=True) == {"position": 3, "priority": 1}
+        q = rsps.calls[0].request.params
+        assert (q["mode"], q["value"], q["value2"]) == ("switch", N("a"), N("b"))
+    with responses.RequestsMock() as rsps:
+        rsps.add(responses.GET, f"{SAB}/api", json={"result": {"position": -1, "priority": -1}})
+        with pytest.raises(ArrError, match="didn't move"):
+            sab.move(N("a"), N("b"), allowed=True)
+
+
+def test_groups_carry_their_edges(queue):
+    _c, _fq, w = queue
+    assert [(r["kind"], r.get("first_id"), r.get("last_id")) for r in w.st["base"]] == [
+        ("other", N("o1"), N("o2")), ("job", None, None), ("other", N("o3"), N("o4")), ("job", None, None),
+        ("job", None, None), ("other", N("o5"), N("o5"))]
+
+
+@pytest.mark.parametrize("me, above, below, expect, switches", [
+    # up, past a group: one move onto the job below the drop
+    ("film", "o2", "tv1", ["o1", "o2", "film", "tv1", "o3", "o4", "tv2", "o5"], 1),
+    # down, past a group: one move onto the job above the drop
+    ("tv1", "o4", "film", ["o1", "o2", "o3", "o4", "tv1", "film", "tv2", "o5"], 1),
+    # to the very top, and the very bottom
+    ("tv2", None, "o1", ["tv2", "o1", "o2", "tv1", "o3", "o4", "film", "o5"], 1),
+    ("tv1", "o5", None, ["o1", "o2", "o3", "o4", "film", "tv2", "o5", "tv1"], 1),
+    # already there: nothing sent
+    ("film", "o4", "tv2", ["o1", "o2", "tv1", "o3", "o4", "film", "tv2", "o5"], 0),
+])
+def test_a_drop_lands_exactly_between_its_neighbours(queue, me, above, below, expect, switches):
+    c, fq, _w = queue
+    before = len([x for x in fq.calls if x["mode"] == "switch"])
+    res = run(fq, lambda: arr.move_job(c, N(me), above=above and N(above), below=below and N(below)))
+    assert fq.order() == [N(x) for x in expect]
+    assert len([x for x in fq.calls if x["mode"] == "switch"]) - before == switches and res["moved"] == switches
+
+
+def test_a_vanished_neighbour_still_lands_right(queue):
+    c, fq, _w = queue
+    fq.jobs = [j for j in fq.jobs if j["nzo_id"] != N("o4")]          # o4 finished since the page was drawn
+    run(fq, lambda: arr.move_job(c, N("tv1"), above=N("o4"), below=N("film")))
+    assert fq.order().index(N("tv1")) == fq.order().index(N("film")) - 1
+    fq.jobs = [j for j in fq.jobs if j["nzo_id"] != N("o1")]          # moving up with the job above gone
+    run(fq, lambda: arr.move_job(c, N("tv2"), above=N("o1"), below=N("o2")))
+    assert fq.order()[:2] == [N("tv2"), N("o2")]
+    with pytest.raises(ValueError, match="changed"):
+        arr.plan_move(N("x"), N("gone"), None, [N("x")])
+
+
+def test_moving_onto_a_high_job_says_so_and_queues_one_refresh(queue):
+    c, fq, _w = queue
+    res = run(fq, lambda: arr.move(c, N("film"), to="top"))
+    assert fq.order()[0] == N("film") and res["priority_name"] == "High" and res["at"]
+    run(fq, lambda: arr.move(c, N("tv2"), to="bottom"))
+    assert fq.order()[-1] == N("tv2")
+    assert c.execute("SELECT COUNT(*) FROM jobs WHERE kind = 'downloads_refresh' AND status = 'queued'").fetchone()[0] == 1
+
+
+def test_shown_first_keeps_their_order(queue):
+    c, fq, _w = queue
+    res = run(fq, lambda: arr.shown_first(c))
+    assert fq.order()[:3] == [N("tv1"), N("film"), N("tv2")] and res["moved"] == 3
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(arr, "MAX_FRONT", 2)
+        with pytest.raises(ValueError, match="limit"):
+            arr.shown_first(c)
+
+
+def test_moves_refused_when_off_or_not_on_show(queue):
+    c, fq, _w = queue
+    with pytest.raises(ValueError, match="isn't on the Downloads page"):
+        run(fq, lambda: arr.move_job(c, N("o3"), below=N("o1")))       # hidden jobs can't be moved from here
+    with pytest.raises(ValueError, match="where"):
+        run(fq, lambda: arr.move_job(c, N("tv1")))
+    with pytest.raises(ValueError, match="top or bottom"):
+        arr.move(c, N("tv1"), to="sideways")
+    settings.set(c, "sabnzbd.allow_moves", False)
+    with pytest.raises(PermissionError):
+        arr.move(c, N("tv1"), to="top")
+    assert not [x for x in fq.calls if x["mode"] == "switch"]
+
+
+def test_refresh_job_makes_the_next_read_a_full_one(queue):
+    c, fq, w = queue
+    from bingestats.worker.jobs_runner import run_job
+    full = lambda: [x for x in fq.calls if x["mode"] == "queue" and "nzo_ids" not in x and x.get("limit") == "0"]  # noqa: E731
+    n = len(full())
+    run(fq, lambda: w.tick(c, now=NOW + 3))
+    assert len(full()) == n                                            # a fast read
+    run_job(c, None, {"id": 0, "kind": "downloads_refresh", "params": {}})
+    run(fq, lambda: w.tick(c, now=NOW + 6))
+    assert len(full()) == n + 1 and not dl.REFRESH.is_set()
+
+
+def test_move_routes(logged_in, app_conn, app):
+    c = app_conn
+    connect(c)
+    fq = FakeQueue([(N("o1"), "hmm", "Normal"), (N("tv1"), "tv", "Normal"), (N("tv2"), "tv", "Normal")])
+    with responses.RequestsMock(assert_all_requests_are_fired=False) as rsps:
+        rsps.add_callback(responses.GET, f"{SAB}/api", callback=fq)
+        rsps.add(responses.GET, f"{SON}/api/v3/queue", json={"page": 1, "totalRecords": 0, "records": []})
+        rsps.add(responses.GET, f"{RAD}/api/v3/queue", json={"page": 1, "totalRecords": 0, "records": []})
+        dl.DownloadWatcher(None, None).tick(c)
+    body = logged_in.get("/downloads").data.decode()
+    assert "drag-handle" not in body and "sortable.min.js" not in body       # off by default
+    r = logged_in.post("/downloads/move", {"nzo_id": N("tv1"), "to": "top"})
+    assert r.status_code == 403 and "turned off" in r.json["error"]
+
+    logged_in.post("/settings/arr", {"sabnzbd.url": SAB, "sabnzbd.categories": "", "sabnzbd.allow_moves": "on",
+                                     "sonarr.url": SON, "radarr.url": RAD})
+    assert settings.get(c, "sabnzbd.allow_moves") is True
+    body = logged_in.get("/downloads").data.decode()
+    assert "drag-handle" in body and "sortable.min.js" in body and "Move to top" in body
+    assert f'data-id="{N("tv1")}"' in body and f'data-first="{N("o1")}"' in body and "TV &amp; films first" in body
+    assert 'checked' in logged_in.get("/settings").data.decode().split('name="sabnzbd.allow_moves"')[1][:20]
+
+    r = logged_in.client.post("/downloads/move", data={"nzo_id": N("tv1"), "to": "top"})   # no CSRF token
+    assert r.status_code == 400
+    r = run(fq, lambda: logged_in.post("/downloads/move", {"nzo_id": N("tv1"), "above": "", "below": N("o1")}))
+    assert r.status_code == 200 and r.json["ok"] and fq.order() == [N("tv1"), N("o1"), N("tv2")]
+
+    ro = {"Authorization": f"Bearer {api_tokens.create(c, 'ro', 'read')}"}
+    rw = {"Authorization": f"Bearer {api_tokens.create(c, 'rw', 'write')}"}
+    api = app.test_client()
+    assert api.post(f"/api/v1/downloads/{N('tv1')}/move", json={"to": "bottom"}, headers=ro).status_code == 403
+    r = run(fq, lambda: api.post(f"/api/v1/downloads/{N('tv1')}/move", json={"to": "bottom"}, headers=rw))
+    assert r.status_code == 200 and fq.order() == [N("o1"), N("tv2"), N("tv1")]
+    r = api.post(f"/api/v1/downloads/{N('o1')}/move", json={"to": "top"}, headers=rw)
+    assert r.status_code == 400

@@ -171,3 +171,10 @@ def test_reset_in_the_same_second_still_ends_sessions(people):
     accounts.set_password(people, ALEX, "first-password", now=500)
     accounts.set_password(people, ALEX, "second-password", now=500)
     assert not accounts.session_still_valid(people, ALEX, 500)
+
+
+def test_viewer_cannot_move_downloads(alex, app_conn):
+    settings.set(app_conn, "sabnzbd.allow_moves", True)
+    for url in ("/downloads/move", "/downloads/front"):
+        r = alex.post(url, {"nzo_id": "SABnzbd_nzo_x", "to": "top"})
+        assert r.status_code in (302, 403) and b'"ok"' not in r.data

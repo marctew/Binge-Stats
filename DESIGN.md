@@ -14,7 +14,7 @@ This document records decisions that are already made. Build to it. `SPEC.md` ho
 | History import | **Tautulli import is a v1 feature**, not an afterthought. Years of history must carry over. |
 | Stack | Python 3.12, Flask, Jinja, HTMX, Alpine.js, Tailwind, ECharts. |
 | Deployment | Docker Compose on an Ubuntu LXC. One image, two services (`web`, `worker`), one `/data` volume. |
-| Sonarr / Radarr / SABnzbd | **Optional and strictly read-only** (Marc, 2026-10-31). The worker snapshots them every 3 h for real gaps in shows, film collections, below-cutoff lists, what's airing this week and download history. The clients have no write methods, so nothing in them can be deleted, unmonitored or changed. Shows and films are matched to Plex by TVDB / TMDB id, not by title. |
+| Sonarr / Radarr / SABnzbd | **Optional and strictly read-only** (Marc, 2026-10-31). The worker snapshots them every 3 h for real gaps in shows, film collections, below-cutoff lists, what's airing this week and download history. The clients have no write methods, so nothing in them can be deleted, unmonitored or changed. **One exception** (Marc, 2026-11-04): SABnzbd's `mode=switch`, to move jobs in the queue from Downloads, behind a Settings switch that's off by default, admin only. No delete, pause or priority call. Shows and films are matched to Plex by TVDB / TMDB id, not by title. |
 | Repo | `github.com/marctew/Binge-Stats` |
 
 ## 2. Environment

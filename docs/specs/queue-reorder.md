@@ -1,6 +1,8 @@
 # Spec: reordering the SABnzbd queue from Downloads
 
-Status: agreed with Marc on 2026-11-04, not built yet.
+Status: built on 2026-11-04.
+
+One change from the plan below: there's no stored full-queue order (`info.live_order`). A drop sends both neighbours, and the service asks SABnzbd for their present order by `nzo_ids` (about 5 ms) before choosing the target. That copes with two quick drags in a row and with a neighbour that has just finished. See `plan_move` in `services/arr.py`.
 
 ## Why
 

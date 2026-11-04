@@ -20,6 +20,7 @@ KINDS = {
     "wrapped": "Build Wrapped",
     "backup": "Back up the database",
     "arr_sync": "Read Sonarr, Radarr and SABnzbd",
+    "downloads_refresh": "Re-read the SABnzbd queue",
 }
 
 

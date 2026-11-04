@@ -1,6 +1,8 @@
-"""GET-only HTTP clients for Sonarr/Radarr (API v3) and SABnzbd."""
+"""HTTP clients for Sonarr/Radarr (API v3) and SABnzbd. GET only, with one exception:
+SabClient.move (SABnzbd's mode=switch), used only while sabnzbd.allow_moves is on."""
 from __future__ import annotations
 
+import re
 from typing import Any
 
 import requests
@@ -55,10 +57,14 @@ class ArrClient:
         return out
 
 
+NZO_ID = re.compile(r"^SABnzbd_nzo_[A-Za-z0-9_]+$")
+
+
 class SabClient:
-    """SABnzbd's API. Only read modes are used (version, server_stats, history, queue)."""
+    """SABnzbd's API. Read modes only (version, server_stats, history, queue), plus move()."""
 
     READ_MODES = {"version", "server_stats", "history", "queue"}
+    WRITE_MODES = {"switch"}
 
     def __init__(self, url: str, api_key: str, *, timeout: float = 20, http: requests.Session | None = None):
         self.url = _base(url)
@@ -69,6 +75,25 @@ class SabClient:
     def get(self, mode: str, *, timeout: float | None = None, **params) -> Any:
         if mode not in self.READ_MODES:
             raise ArrError(f"SABnzbd mode {mode} isn't allowed (read-only)")
+        return self._call(mode, timeout, params)
+
+    def move(self, nzo_id: str, target_nzo_id: str, *, allowed: bool) -> dict:
+        """Move a job to where another job is: just before it when moving up, just after it when
+        moving down (SABnzbd takes the job out, then puts it at the target's old index). The job
+        takes the target's priority. Returns where it really ended up: {position, priority}."""
+        if not allowed:
+            raise ArrError("Moving jobs is turned off in Settings")
+        if not (NZO_ID.match(nzo_id or "") and NZO_ID.match(target_nzo_id or "")):
+            raise ArrError("Not a SABnzbd job id")
+        d = self._call("switch", 15, {"value": nzo_id, "value2": target_nzo_id})
+        res = d.get("result") if isinstance(d, dict) else None
+        if not isinstance(res, dict) or int(res.get("position", -1)) < 0:
+            raise ArrError("SABnzbd didn't move the job (has it finished?)")
+        return {"position": int(res["position"]), "priority": int(res.get("priority") or 0)}
+
+    def _call(self, mode: str, timeout: float | None, params: dict) -> Any:
+        if mode not in self.READ_MODES | self.WRITE_MODES:
+            raise ArrError(f"SABnzbd mode {mode} isn't allowed")
         try:
             r = self.http.get(f"{self.url}/api", params={"mode": mode, "output": "json", "apikey": self.api_key, **params},
                               timeout=timeout or self.timeout)

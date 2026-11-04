@@ -24,6 +24,7 @@
 <div class="card p-8 text-center text-sm text-muted">Reading SABnzbd's queue for the first time…</div>
 {% else %}
 {% set mbs = q.kbps / 1024 %}
+<div hidden data-full-at="{{ q.full_at }}"></div>
 <div class="card mb-4 flex flex-wrap items-center gap-x-6 gap-y-2 p-4 sm:p-5">
   <span class="{{ 'badge-play' if q.status == 'Downloading' and not q.paused else ('badge-transcode' if q.paused else 'badge-muted') }}">{{ 'Paused' if q.paused else (q.status or 'Idle') }}</span>
   <div><span class="text-2xl font-semibold tabular-nums">{{ '%.1f' % mbs }}</span> <span class="text-sm text-muted">MB/s</span>
@@ -31,6 +32,17 @@
   <div class="text-sm text-muted"><span class="text-text">{{ q['items'] | length }}</span> {{ 'download' if q['items'] | length == 1 else 'downloads' }} · <span class="text-text">{{ (q.mb_left * 1e6) | filesize }}</span> to go</div>
   {% if q.hidden %}<div class="text-xs text-faint">+ {{ '{:,}'.format(q.hidden) }} other {{ 'download' if q.hidden == 1 else 'downloads' }} ({{ (q.total_mb_left * 1e6) | filesize }} in all), grouped</div>{% endif %}
   {% if q.stale %}<div class="text-xs text-transcode">Last read {{ q.at | relative }}: is the worker running?</div>{% endif %}
+  {% if q.can_move and q['items'] | length > 1 and q.hidden %}
+  <div class="relative ml-auto" x-data="{ ask: false }" x-init="$watch('ask', v => window.bsDragging = v)">
+    <button type="button" class="btn-ghost py-1.5" @click="ask = !ask">{{ icon('to-top', 'h-4 w-4') }} TV &amp; films first</button>
+    <div x-show="ask" x-cloak x-transition.opacity @click.outside="ask = false" class="menu w-64 p-3">
+      <p class="text-muted">Move {{ q['items'] | length }} jobs to the front of the queue, in this order?</p>
+      <p class="mt-1 text-xs text-faint">They take the priority of the job at the top now.</p>
+      <div class="mt-3 flex gap-2"><button type="button" class="btn-primary py-1.5" data-move-front @click="ask = false">Move them</button>
+        <button type="button" class="btn-ghost py-1.5" @click="ask = false">Cancel</button></div>
+    </div>
+  </div>
+  {% endif %}
 </div>
 
 {% if q.pp %}
@@ -51,11 +63,11 @@
 {% endif %}
 
 {% if q['items'] %}
-<div class="space-y-3">
+<div class="space-y-3" id="dl-list">
   {% for j in q.rows %}
   {% if j.kind == 'other' %}
   {% set done = ((j.mb - j.mb_left) / j.mb * 100) if j.mb else 0 %}
-  <div class="flex items-center gap-4 rounded-2xl border border-dashed border-border px-4 py-3">
+  <div class="dl-row flex items-center gap-4 rounded-2xl border border-dashed border-border px-4 py-3" data-first="{{ j.first_id or '' }}" data-last="{{ j.last_id or '' }}">
     <div class="flex w-12 shrink-0 justify-center text-faint sm:w-14">{{ icon('stack', 'h-5 w-5') }}</div>
     <div class="min-w-0 flex-1">
       <div class="flex flex-wrap items-baseline justify-between gap-x-4">
@@ -66,13 +78,26 @@
     </div>
   </div>
   {% else %}
-  <div class="card flex gap-4 p-3 sm:p-4">
-    {{ art(j, 'w-12 sm:w-14') }}
+  <div class="dl-row card flex gap-3 p-3 sm:gap-4 sm:p-4" data-id="{{ j.nzo_id }}" data-priority="{{ j.priority or 'Normal' }}">
+    {% if q.can_move %}<button type="button" class="drag-handle" aria-label="Drag to move in the queue" title="Drag to move">{{ icon('grip', 'h-5 w-5') }}</button>{% endif %}
+    {{ art(j, 'w-10 sm:w-14' if q.can_move else 'w-12 sm:w-14') }}
     <div class="min-w-0 flex-1">
-      <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
+      <div class="flex items-start gap-2">
+      <div class="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
         <div class="flex min-w-0 max-w-full items-center">{{ title(j) }}</div>
         {{ tags(j) }}
+        {% if j.priority in ('High', 'Force') %}<span class="badge-muted">{{ j.priority }}</span>{% endif %}
         {% if j.status in ('Paused', 'Queued') %}<span class="{{ 'badge-transcode' if j.status == 'Paused' else 'badge-muted' }}">{{ j.status }}</span>{% endif %}
+      </div>
+      {% if q.can_move %}
+      <div class="relative -my-2 -mr-2 shrink-0" x-data="{ open: false }" x-init="$watch('open', v => window.bsDragging = v)">
+        <button type="button" class="flex h-10 w-10 items-center justify-center rounded-lg text-faint hover:bg-surface-2 hover:text-muted" @click="open = !open" aria-label="Move">{{ icon('more', 'h-5 w-5') }}</button>
+        <div x-show="open" x-cloak x-transition.opacity @click.outside="open = false" class="menu">
+          <button type="button" class="menu-item" data-move-to="top" @click="open = false">{{ icon('to-top', 'h-4 w-4') }} Move to top</button>
+          <button type="button" class="menu-item" data-move-to="bottom" @click="open = false">{{ icon('to-bottom', 'h-4 w-4') }} Move to bottom</button>
+        </div>
+      </div>
+      {% endif %}
       </div>
       {% if j.sub %}<div class="truncate text-sm text-muted">{{ j.sub }}</div>{% endif %}
       <div class="mt-2 flex items-center gap-3">

@@ -540,7 +540,7 @@ As built in `services/insights.py`. Counts are per play (resumed parts fold into
 
 ### Sonarr, Radarr and SABnzbd (added after M8)
 
-Optional, set up in **Settings → Sonarr, Radarr and SABnzbd** (URL and API key each; the key is masked, and leaving it blank keeps the saved one). They're strictly read-only: `bingestats/arr/` has GET clients only, and SABnzbd is limited to the `version`, `server_stats`, `history` and `queue` modes.
+Optional, set up in **Settings → Sonarr, Radarr and SABnzbd** (URL and API key each; the key is masked, and leaving it blank keeps the saved one). They're read-only: `bingestats/arr/` has GET clients, and SABnzbd is limited to the `version`, `server_stats`, `history` and `queue` modes. The one exception is `SabClient.move` (SABnzbd's `mode=switch`), used only while **Allow moving jobs** is on (`sabnzbd.allow_moves`, off by default); see Moving jobs below.
 
 - **Sync:** the worker's `arr_sync` job runs every `arr.sync_h` (3) hours, and from "Save and read now".
   - Each app is read on its own and replaces its snapshot tables in one transaction.
@@ -560,12 +560,26 @@ Optional, set up in **Settings → Sonarr, Radarr and SABnzbd** (URL and API key
   - **Home Assistant:** "Download queue" and "Download speed" sensors, only while SABnzbd is connected.
   - **API:** `GET /api/v1/insights/arr`, `/insights/downloads`, `/insights/downloads/series?days=`.
   - **Downloads page** (`/downloads`, in the sidebar once SABnzbd is set up): the live queue, refreshed every 2 s.
-    - A worker thread (`worker/downloads.py`) reads SABnzbd's whole queue (about 0.6 MB for 1,400 jobs) and the last 20 history entries every 3 s while it's busy, and every 30 s when idle.
-    - Rows follow the queue order. Jobs to show (see Categories) are rows of their own; each run of other jobs between them becomes one "Other items" row with its count, size left and when the last of them finishes. Every "done in" is SABnzbd's own estimate, counting everything ahead in the queue, shown as '22 mins' or '6h 22m'.
+    - **The watcher.** A worker thread (`worker/downloads.py`) reads SABnzbd's whole queue only now and then. SABnzbd can take 40 s to list 1,400 jobs while busy. The full read happens:
+      - at start;
+      - once a minute;
+      - 10 s after jobs are added;
+      - when the category setting changes;
+      - after a move (the `downloads_refresh` job).
+    - **Between full reads**, every 3 s while busy (30 s when idle), it reads only the jobs on show, by `nzo_ids`, plus the last 20 history entries.
+    - **Rows** follow the queue order. Jobs to show (see Categories) are rows of their own. Each run of other jobs between them becomes one "Other items" row, carrying its count, size left, finish time and first and last `nzo_id`. MB downloaded from other jobs since the full read comes off the groups, front first.
+    - **"Done in"** is the MB ahead (this row included) over the current speed, the same sum SABnzbd does, shown as '22 mins' or '6h 22m'.
+    - **Failures:** a failed read logs one warning and keeps the last snapshot.
     - Each job is matched to what it is through Sonarr's and Radarr's own queues: their `downloadId` is SABnzbd's `nzo_id`, so the match is exact. Those queues are only re-read when a job appears that hasn't been looked up, or once a minute while busy.
     - Shown per job: poster (from Sonarr/Radarr via `/img/arr/<app>/<id>`), show and episode (or season pack and episode count) or film and year, quality, progress, size, time left, and the NZB name small underneath. Unmatched jobs show a tidied file name.
     - Jobs being verified or unpacked show under "Finishing up"; jobs completed or failed in the last 6 h show under "Finished".
     - **Categories:** only Sonarr's and Radarr's SABnzbd categories show by default (read from their download-client settings, else `tv` and `movies`). Other categories are grouped into "Other items" rows, without names. `sabnzbd.categories` can list categories to show, or be `*` for all. The same filter applies to failed downloads on Download stats.
+    - **Moving jobs** (only while `sabnzbd.allow_moves` is on; admin only; the full design is in `docs/specs/queue-reorder.md`):
+      - **Controls:** drag a job card by its grip (SortableJS, pinned), use its menu (Move to top / bottom), or use "TV & films first". That last one moves every job on show to the front in their current order, at most 100, and asks first. "Other items" rows can't be dragged; you drop before or after them.
+      - **Where a job lands.** The drop sends the jobs either side of it (a group contributes its first or last `nzo_id`). `services/arr.plan_move` reads the present order of those jobs by `nzo_ids`, then picks the `switch` target. SABnzbd puts a job before its target when moving up and after it when moving down. If a neighbour has just finished, it makes two switches onto the one that's left.
+      - **Priority:** a moved job takes the priority of where it lands (SABnzbd's rule), and the page says so.
+      - **After a move:** the web process queues `downloads_refresh`, so the watcher does a full read straight away. The page keeps the dropped order until a snapshot from after the move arrives. On an error, the card goes back and the message shows.
+      - **Routes:** `POST /downloads/move` (`nzo_id` plus `above`/`below`, or `to=top|bottom`), `POST /downloads/front`, and `POST /api/v1/downloads/<nzo_id>/move` (write tokens; JSON `{"above", "below"}` or `{"to"}`). Only jobs on show can be moved.
   - **Item pages:** "Open in Plex" (app.plex.tv with the server's machine id) on anything still in the library; "Open in Sonarr" on a show, season or episode whose show Sonarr has (by TVDB id, using Sonarr's title slug, migration v9); "Open in Radarr" on a film Radarr has (Radarr's page is `/movie/<tmdb id>`). The Sonarr and Radarr links use the optional "Link address" from Settings (e.g. a tunnel hostname), falling back to the URL Binge Stats reads from.
 
 ---

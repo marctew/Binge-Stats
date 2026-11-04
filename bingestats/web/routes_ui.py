@@ -1,9 +1,10 @@
 """UI routes. Thin: every operation goes through services/."""
 from __future__ import annotations
 
-from flask import (Blueprint, Response, current_app, flash, redirect, render_template, request,
+from flask import (Blueprint, Response, current_app, flash, jsonify, redirect, render_template, request,
                    send_file, url_for)
 
+from ..arr.client import ArrError
 from ..plex.client import PlexError
 from ..services import (accounts, activity, alerts, api_tokens, arr, backups, binges, completion, geo, history, homeassistant, jobs,
                         libraries, plex_setup, settings, stats, wrapped)
@@ -343,7 +344,8 @@ def _render_settings(conn, **extra):
                            backup_list=backups.list_backups(current_app.config["BS_CONFIG"].data_dir),
                            backup_keep=settings.get(conn, "backup.keep"),
                            backup_last=settings.get(conn, "backup.last_run_at"), arr_apps=arr.view(conn),
-                           sab_categories=settings.get(conn, "sabnzbd.categories"))
+                           sab_categories=settings.get(conn, "sabnzbd.categories"),
+                           sab_allow_moves=settings.get(conn, "sabnzbd.allow_moves"))
 
 
 @bp.route("/settings/homeassistant", methods=["POST"])
@@ -420,6 +422,29 @@ def downloads_page():
 @bp.route("/downloads/live")
 def downloads_live():
     return render_template("partials/downloads_live.html", q=arr.download_queue(_db()))
+
+
+def _move_result(fn):
+    try:
+        return jsonify({"ok": True, **fn()})
+    except PermissionError as e:
+        return jsonify({"ok": False, "error": str(e)}), 403
+    except ValueError as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+    except ArrError as e:
+        return jsonify({"ok": False, "error": str(e)}), 502
+
+
+@bp.route("/downloads/move", methods=["POST"])
+def downloads_move():
+    f = request.form
+    return _move_result(lambda: arr.move(_db(), f.get("nzo_id", ""), to=f.get("to") or None,
+                                         above=f.get("above") or None, below=f.get("below") or None))
+
+
+@bp.route("/downloads/front", methods=["POST"])
+def downloads_front():
+    return _move_result(lambda: arr.shown_first(_db()))
 
 
 @bp.route("/settings/arr", methods=["POST"])

@@ -20,7 +20,7 @@ Self-hosted Plex monitoring and statistics: a modern take on Tautulli. Live acti
   - library health: stale and never-watched content, and GB per hour watched, with CSV.
   - the collection: codecs, resolutions, how much a re-encode would free (nothing deleted), what to upgrade, and gaps in shows;
   - playback problems: who buffers, on which device and from where.
-- **Sonarr, Radarr and SABnzbd (optional, read-only):** a live downloads queue showing the show, episode or film each NZB is (not its file name), real gaps in shows, film collections, what's below your quality cutoff, what's airing this week and your download history.
+- **Sonarr, Radarr and SABnzbd (optional, read-only):** a live downloads queue showing the show, episode or film each NZB is (not its file name), which you can reorder by dragging if you turn that on, real gaps in shows, film collections, what's below your quality cutoff, what's airing this week and your download history.
 - **Wrapped:** a year in review per person and for the whole server. It's built for a phone, shared with a signed link you can revoke, and prints as one page.
 - **Notifications:** rules (trigger → conditions → message → channels) to Discord, Telegram, ntfy, Pushover, email and the rest through Apprise. A season drop sends one "recently added" digest.
 - **Stream rules:** per-person stream and transcode limits that alert, or stop the newest stream. Alerts for one account playing from two places at once, or from a new country.

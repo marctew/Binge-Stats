@@ -109,6 +109,22 @@ def api_stop(session_id: str):
     return jsonify({"ok": True})
 
 
+@bp.route("/downloads/<nzo_id>/move", methods=["POST"])
+@require("write")
+def api_download_move(nzo_id: str):
+    from ..arr.client import ArrError
+    body = request.get_json(silent=True) or {}
+    try:
+        res = arr.move(_db(), nzo_id, to=body.get("to"), above=body.get("above"), below=body.get("below"))
+    except PermissionError as e:
+        return _err("forbidden", str(e), 403)
+    except ValueError as e:
+        return _err("bad_request", str(e), 400)
+    except ArrError as e:
+        return _err("sabnzbd_error", str(e), 502)
+    return jsonify({"ok": True, **res})
+
+
 # -- history -------------------------------------------------------------------------
 
 @bp.route("/history")

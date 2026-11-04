@@ -42,6 +42,14 @@
 }
 
 @layer components {
+  /* Downloads: dragging jobs in SABnzbd's queue */
+  .drag-handle { @apply -my-1 -ml-1 flex w-10 sm:w-8 shrink-0 cursor-grab touch-none items-center justify-center self-stretch rounded-lg text-faint transition hover:bg-surface-2 hover:text-muted active:cursor-grabbing; }
+  .dl-ghost { @apply opacity-40; }
+  .dl-chosen { @apply ring-2 ring-accent/60; }
+  .dl-dragging { @apply shadow-2xl; }
+  .dl-moving { @apply pointer-events-none opacity-60; }
+  .menu { @apply absolute right-0 top-full z-20 mt-1 w-48 overflow-hidden rounded-xl border border-border bg-surface py-1 text-sm shadow-2xl; }
+  .menu-item { @apply flex w-full items-center gap-2 px-3 py-2.5 text-left text-muted hover:bg-surface-2 hover:text-text; }
   .card { @apply rounded-2xl border border-border bg-surface; }
   .btn { @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition
          focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:opacity-50; }

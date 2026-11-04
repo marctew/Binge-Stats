@@ -80,6 +80,10 @@ def run_job(conn, cfg, job: dict) -> dict:
         result = arr_sync.run(conn, progress)
         settings.set(conn, "arr.last_sync_at", int(time.time()))
         return result
+    if kind == "downloads_refresh":
+        from .downloads import REFRESH
+        REFRESH.set()                    # the watcher's next read is a full one, straight away
+        return {"ok": True}
     if kind == "backup":
         result = backups.create(cfg.db_path, cfg.data_dir, int(settings.get(conn, "backup.keep")))
         settings.set(conn, "backup.last_run_at", int(time.time()))

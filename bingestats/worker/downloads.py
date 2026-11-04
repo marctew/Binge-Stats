@@ -41,6 +41,9 @@ FULL_AFTER_ADD_S = 10      # sooner when jobs are added, but not on every tick o
 FULL_TIMEOUT_S = 90        # SABnzbd is slow to list a big queue while it's busy
 MAX_ROWS = 400             # after grouping; a pathological queue still stays a sensible size
 
+# Set by the downloads_refresh job (queued by the web process after a move): read everything now.
+REFRESH = threading.Event()
+
 
 def group_rows(slots: list[dict], show) -> list[dict]:
     """Jobs to show stay as rows; each run of other jobs between them becomes one
@@ -54,8 +57,9 @@ def group_rows(slots: list[dict], show) -> list[dict]:
             g = rows[-1]
         else:
             g = {"kind": "other", "count": 0, "mb": 0.0, "mb_left": 0.0, "eta_s": None, "position": s.get("index"),
-                 "downloading": False}
+                 "downloading": False, "first_id": s["nzo_id"], "last_id": s["nzo_id"]}
             rows.append(g)
+        g["last_id"] = s["nzo_id"]
         g["count"] += 1
         g["mb"] += s["mb"]
         g["mb_left"] += s["mb_left"]
@@ -65,7 +69,9 @@ def group_rows(slots: list[dict], show) -> list[dict]:
         rest = rows[MAX_ROWS - 1:]
         tail = {"kind": "other", "count": sum(r.get("count", 1) for r in rest), "mb": sum(r["mb"] for r in rest),
                 "mb_left": sum(r["mb_left"] for r in rest), "eta_s": rest[-1].get("eta_s"),
-                "position": rest[0].get("position", rest[0].get("index")), "downloading": False}
+                "position": rest[0].get("position", rest[0].get("index")), "downloading": False,
+                "first_id": rest[0].get("first_id", rest[0].get("nzo_id")),
+                "last_id": rest[-1].get("last_id", rest[-1].get("nzo_id"))}
         rows = rows[:MAX_ROWS - 1] + [tail]
     return rows
 
@@ -130,6 +136,9 @@ def snapshot(conn, clients: dict, st: dict, now: float) -> dict:
               and (int(h.get("completed") or 0) >= now - 6 * 3600)][:10]
 
     fresh = None
+    if REFRESH.is_set():
+        REFRESH.clear()
+        st["full_at"] = 0.0
     if st.get("base") is not None and cats == st.get("cats") and now - st["full_at"] < FULL_EVERY_S:
         ids = [r["nzo_id"] for r in st["base"] if r["kind"] == "job"]
         q = sab.get("queue", limit=0 if ids else 1, **({"nzo_ids": ",".join(ids)} if ids else {})).get("queue") or {}
@@ -164,7 +173,7 @@ def snapshot(conn, clients: dict, st: dict, now: float) -> dict:
         st["checked"] = st.get("checked", set()) | {p["nzo_id"] for p in pp}
 
     rows = refresh(st["base"], header, fresh, st["base_mb_left"])
-    return {"header": header, "rows": rows, "pp": pp, "recent": recent, "at": int(now)}
+    return {"header": header, "rows": rows, "pp": pp, "recent": recent, "at": int(now), "full_at": int(st["full_at"])}
 
 
 def store(conn, live: dict, known: dict) -> None:
@@ -216,5 +225,7 @@ class DownloadWatcher(threading.Thread):
                 busy = self.tick(conn)
             except Exception:  # noqa: BLE001 - never take the worker down over a status page
                 log.exception("download watcher failed")
-            self.stop_event.wait(BUSY_S if busy else IDLE_S)
+            REFRESH.wait(BUSY_S if busy else IDLE_S)     # a move wakes it early
+            if self.stop_event.is_set():
+                break
         conn.close()

@@ -156,6 +156,7 @@
     <h2 class="font-semibold">Sonarr, Radarr and SABnzbd</h2>
     <p class="mt-1 text-sm text-muted">Optional. Binge Stats only reads from them (it can't delete, unmonitor or change anything) to show
       real gaps in shows, film collections, what's below your quality cutoff, what's airing this week and your download history.
+      The one exception, if you turn it on below: moving jobs in SABnzbd's queue from Downloads.
       The API key is in each app under Settings → General.</p>
     <form method="post" action="{{ url_for('ui.settings_arr') }}" class="mt-5 space-y-4">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -176,7 +177,9 @@
         {% if a.app == 'sabnzbd' %}
         <div class="sm:col-start-2 sm:col-span-2"><label class="label" for="sab_cats">Show on the Downloads page <span class="normal-case text-faint">(optional)</span></label>
           <input id="sab_cats" name="sabnzbd.categories" class="input" value="{{ sab_categories }}" placeholder="Blank: only Sonarr's and Radarr's categories">
-          <p class="mt-1 text-xs text-faint">Blank shows the categories Sonarr and Radarr download to; other categories are hidden and only counted. List categories (e.g. <code>tv, movies, music</code>) to choose, or <code>*</code> for everything.</p></div>
+          <p class="mt-1 text-xs text-faint">Blank shows the categories Sonarr and Radarr download to; other categories are hidden and only counted. List categories (e.g. <code>tv, movies, music</code>) to choose, or <code>*</code> for everything.</p>
+          <label class="mt-3 flex items-start gap-2 text-sm"><input type="checkbox" name="sabnzbd.allow_moves" {{ 'checked' if sab_allow_moves }} class="mt-0.5 rounded">
+            <span>Allow moving jobs in the queue from Downloads<span class="block text-xs text-faint">Drag, move to top or bottom, and "TV &amp; films first". It only changes the order (and a moved job takes the priority of where it lands); nothing is ever deleted or paused.</span></span></label></div>
         {% else %}
         <div class="sm:col-start-2"><label class="label" for="{{ a.app }}_link">Link address <span class="normal-case text-faint">(optional)</span></label>
           <input id="{{ a.app }}_link" name="{{ a.app }}.link_url" class="input" value="{{ a.link_url or '' }}" placeholder="https://{{ a.app }}.example.com">
