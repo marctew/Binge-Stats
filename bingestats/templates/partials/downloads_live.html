@@ -29,7 +29,7 @@
   <div><span class="text-2xl font-semibold tabular-nums">{{ '%.1f' % mbs }}</span> <span class="text-sm text-muted">MB/s</span>
     <span class="ml-1 text-xs text-faint">{{ '%.0f' % (q.kbps * 8 / 1000) }} Mbit/s</span></div>
   <div class="text-sm text-muted"><span class="text-text">{{ q['items'] | length }}</span> {{ 'download' if q['items'] | length == 1 else 'downloads' }} · <span class="text-text">{{ (q.mb_left * 1e6) | filesize }}</span> to go</div>
-  {% if q.hidden %}<div class="text-xs text-faint">+ {{ '{:,}'.format(q.hidden) }} in other categories, hidden</div>{% endif %}
+  {% if q.hidden %}<div class="text-xs text-faint">+ {{ '{:,}'.format(q.hidden) }} other {{ 'download' if q.hidden == 1 else 'downloads' }} ({{ (q.total_mb_left * 1e6) | filesize }} in all), grouped</div>{% endif %}
   {% if q.stale %}<div class="text-xs text-transcode">Last read {{ q.at | relative }}: is the worker running?</div>{% endif %}
 </div>
 
@@ -52,7 +52,20 @@
 
 {% if q['items'] %}
 <div class="space-y-3">
-  {% for j in q['items'][:100] %}
+  {% for j in q.rows %}
+  {% if j.kind == 'other' %}
+  {% set done = ((j.mb - j.mb_left) / j.mb * 100) if j.mb else 0 %}
+  <div class="flex items-center gap-4 rounded-2xl border border-dashed border-border px-4 py-3">
+    <div class="flex w-12 shrink-0 justify-center text-faint sm:w-14">{{ icon('stack', 'h-5 w-5') }}</div>
+    <div class="min-w-0 flex-1">
+      <div class="flex flex-wrap items-baseline justify-between gap-x-4">
+        <span class="text-sm font-medium text-muted">Other items <span class="font-normal text-faint">· {{ '{:,}'.format(j.count) }} {{ 'download' if j.count == 1 else 'downloads' }}</span></span>
+        <span class="text-sm tabular-nums text-muted">{{ (j.mb_left * 1e6) | filesize }}{% if j.eta_s %} · done in {{ j.eta_s | eta }}{% endif %}</span>
+      </div>
+      {% if j.downloading %}<div class="mt-2 h-1 overflow-hidden rounded-full bg-surface-2"><div class="h-full rounded-full bg-faint/60" style="width: {{ done | round(1) }}%"></div></div>{% endif %}
+    </div>
+  </div>
+  {% else %}
   <div class="card flex gap-4 p-3 sm:p-4">
     {{ art(j, 'w-12 sm:w-14') }}
     <div class="min-w-0 flex-1">
@@ -68,14 +81,14 @@
       </div>
       <div class="mt-1 flex flex-wrap justify-between gap-x-4 text-xs text-muted">
         <span class="tabular-nums">{{ ((j.mb - j.mb_left) * 1e6) | filesize }} of {{ (j.mb * 1e6) | filesize }}</span>
-        <span class="tabular-nums">{% if j.status == 'Downloading' and j.time_left and j.time_left != '0:00:00' %}{{ j.time_left }} left{% elif j.status == 'Downloading' %}finishing{% else %}waiting{% endif %}</span>
+        <span class="tabular-nums">{% if j.status == 'Paused' %}paused{% elif j.eta_s %}done in {{ j.eta_s | eta }}{% elif j.status == 'Downloading' %}finishing{% else %}waiting{% endif %}</span>
       </div>
       {% if j.warning %}<div class="mt-1 text-xs text-transcode">{{ j.warning }}</div>{% endif %}
       {% if j.app %}<div class="mt-1 truncate text-[11px] text-faint" title="{{ j.name }}">{{ j.name }}</div>{% endif %}
     </div>
   </div>
+  {% endif %}
   {% endfor %}
-  {% if q['items'] | length > 100 %}<p class="text-center text-sm text-faint">and {{ q['items'] | length - 100 }} more</p>{% endif %}
 </div>
 {% elif not q.pp %}
 <div class="card flex flex-col items-center px-6 py-14 text-center">

@@ -94,11 +94,27 @@ def _f(v) -> float:
         return 0.0
 
 
+def sab_seconds(value) -> int | None:
+    """SABnzbd's '1:06:22:40' / '6:22:40' / '0:04:12' -> seconds."""
+    try:
+        parts = [int(p) for p in str(value).split(":")]
+    except (TypeError, ValueError):
+        return None
+    if not parts or len(parts) > 4:
+        return None
+    secs = 0
+    for unit, p in zip((86400, 3600, 60, 1)[-len(parts):], parts):
+        secs += unit * p
+    return secs
+
+
 def sab_slot(s: dict) -> dict:
-    """One queued job."""
+    """One queued job. eta_s is SABnzbd's own estimate of when it'll be done, counting
+    everything ahead of it in the queue."""
     return {"nzo_id": s.get("nzo_id"), "name": s.get("filename"), "cat": s.get("cat"), "status": s.get("status"),
             "pct": int(_f(s.get("percentage"))), "mb": _f(s.get("mb")), "mb_left": _f(s.get("mbleft")),
-            "time_left": s.get("timeleft"), "priority": s.get("priority")}
+            "time_left": s.get("timeleft"), "eta_s": sab_seconds(s.get("timeleft")), "priority": s.get("priority"),
+            "index": s.get("index")}
 
 
 # SABnzbd history states while a finished download is still being worked on.

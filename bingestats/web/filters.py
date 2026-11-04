@@ -155,12 +155,27 @@ def media_subtitle(p) -> str:
     return str(get("year") or "")
 
 
+def eta(seconds) -> str:
+    """When a download finishes: '45 secs', '22 mins', '1h 02m', '6h 22m', '2d 4h'."""
+    if seconds is None:
+        return "–"
+    s = int(seconds)
+    if s < 60:
+        return f"{s} secs"
+    if s < 3600:
+        m = round(s / 60)
+        return "1 min" if m == 1 else f"{m} mins"
+    if s < 86400:
+        return f"{s // 3600}h {s % 3600 // 60:02d}m"
+    return f"{s // 86400}d {s % 86400 // 3600}h"
+
+
 def register(app) -> None:
     for name, fn in {
         "duration": duration, "clock": clock, "localtime": localtime, "relative": relative,
         "resolution": resolution, "codec": codec, "channels": channels, "bandwidth": bandwidth, "filesize": filesize, "plural": plural, "map_points": map_points,
         "decision_label": decision_label, "reason_label": reason_label,
-        "media_title": media_title, "media_subtitle": media_subtitle,
+        "media_title": media_title, "media_subtitle": media_subtitle, "eta": eta,
     }.items():
         app.jinja_env.filters[name] = fn
     app.jinja_env.globals["now"] = lambda: int(time.time())

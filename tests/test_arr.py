@@ -418,7 +418,8 @@ def test_watcher_matches_by_download_id_and_hides_other_categories(synced):
     [item] = q["items"]
     assert item["title"] == "Way Behind" and item["sub"] == "Season 2 · 2 episodes" and item["quality"] == "WEBDL-1080p"
     assert item["app"] == "sonarr" and item["pct"] == 40 and item["mb_left"] == 600.0
-    assert q["hidden"] == 6 and q["categories"] == ["movies", "tv"]   # 1 'hmm' slot + 5 beyond the detail limit
+    assert q["hidden"] == 1 and q["categories"] == ["movies", "tv"]   # the 'hmm' job, grouped
+    assert [r["kind"] for r in q["rows"]] == ["job", "other"]
     [pp] = q["pp"]
     assert pp["title"] == "Quiet Two" and pp["sub"] == "2020" and pp["status"] == "Extracting"
     assert [r["status"] for r in q["recent"]] == ["Completed"]
@@ -436,11 +437,19 @@ def test_watcher_looks_up_new_jobs_and_shows_all_when_asked(synced):
         mock_live(rsps, [slot(TV_ID, "a", "tv"), slot(NEW_ID, "Brand.New.Film.2026.1080p", "other")], sonarr_calls=calls)
         w.tick(c, now=NOW + 3)
     assert len(calls) == 2                                       # a new job: looked up again
+    assert [r["kind"] for r in arr.download_queue(c, now=NOW + 3)["rows"]] == ["job", "other"]
+
+    def retick(t):
+        with responses.RequestsMock(assert_all_requests_are_fired=False) as rsps:
+            mock_live(rsps, [slot(TV_ID, "a", "tv"), slot(NEW_ID, "Brand.New.Film.2026.1080p", "other")])
+            w.tick(c, now=t)
     settings.set(c, "sabnzbd.categories", "*")
-    q = arr.download_queue(c, now=NOW + 3)
+    retick(NOW + 6)                                              # grouping is decided when the queue is read
+    q = arr.download_queue(c, now=NOW + 6)
     assert [i["title"] for i in q["items"]] == ["Way Behind", "Brand New Film 2026 1080p"]   # unmatched: tidied name
     settings.set(c, "sabnzbd.categories", "other")
-    assert [i["title"] for i in arr.download_queue(c, now=NOW + 3)["items"]] == ["Way Behind", "Brand New Film 2026 1080p"]
+    retick(NOW + 9)
+    assert [i["title"] for i in arr.download_queue(c, now=NOW + 9)["items"]] == ["Way Behind", "Brand New Film 2026 1080p"]
 
 
 def test_not_configured_and_idle(conn):
@@ -463,7 +472,7 @@ def test_downloads_page(logged_in, app_conn, app):
         dl.DownloadWatcher(None, None).tick(app_conn)
     body = logged_in.get("/downloads").data.decode()
     assert "Way Behind" in body and "Season 2 · 2 episodes" in body and "WEBDL-1080p" in body
-    assert "in other categories, hidden" in body and "Private" not in body
+    assert "1 other download" in body and "Other items" in body and "Private" not in body
     assert "/img/arr/sonarr/2" in body and 'hx-trigger="every 2s' in body
     assert "Finishing up" in logged_in.get("/downloads/live").data.decode()
     assert 'href="/downloads"' in logged_in.get("/").data.decode()                     # in the nav now
@@ -489,3 +498,27 @@ def test_settings_categories(conn):
     assert arr.visible_categories(conn) == {"tv", "movies", "music"}
     arr.save(conn, {"sabnzbd.categories": "*"})
     assert arr.visible_categories(conn) is None
+
+
+
+def test_runs_of_other_jobs_are_grouped():
+    """Marc's example: 1-4 other, 5 TV, 6-9 other, 10 a film."""
+    def s(i, cat, mb, eta):
+        return {"nzo_id": f"n{i}", "name": f"x{i}", "cat": cat, "status": "Downloading" if i == 1 else "Queued",
+                "pct": 50 if i == 1 else 0, "mb": float(mb), "mb_left": float(mb) / (2 if i == 1 else 1),
+                "time_left": None, "eta_s": eta, "priority": "Normal", "index": i - 1}
+    slots = [s(1, "hmm", 2000, 300), s(2, "hmm", 2000, 600), s(3, "hmm", 2000, 900), s(4, "hmm", 2000, 1320),
+             s(5, "tv", 2000, 1440), s(6, "hmm", 4000, 1800), s(7, "hmm", 4000, 2200), s(8, "hmm", 4000, 2600),
+             s(9, "hmm", 4000, 2940), s(10, "movies", 5000, 3720)]
+    rows = dl.group_rows(slots, lambda j: j["cat"] in ("tv", "movies"))
+    assert [(r["kind"], r.get("count"), r.get("eta_s")) for r in rows] == [
+        ("other", 4, 1320), ("job", None, 1440), ("other", 4, 2940), ("job", None, 3720)]
+    assert rows[0]["mb"] == 8000 and rows[0]["mb_left"] == 7000 and rows[0]["downloading"]
+    assert rows[2]["mb"] == 16000 and not rows[2]["downloading"]
+
+
+def test_sab_seconds_and_eta_filter():
+    from bingestats.web.filters import eta
+    assert parse.sab_seconds("0:04:12") == 252 and parse.sab_seconds("6:22:40") == 22960
+    assert parse.sab_seconds("1:06:22:40") == 109360 and parse.sab_seconds("x") is None
+    assert [eta(x) for x in (45, 60, 1320, 3720, 22960, 109360)] == ["45 secs", "1 min", "22 mins", "1h 02m", "6h 22m", "1d 6h"]

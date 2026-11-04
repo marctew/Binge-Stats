@@ -402,12 +402,12 @@ def download_queue(conn: sqlite3.Connection, now: float | None = None) -> dict |
         return {**j, **d}
 
     header = live.get("header") or {}
-    slots = live.get("slots") or []
-    items = [enrich(s) for s in slots if show(s)]
-    hidden = (header.get("items") or len(slots)) - len(items)
+    rows = [enrich(r) if r["kind"] == "job" else r for r in live.get("rows") or []]
+    items = [r for r in rows if r["kind"] == "job"]
     return {"ready": True, "at": live.get("at"), "stale": now - (live.get("at") or 0) > 120,
             "status": header.get("status"), "paused": header.get("paused"), "kbps": header.get("kbps") or 0,
-            "items": items, "hidden": max(0, hidden), "categories": sorted(cats) if cats is not None else None,
-            "mb_left": sum(i["mb_left"] for i in items),
+            "rows": rows, "items": items, "hidden": sum(r["count"] for r in rows if r["kind"] == "other"),
+            "categories": sorted(cats) if cats is not None else None,
+            "mb_left": sum(i["mb_left"] for i in items), "total_mb_left": header.get("mb_left") or 0,
             "pp": [enrich(p) for p in live.get("pp") or [] if show(p)],
             "recent": [enrich(p) for p in live.get("recent") or [] if show(p)]}

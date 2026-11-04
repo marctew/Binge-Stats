@@ -25,7 +25,35 @@ from ..services import arr as arr_svc
 log = logging.getLogger("bingestats.downloads")
 
 BUSY_S, IDLE_S, ARR_REFRESH_S = 3, 30, 60
-DETAIL_LIMIT = 200          # jobs read in detail; the header totals cover the whole queue
+MAX_ROWS = 400             # after grouping; a pathological queue still stays a sensible size
+
+
+def group_rows(slots: list[dict], show) -> list[dict]:
+    """Jobs to show stay as rows; each run of other jobs between them becomes one
+    'other' row with its count, size and when the last of them finishes."""
+    rows: list[dict] = []
+    for s in slots:
+        if show(s):
+            rows.append({"kind": "job", **s})
+            continue
+        if rows and rows[-1]["kind"] == "other":
+            g = rows[-1]
+        else:
+            g = {"kind": "other", "count": 0, "mb": 0.0, "mb_left": 0.0, "eta_s": None, "position": s.get("index"),
+                 "downloading": False}
+            rows.append(g)
+        g["count"] += 1
+        g["mb"] += s["mb"]
+        g["mb_left"] += s["mb_left"]
+        g["eta_s"] = s["eta_s"] if s["eta_s"] is not None else g["eta_s"]
+        g["downloading"] = g["downloading"] or s["status"] == "Downloading" and s["pct"] > 0
+    if len(rows) > MAX_ROWS:
+        rest = rows[MAX_ROWS - 1:]
+        tail = {"kind": "other", "count": sum(r.get("count", 1) for r in rest), "mb": sum(r["mb"] for r in rest),
+                "mb_left": sum(r["mb_left"] for r in rest), "eta_s": rest[-1].get("eta_s"),
+                "position": rest[0].get("position", rest[0].get("index")), "downloading": False}
+        rows = rows[:MAX_ROWS - 1] + [tail]
+    return rows
 
 
 def snapshot(conn, clients: dict, known: dict, checked: set, now: float, arr_read_at: float):
@@ -33,7 +61,7 @@ def snapshot(conn, clients: dict, known: dict, checked: set, now: float, arr_rea
     minute while busy). Returns (live, known map, checked ids, when Sonarr/Radarr were last read).
     Jobs neither app knows about stay 'checked', so they don't cause a lookup every few seconds."""
     sab = clients["sabnzbd"]
-    q = sab.get("queue", limit=DETAIL_LIMIT).get("queue") or {}
+    q = sab.get("queue", limit=0).get("queue") or {}       # the whole queue: ~0.6 MB for 1,400 jobs
     header = parse.sab_queue(q)
     slots = [parse.sab_slot(s) for s in q.get("slots") or []]
     hist = (sab.get("history", limit=20).get("history") or {}).get("slots") or []
@@ -57,7 +85,9 @@ def snapshot(conn, clients: dict, known: dict, checked: set, now: float, arr_rea
         arr_read_at = now
     else:
         known = {k: v for k, v in known.items() if k in ids}
-    live = {"header": header, "slots": slots, "pp": pp, "recent": recent, "at": int(now)}
+    cats = arr_svc.visible_categories(conn)
+    show = lambda s: cats is None or (s.get("cat") or "").lower() in cats or s.get("nzo_id") in known  # noqa: E731
+    live = {"header": header, "rows": group_rows(slots, show), "pp": pp, "recent": recent, "at": int(now)}
     return live, known, ids, arr_read_at
 
 
@@ -91,7 +121,7 @@ class DownloadWatcher(threading.Thread):
             log.debug("SABnzbd queue: %s", e)
             return False
         store(conn, live, self.known)
-        return bool(live["slots"] or live["pp"])
+        return bool(live["rows"] or live["pp"])
 
     def run(self) -> None:
         conn = db.connect(self.db_path)
