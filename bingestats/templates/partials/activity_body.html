@@ -31,7 +31,7 @@
             <p class="truncate text-sm text-muted">{{ s | media_subtitle }}</p>
           </div>
           <div x-data="{ open: false }" class="relative shrink-0">
-            <button type="button" class="btn-icon" title="Stop stream"
+            <button type="button" class="btn-icon" aria-label="Stop stream" title="Stop stream"
                     @click="open = true; document.body.dataset.hold = '1'">{{ icon('stop', 'h-4 w-4') }}</button>
             <div x-cloak x-show="open" x-transition @click.outside="open = false; delete document.body.dataset.hold"
                  class="absolute right-0 top-10 z-20 w-72 rounded-2xl border border-border bg-surface p-4 shadow-2xl">

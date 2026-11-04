@@ -1,0 +1,99 @@
+/* Design Uniformity: Tailwind entry point. The app's input.css starts with this file.
+ * Same tokens and class names as uniform.css; per app, override only --accent and --accent-2. */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root, [data-theme="dark"] {
+  --bg: 9 11 17;            /* #090b11  page */
+  --surface: 17 20 29;      /* #11141d  cards, sidebar */
+  --surface-2: 25 29 41;    /* #191d29  inputs, hovers, wells */
+  --border: 39 44 59;       /* #272c3b  hairlines */
+  --text: 232 235 242;      /* #e8ebf2 */
+  --muted: 146 154 175;     /* #929aaf  secondary text, labels */
+  --faint: 92 99 120;       /* #5c6378  hints, placeholders, idle icons */
+  --accent: 139 92 246;     /* #8b5cf6  app accent (Binge: violet) */
+  --accent-2: 236 72 153;   /* #ec4899  gradient partner (Binge: pink) */
+  --on-accent: 255 255 255; /* text on a filled accent button */
+  --success: 52 211 153;    /* #34d399  ok, running, done */
+  --info: 56 189 248;       /* #38bdf8  neutral-positive, in progress */
+  --warning: 251 146 60;    /* #fb923c  degraded, needs a look */
+  --danger: 248 113 113;    /* #f87171  failed, destructive */
+  color-scheme: dark;
+}
+[data-theme="light"] {
+  --bg: 245 246 250;        /* #f5f6fa */
+  --surface: 255 255 255;
+  --surface-2: 240 242 247; /* #f0f2f7 */
+  --border: 222 226 235;    /* #dee2eb */
+  --text: 20 23 33;         /* #141721 */
+  --muted: 95 103 125;      /* #5f677d */
+  --faint: 150 157 175;     /* #969daf */
+  --accent: 124 58 237;     /* #7c3aed */
+  --accent-2: 219 39 119;   /* #db2777 */
+  --on-accent: 255 255 255;
+  --success: 5 150 105;
+  --info: 2 132 199;
+  --warning: 234 88 12;
+  --danger: 220 38 38;
+  color-scheme: light;
+}
+
+@layer base {
+  html { -webkit-tap-highlight-color: transparent; }
+  body { @apply bg-bg text-text antialiased; }
+  [x-cloak] { display: none !important; }
+}
+
+@layer components {
+  .card { @apply rounded-2xl border border-border bg-surface; }
+  .btn { @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition
+         focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:opacity-50; }
+  .btn-primary { @apply btn bg-accent text-on-accent hover:bg-accent/90 shadow-lg shadow-accent/20; }
+  .btn-ghost { @apply btn border border-border bg-surface-2/60 text-text hover:bg-surface-2; }
+  .btn-danger { @apply btn bg-danger/90 text-white hover:bg-danger; }
+  .btn-icon { @apply inline-flex h-9 w-9 items-center justify-center rounded-xl text-muted transition
+              hover:bg-surface-2 hover:text-text focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60; }
+  .input { @apply w-full rounded-xl border border-border bg-surface-2/70 px-3 py-2 text-sm text-text
+           placeholder:text-faint focus:border-accent/70 focus:outline-none focus:ring-2 focus:ring-accent/30; }
+  .label { @apply mb-1.5 block text-xs font-medium uppercase tracking-wide text-muted; }
+  .badge { @apply inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-medium; }
+  .badge-success { @apply badge bg-success/15 text-success ring-1 ring-inset ring-success/25; }
+  .badge-info { @apply badge bg-info/15 text-info ring-1 ring-inset ring-info/25; }
+  .badge-warning { @apply badge bg-warning/15 text-warning ring-1 ring-inset ring-warning/25; }
+  .badge-danger { @apply badge bg-danger/15 text-danger ring-1 ring-inset ring-danger/25; }
+  .badge-accent { @apply badge bg-accent/15 text-accent ring-1 ring-inset ring-accent/25; }
+  .badge-muted { @apply badge bg-surface-2 text-muted ring-1 ring-inset ring-border; }
+  .nav-link { @apply flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-muted transition
+              hover:bg-surface-2 hover:text-text; }
+  .nav-link.active { @apply bg-accent/15 text-text; }
+  .nav-link.active svg { @apply text-accent; }
+  .th { @apply px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted; }
+  .td { @apply px-4 py-3 align-middle text-sm; }
+  .menu { @apply absolute right-0 top-full z-20 mt-1 w-48 overflow-hidden rounded-xl border border-border bg-surface py-1 text-sm shadow-2xl; }
+  .menu-item { @apply flex w-full items-center gap-2 px-3 py-2.5 text-left text-muted hover:bg-surface-2 hover:text-text; }
+  .drag-handle { @apply -my-1 -ml-1 flex w-10 sm:w-8 shrink-0 cursor-grab touch-none items-center justify-center self-stretch rounded-lg text-faint transition hover:bg-surface-2 hover:text-muted active:cursor-grabbing; }
+  .confirm-wrap { @apply relative inline-flex; }
+  .confirm { @apply absolute right-0 top-full z-30 mt-2 block w-72 max-w-[calc(100vw-2rem)] rounded-2xl border border-border bg-surface p-4
+             text-left text-sm font-normal text-text shadow-2xl; }
+  .confirm.left { @apply left-0 right-auto; }
+  .confirm-actions { @apply mt-3 flex justify-end gap-2; }
+  .is-busy { @apply pointer-events-none opacity-60; }
+  .brand-gradient { @apply bg-gradient-to-r from-accent to-accent-2 bg-clip-text text-transparent; }
+}
+
+.progress-track { @apply h-1.5 w-full overflow-hidden rounded-full bg-white/10; }
+[data-theme="light"] .progress-track { @apply bg-black/10; }
+.progress-fill { @apply h-full rounded-full bg-gradient-to-r from-accent to-accent-2 transition-[width] duration-1000 ease-linear; }
+
+/* ------------------------------------------------------------ scrollbars */
+@supports (-moz-appearance: none) { * { scrollbar-width: thin; scrollbar-color: rgb(var(--faint) / 0.45) transparent; } }
+::-webkit-scrollbar { width: 12px; height: 12px; }
+::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }
+::-webkit-scrollbar-thumb { background-color: rgb(var(--faint) / 0.35); border: 3px solid transparent; background-clip: padding-box; border-radius: 9999px; min-height: 40px; }
+::-webkit-scrollbar-thumb:hover { background-color: rgb(var(--muted) / 0.6); }
+::-webkit-scrollbar-thumb:active { background-color: rgb(var(--accent) / 0.7); }
+.overflow-x-auto::-webkit-scrollbar { height: 8px; }
+.overflow-x-auto::-webkit-scrollbar-thumb { border-width: 2px; }
+
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: 0ms !important; animation-duration: 0ms !important; } }

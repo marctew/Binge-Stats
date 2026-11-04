@@ -1,83 +1,14 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-:root, [data-theme="dark"] {
-  --bg: 9 11 17;
-  --surface: 17 20 29;
-  --surface-2: 25 29 41;
-  --border: 39 44 59;
-  --text: 232 235 242;
-  --muted: 146 154 175;
-  --faint: 92 99 120;
-  --accent: 139 92 246;
-  --accent-2: 236 72 153;
-  --play: 52 211 153;
-  --stream: 56 189 248;
-  --transcode: 251 146 60;
-  --danger: 248 113 113;
-  color-scheme: dark;
-}
-[data-theme="light"] {
-  --bg: 245 246 250;
-  --surface: 255 255 255;
-  --surface-2: 240 242 247;
-  --border: 222 226 235;
-  --text: 20 23 33;
-  --muted: 95 103 125;
-  --faint: 150 157 175;
-  --accent: 124 58 237;
-  --accent-2: 219 39 119;
-  --play: 5 150 105;
-  --stream: 2 132 199;
-  --transcode: 234 88 12;
-  --danger: 220 38 38;
-  color-scheme: light;
-}
-
-@layer base {
-  html { -webkit-tap-highlight-color: transparent; }
-  body { @apply bg-bg text-text antialiased; }
-  [x-cloak] { display: none !important; }
-}
+/* Tokens, base and shared components come from Design Uniformity
+   (C:/ClaudeCowork/Design Uniformity, copied into ./design). Don't edit ./design here:
+   change the source and copy it back in. Only Binge-specific additions live below. */
+@import "./design/tailwind-components.css";
 
 @layer components {
-  /* Downloads: dragging jobs in SABnzbd's queue */
-  .drag-handle { @apply -my-1 -ml-1 flex w-10 sm:w-8 shrink-0 cursor-grab touch-none items-center justify-center self-stretch rounded-lg text-faint transition hover:bg-surface-2 hover:text-muted active:cursor-grabbing; }
+  /* Downloads: SortableJS states while dragging SABnzbd jobs (spec 7.13). */
   .dl-ghost { @apply opacity-40; }
   .dl-chosen { @apply ring-2 ring-accent/60; }
   .dl-dragging { @apply shadow-2xl; }
-  .dl-moving { @apply pointer-events-none opacity-60; }
-  .menu { @apply absolute right-0 top-full z-20 mt-1 w-48 overflow-hidden rounded-xl border border-border bg-surface py-1 text-sm shadow-2xl; }
-  .menu-item { @apply flex w-full items-center gap-2 px-3 py-2.5 text-left text-muted hover:bg-surface-2 hover:text-text; }
-  .card { @apply rounded-2xl border border-border bg-surface; }
-  .btn { @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition
-         focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:opacity-50; }
-  .btn-primary { @apply btn bg-accent text-white hover:bg-accent/90 shadow-lg shadow-accent/20; }
-  .btn-ghost { @apply btn border border-border bg-surface-2/60 text-text hover:bg-surface-2; }
-  .btn-danger { @apply btn bg-danger/90 text-white hover:bg-danger; }
-  .btn-icon { @apply inline-flex h-9 w-9 items-center justify-center rounded-xl text-muted transition
-              hover:bg-surface-2 hover:text-text focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60; }
-  .input { @apply w-full rounded-xl border border-border bg-surface-2/70 px-3 py-2 text-sm text-text
-           placeholder:text-faint focus:border-accent/70 focus:outline-none focus:ring-2 focus:ring-accent/30; }
-  .label { @apply mb-1.5 block text-xs font-medium uppercase tracking-wide text-muted; }
-  .badge { @apply inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-medium; }
-  .badge-play { @apply badge bg-play/15 text-play ring-1 ring-inset ring-play/25; }
-  .badge-stream { @apply badge bg-stream/15 text-stream ring-1 ring-inset ring-stream/25; }
-  .badge-transcode { @apply badge bg-transcode/15 text-transcode ring-1 ring-inset ring-transcode/25; }
-  .badge-muted { @apply badge bg-surface-2 text-muted ring-1 ring-inset ring-border; }
-  .nav-link { @apply flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-muted transition
-              hover:bg-surface-2 hover:text-text; }
-  .nav-link.active { @apply bg-accent/15 text-text; }
-  .nav-link.active svg { @apply text-accent; }
-  .th { @apply px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted; }
-  .td { @apply px-4 py-3 align-middle text-sm; }
-  .brand-gradient { @apply bg-gradient-to-r from-accent to-accent-2 bg-clip-text text-transparent; }
 }
-
-.progress-track { @apply h-1.5 w-full overflow-hidden rounded-full bg-white/10; }
-[data-theme="light"] .progress-track { @apply bg-black/10; }
-.progress-fill { @apply h-full rounded-full bg-gradient-to-r from-accent to-accent-2 transition-[width] duration-1000 ease-linear; }
 
 /* OpenStreetMap tiles are light only: darken them for the dark theme. */
 .map-dark .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(0.9) contrast(0.85) saturate(0.35); }
@@ -98,23 +29,3 @@
 .bar-1 { background-color: #d95926; }
 [data-theme="light"] .bar-0 { background-color: #2a78d6; }
 [data-theme="light"] .bar-1 { background-color: #eb6834; }
-
-/* Scrollbars: thin, rounded, quiet until hovered; follow the theme.
-   Chromium and Safari use the ::-webkit-scrollbar parts (full control: rounded thumb, inset by a transparent
-   border). Firefox only has the standard properties, so it gets thin + theme colours. */
-@supports (-moz-appearance: none) {
-  * { scrollbar-width: thin; scrollbar-color: rgb(var(--faint) / 0.45) transparent; }
-}
-::-webkit-scrollbar { width: 12px; height: 12px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb {
-  background-color: rgb(var(--faint) / 0.35);
-  border: 3px solid transparent; background-clip: padding-box; border-radius: 9999px;
-  min-height: 40px;
-}
-::-webkit-scrollbar-thumb:hover { background-color: rgb(var(--muted) / 0.6); }
-::-webkit-scrollbar-thumb:active { background-color: rgb(var(--accent) / 0.7); }
-::-webkit-scrollbar-corner { background: transparent; }
-/* Sideways strips (tabs, Airing this week, Watching now): slimmer still. */
-.overflow-x-auto::-webkit-scrollbar { height: 8px; }
-.overflow-x-auto::-webkit-scrollbar-thumb { border-width: 2px; }

@@ -26,7 +26,7 @@
         {% if item.size_bytes %}<span class="badge-muted">{{ item.size_bytes | filesize }}</span>{% endif %}
         {% if item.episodes %}<span class="badge-muted">{{ item.episodes }} episodes in library</span>{% endif %}
         {% if item.added_at %}<span class="badge-muted">Added {{ item.added_at | localtime('%d %b %Y') }}</span>{% endif %}
-        {% if not item.is_present %}<span class="badge-transcode">No longer in Plex</span>{% endif %}
+        {% if not item.is_present %}<span class="badge-warning">No longer in Plex</span>{% endif %}
       </div>
       {% if links %}
       <div class="mt-4 flex flex-wrap gap-2">

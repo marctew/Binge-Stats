@@ -20,6 +20,7 @@ Self-hosted Plex monitoring and stats, a modern Tautulli replacement. Read DESIG
 - All timestamps are UTC epoch seconds; display in the `ui.timezone` setting.
 - Long work runs as a row in `jobs`, picked up by the worker. Never do it in a request.
 - Settings live in the `settings` table, read only through `services/settings.py`.
+- UI follows the Design Uniformity spec (`C:/ClaudeCowork/Design Uniformity/DESIGN-SPEC.md` on Marc's PC). Its Tailwind preset and components are copied into `bingestats/static/css/design/`: don't edit them here; change the source and copy them back in. `input.css` holds only Binge-specific additions.
 - Reuse the Jinja component macros and the shared ECharts theme; no page-specific one-offs. Every chart and list needs an empty state. Pages must work at phone width.
 - Front-end assets are pinned (version + sha256) in `bingestats/static/vendor/VERSIONS` and fetched at build time by `scripts/fetch-assets.sh`. No CDNs at runtime.
 - Runtime data (`/data`, `*.db`, caches, config with secrets) stays out of the tracked tree.

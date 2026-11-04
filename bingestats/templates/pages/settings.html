@@ -12,7 +12,7 @@
       <div><dt class="label">Version</dt><dd>{{ server.version if server and server.version else '–' }}</dd></div>
       <div><dt class="label">URL</dt><dd class="break-all font-mono text-xs">{{ plex_url or 'Not connected' }}</dd></div>
       <div><dt class="label">Status</dt><dd>
-        {% if server and server.is_up %}<span class="badge-play">Up</span>{% elif server %}<span class="badge-transcode">Unreachable</span>{% else %}<span class="badge-muted">Waiting for first poll</span>{% endif %}
+        {% if server and server.is_up %}<span class="badge-success">Up</span>{% elif server %}<span class="badge-warning">Unreachable</span>{% else %}<span class="badge-muted">Waiting for first poll</span>{% endif %}
         {% if server and server.last_seen_at %}<span class="ml-2 text-xs text-muted">seen {{ server.last_seen_at | relative }}</span>{% endif %}
       </dd></div>
     </dl>
@@ -79,7 +79,7 @@
             <span class="hidden text-xs text-muted sm:inline">{{ ('used ' ~ (t.last_used_at | relative)) if t.last_used_at else 'never used' }}</span>
             <form method="post" action="{{ url_for('ui.settings_token_delete', token_id=t.id) }}">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <button class="btn-icon" title="Revoke">{{ icon('x', 'h-4 w-4') }}</button>
+              <button class="btn-icon" aria-label="Revoke" title="Revoke">{{ icon('x', 'h-4 w-4') }}</button>
             </form>
           </li>
           {% endfor %}
@@ -96,7 +96,7 @@
         <p class="mt-1 text-sm text-muted">Publishes stream counts, bandwidth, Plex status and alerts to your MQTT broker, with discovery so they appear in HA as one device.</p>
       </div>
       {% set st = ha['mqtt.status'] %}
-      <span class="{{ 'badge-play' if st == 'connected' else ('badge-muted' if st == 'off' or st.startswith('Connecting') else 'badge-transcode') }}">
+      <span class="{{ 'badge-success' if st == 'connected' else ('badge-muted' if st == 'off' or st.startswith('Connecting') else 'badge-warning') }}">
         {{ 'Connected' if st == 'connected' else ('Off' if st == 'off' else st) }}</span>
     </div>
     <form method="post" action="{{ url_for('ui.settings_homeassistant') }}" class="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -212,7 +212,7 @@
         <span class="min-w-0 flex-1 truncate font-mono text-xs">{{ b.name }}</span>
         <span class="hidden text-xs text-muted sm:inline">{{ b.created | relative }}</span>
         <span class="w-20 text-right text-xs tabular-nums text-muted">{{ b.size | filesize }}</span>
-        <a href="{{ url_for('ui.settings_backup_download', name=b.name) }}" class="btn-icon" title="Download">{{ icon('download', 'h-4 w-4') }}</a>
+        <a href="{{ url_for('ui.settings_backup_download', name=b.name) }}" class="btn-icon" aria-label="Download" title="Download">{{ icon('download', 'h-4 w-4') }}</a>
       </li>
       {% endfor %}
     </ul>

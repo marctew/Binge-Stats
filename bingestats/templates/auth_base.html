@@ -2,7 +2,7 @@
 <html lang="en-GB" data-theme="{{ 'light' if ui_theme() == 'light' else 'dark' }}">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   {% include "partials/theme_head.html" %}
   <title>{% block title %}Binge Stats{% endblock %}</title>
   <link rel="icon" href="{{ url_for('static', filename='img/icon.svg') }}" type="image/svg+xml">

@@ -17,7 +17,7 @@
 {%- endmacro %}
 
 {% macro decision_badge(decision, hw=False) -%}
-{%- set cls = {'direct_play': 'badge-play', 'direct_stream': 'badge-stream', 'transcode': 'badge-transcode'}.get(decision, 'badge-muted') -%}
+{%- set cls = {'direct_play': 'badge-success', 'direct_stream': 'badge-info', 'transcode': 'badge-warning'}.get(decision, 'badge-muted') -%}
 <span class="{{ cls }}">{{ decision | decision_label }}{% if decision == 'transcode' and hw %} <span class="opacity-80">· HW</span>{% endif %}</span>
 {%- endmacro %}
 
@@ -88,4 +88,24 @@
          (url_for('insights.playback_page'), 'Playback', active == 'playback'),
          (url_for('insights.downloads_page'), 'Download stats', active == 'downloads'),
          (url_for('wrapped.index'), 'Wrapped', active == 'wrapped')]) }}
+{%- endmacro %}
+
+
+{# A destructive button that asks first, in an inline popover (spec 7.10). Put it inside the form it submits,
+   or pass form=. align='left' opens the popover to the right of the button. #}
+{% macro confirm_button(label, question, yes, cls='btn-ghost text-danger', glyph=None, icon_only=False,
+                        formaction=None, form=None, novalidate=False, align='right', wrap='') -%}
+<span x-data="{ ask: false }" class="confirm-wrap {{ wrap }}" @keydown.escape.window="ask = false">
+  <button type="button" class="{{ cls }}" @click="ask = !ask" :aria-expanded="ask"{% if icon_only %} aria-label="{{ label }}" title="{{ label }}"{% endif %}>
+    {%- if glyph %}{{ icon(glyph, 'h-4 w-4') }}{% endif %}{% if not icon_only %}{{ ' ' if glyph }}{{ label }}{% endif -%}
+  </button>
+  <span x-cloak x-show="ask" x-transition.opacity @click.outside="ask = false"
+        class="confirm {{ 'left' if align == 'left' }}">
+    <span class="block">{{ question }}</span>
+    <span class="confirm-actions">
+      <button type="button" class="btn-ghost" @click="ask = false">Cancel</button>
+      <button type="submit" class="btn-danger"{% if formaction %} formaction="{{ formaction }}"{% endif %}{% if form %} form="{{ form }}"{% endif %}{% if novalidate %} formnovalidate{% endif %}>{{ yes }}</button>
+    </span>
+  </span>
+</span>
 {%- endmacro %}

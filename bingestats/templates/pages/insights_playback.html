@@ -25,7 +25,7 @@
 
 {{ section_title('Worst plays', 'most stalls first') }}
 {% if worst %}
-<div class="card overflow-hidden">
+<div class="card overflow-x-auto">
   <table class="w-full">
     <thead class="border-b border-border bg-surface-2/40"><tr>
       <th class="th">Title</th><th class="th hidden md:table-cell">Who and where</th>
@@ -39,7 +39,7 @@
         <td class="td hidden md:table-cell"><a href="{{ url_for('ui.user_page', user_id=w.user_id) }}" class="flex items-center gap-2 hover:text-accent">{{ avatar(w.user_id, w.user_name) }}<span class="truncate">{{ w.user_name }}</span></a>
           <div class="mt-0.5 text-xs text-muted">{{ w.place }}{% if w.bandwidth_kbps %} · {{ '%.1f' % (w.bandwidth_kbps / 1000) }} Mbps{% endif %}</div></td>
         <td class="td hidden text-sm text-muted sm:table-cell">{{ w.started_at | localtime('%a %d %b, %H:%M') }}</td>
-        <td class="td text-right tabular-nums">{{ w.buffer_count }}{% if w.slow %} <span class="badge-transcode ml-1">slow</span>{% endif %}</td>
+        <td class="td text-right tabular-nums">{{ w.buffer_count }}{% if w.slow %} <span class="badge-warning ml-1">slow</span>{% endif %}</td>
         <td class="td hidden lg:table-cell">{{ decision_badge(w.decision) }}</td>
       </tr>
       {% endfor %}

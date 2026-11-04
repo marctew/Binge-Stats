@@ -60,7 +60,7 @@
     </a>
     <form method="post" action="{{ url_for('auth.logout') }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button class="btn-icon" title="Sign out">{{ icon('logout') }}</button>
+      <button class="btn-icon" aria-label="Sign out" title="Sign out">{{ icon('logout') }}</button>
     </form>
   </header>
 

@@ -54,7 +54,7 @@
     const list = document.getElementById("dl-list");
     if (!list) return;
     if (to === "front") {
-      [...list.querySelectorAll(".dl-row[data-id]")].reverse().forEach((c) => { c.classList.add("dl-moving"); list.prepend(c); });
+      [...list.querySelectorAll(".dl-row[data-id]")].reverse().forEach((c) => { c.classList.add("is-busy"); list.prepend(c); });
     } else if (card) {
       if (to === "top") list.prepend(card); else list.append(card);
     }
@@ -77,10 +77,10 @@
       }
     } else if (!res.ok) {
       if (revert) revert(); else resync();
-      if (card) card.classList.remove("dl-moving");
+      if (card) card.classList.remove("is-busy");
       toast(res.error || "SABnzbd didn't move it", "error");
     } else {
-      document.querySelectorAll(".dl-moving").forEach((c) => c.classList.remove("dl-moving"));   // already there
+      document.querySelectorAll(".is-busy").forEach((c) => c.classList.remove("is-busy"));   // already there
     }
     window.bsDragging = false;
   }
@@ -111,9 +111,9 @@
         const prev = card.previousElementSibling, next = card.nextElementSibling;
         const above = prev ? (prev.dataset.id || prev.dataset.last || "") : "";
         const below = next ? (next.dataset.id || next.dataset.first || "") : "";
-        card.classList.add("dl-moving");
+        card.classList.add("is-busy");
         post(host().dataset.moveUrl, { nzo_id: card.dataset.id, above, below }).then((res) => {
-          if (res.ok) card.classList.remove("dl-moving");      // dropped where it belongs already
+          if (res.ok) card.classList.remove("is-busy");      // dropped where it belongs already
           after(res, card, () => sortable && sortable.sort(order, true));
         });
       },
@@ -133,7 +133,7 @@
     }
     const card = btn.closest(".dl-row");
     if (!card) return;
-    card.classList.add("dl-moving");
+    card.classList.add("is-busy");
     window.bsDragging = true;
     moveCards(btn.dataset.moveTo, card);
     post(host().dataset.moveUrl, { nzo_id: card.dataset.id, to: btn.dataset.moveTo }).then((res) => after(res, card));

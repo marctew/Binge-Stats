@@ -68,7 +68,7 @@ def _viewer_gate(conn, ep: str):
     uid = session["viewer"]
     if not accounts.session_still_valid(conn, uid, session.get("viewer_v")):
         session.clear()
-        flash("Please sign in again.", "error")
+        flash("Your session has ended. Sign in again.", "error")
         return redirect(url_for("auth.login"))
     allowed = ep in VIEWER_ENDPOINTS or ep.startswith(VIEWER_PREFIXES) or \
         (ep == "img.user_avatar" and (request.view_args or {}).get("user_id") == uid)

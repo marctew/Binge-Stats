@@ -211,7 +211,7 @@
     if (el.dataset.chartReady) return;
     el.dataset.chartReady = "1";
     const kind = el.dataset.chart, unit = el.dataset.unit || "plays";
-    el.innerHTML = `<div class="flex h-full items-center justify-center"><div class="h-1.5 w-24 animate-pulse rounded-full bg-surface-2"></div></div>`;
+    el.innerHTML = `<div class="flex h-full items-center justify-center text-sm text-faint">Loading…</div>`;
     let d;
     try {
       const r = await fetch(el.dataset.src, { credentials: "same-origin", headers: { Accept: "application/json" } });

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "macros/ui.html" import avatar, stat_tile, empty_state %}
+{% from "macros/ui.html" import avatar, stat_tile, empty_state, confirm_button %}
 {% from "macros/media.html" import poster_card, section_title, binge_list, completion_list %}
 {% from "macros/icons.html" import icon %}
 {% from "macros/charts.html" import chart_scripts, map_scripts, chart_card, locations_card %}
@@ -44,7 +44,7 @@
         <input id="limit_message" name="limit_message" class="input" maxlength="200" value="{{ user.limit_message or '' }}" placeholder="You've reached the stream limit on this server.">
       </div>
       <button class="btn-primary w-full">Save</button>
-      <button form="revoke-wrapped" class="btn-ghost w-full text-danger" onclick="return confirm('Stop every Wrapped share link for {{ user.name }} working?')">Revoke Wrapped share links</button>
+      {{ confirm_button('Revoke Wrapped share links', 'Stop every Wrapped share link for ' ~ user.name ~ ' working?', 'Revoke links', cls='btn-ghost w-full text-danger', form='revoke-wrapped', align='left', wrap='w-full') }}
     </form>
     <form id="revoke-wrapped" method="post" action="{{ url_for('wrapped.revoke', user_id=user.id) }}" class="hidden">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -98,7 +98,7 @@
   <div class="lg:col-span-2">
     {{ section_title('Recent plays') }}
     {% if rows %}
-    <div class="card overflow-hidden">
+    <div class="card overflow-x-auto">
       <table class="w-full">
         <thead class="border-b border-border bg-surface-2/40"><tr>
           <th class="th">Title</th>
@@ -147,8 +147,8 @@
     {% if login %}
     <div class="flex gap-2">
       <button type="button" class="btn-ghost" @click="open = !open">Reset password</button>
-      <form method="post" action="{{ url_for('ui.user_login_remove', user_id=user.id) }}" onsubmit="return confirm('Remove {{ user.name }}\'s login? They\'ll be signed out.')">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn-ghost text-danger">Remove login</button>
+      <form method="post" action="{{ url_for('ui.user_login_remove', user_id=user.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{{ confirm_button('Remove login', 'Remove ' ~ user.name ~ '\'s login? They\'ll be signed out.', 'Remove login', align='left') }}
       </form>
     </div>
     {% elif can_login[0] %}

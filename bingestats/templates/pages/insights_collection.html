@@ -90,7 +90,7 @@
       {{ poster(r.thumb, r.title, 'w-9', 'poster', 150) }}
       <div class="min-w-0 flex-1">
         {% if r.rating_key %}<a href="{{ url_for('ui.item_page', rating_key=r.rating_key) }}" class="font-medium hover:text-accent">{{ r.title }}</a>{% else %}<span class="font-medium">{{ r.title }}</span>{% endif %}{% if r.year %} <span class="text-sm text-muted">{{ r.year }}</span>{% endif %}
-        {% if r.status %}<span class="{{ 'badge-muted' if r.ended else 'badge-stream' }} ml-1">{{ 'Ended' if r.ended else 'Continuing' }}</span>{% endif %}
+        {% if r.status %}<span class="{{ 'badge-muted' if r.ended else 'badge-info' }} ml-1">{{ 'Ended' if r.ended else 'Continuing' }}</span>{% endif %}
         <div class="mt-1 space-y-0.5 text-sm text-muted">
           {% if r.missing_seasons is defined and r.missing_seasons %}<div><span class="text-transcode">Missing {{ 'season' if r.missing_seasons | length == 1 else 'seasons' }} {{ r.missing_seasons | join(', ') }}</span></div>{% endif %}
           {% for h in r.holes[:6] %}<div><span class="text-text">S{{ '%02d' % h.season }}</span> · {{ h.have }} of {{ h.of }} · {% if h.whole %}<span class="text-transcode">whole season missing</span>{% else %}missing {{ h.text }}{% endif %}</div>{% endfor %}
@@ -138,7 +138,7 @@
     {% endfor %}
   </ul>
   {% else %}
-  <table class="w-full">
+  <div class="overflow-x-auto"><table class="w-full">
     <thead class="border-b border-border bg-surface-2/40"><tr>
       <th class="th">Title</th><th class="th hidden sm:table-cell">Quality</th>
       <th class="th text-right">Size</th>
@@ -162,7 +162,7 @@
       </tr>
       {% endfor %}
     </tbody>
-  </table>
+  </table></div>
   {% endif %}
 </div>
 {% else %}

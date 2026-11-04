@@ -84,7 +84,7 @@
 
 {{ section_title('Recently watched') }}
 {% if rows %}
-<div class="card overflow-hidden">
+<div class="card overflow-x-auto">
   <table class="w-full">
     {% with compact = true, viewer = true, parts_ep = 'me.history_parts', more_ep = 'me.history_page', cursor = None, f = None %}{% include "partials/history_rows.html" %}{% endwith %}
   </table>

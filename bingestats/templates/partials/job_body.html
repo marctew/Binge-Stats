@@ -27,8 +27,8 @@
     </div>
     <div class="mt-4 flex flex-wrap gap-2 text-xs">
       {% for t, n in r.by_type.items() %}<span class="badge-muted">{{ '{:,}'.format(n) }} {{ t }}s</span>{% endfor %}
-      {% if r.already_imported %}<span class="badge-stream">{{ '{:,}'.format(r.already_imported) }} already imported</span>{% endif %}
-      {% if r.missing_users %}<span class="badge-transcode">{{ r.missing_users }} with an unknown user (skipped)</span>{% endif %}
+      {% if r.already_imported %}<span class="badge-info">{{ '{:,}'.format(r.already_imported) }} already imported</span>{% endif %}
+      {% if r.missing_users %}<span class="badge-warning">{{ r.missing_users }} with an unknown user (skipped)</span>{% endif %}
     </div>
     <h3 class="mt-6 text-sm font-semibold">Users</h3>
     <div class="mt-2 grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2">

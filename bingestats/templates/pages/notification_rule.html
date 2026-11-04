@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "macros/ui.html" import page_header %}
+{% from "macros/ui.html" import page_header, confirm_button %}
 {% from "macros/icons.html" import icon %}
 {% block title %}{{ rule.name or 'New rule' }} · Notifications · Binge Stats{% endblock %}
 {% block content %}
@@ -57,7 +57,7 @@
               </template>
               <template x-if="field(c).kind === 'int'"><input type="number" class="input w-28" x-model="c.value"></template>
               <template x-if="field(c).kind === 'str'"><input type="text" class="input w-auto flex-1" x-model="c.value"></template>
-              <button type="button" class="btn-icon" @click="conditions.splice(i, 1)" title="Remove">{{ icon('x', 'h-4 w-4') }}</button>
+              <button type="button" class="btn-icon" @click="conditions.splice(i, 1)" aria-label="Remove" title="Remove">{{ icon('x', 'h-4 w-4') }}</button>
             </div>
           </template>
         </div>
@@ -117,7 +117,7 @@
       <div class="flex flex-wrap gap-2 pt-2">
         <button class="btn-primary">Save rule</button>
         {% if rule.id %}
-        <button class="btn-ghost text-danger" formaction="{{ url_for('notify.rule_delete', rule_id=rule.id) }}" formnovalidate onclick="return confirm('Delete this rule?')">{{ icon('trash', 'h-4 w-4') }} Delete</button>
+        {{ confirm_button('Delete', 'Delete this rule? It stops sending alerts straight away.', 'Delete rule', glyph='trash', formaction=url_for('notify.rule_delete', rule_id=rule.id), novalidate=True, align='left') }}
         {% endif %}
       </div>
     </section>

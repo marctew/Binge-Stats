@@ -15,9 +15,9 @@
     <div class="min-w-0 flex-1">
       <div class="flex items-center gap-2">
         <span class="truncate font-semibold group-hover:text-accent">{{ u.name }}</span>
-        {% if u.is_owner %}<span class="badge-stream">Owner</span>{% elif u.is_home %}<span class="badge-muted">Home</span>{% endif %}
+        {% if u.is_owner %}<span class="badge-info">Owner</span>{% elif u.is_home %}<span class="badge-muted">Home</span>{% endif %}
         {% if not u.is_active %}<span class="badge-muted">Removed</span>{% endif %}
-        {% if u.id in with_login %}<span class="badge-play" title="Can sign in to Binge Stats">Login</span>{% endif %}
+        {% if u.id in with_login %}<span class="badge-success" title="Can sign in to Binge Stats">Login</span>{% endif %}
       </div>
       <div class="mt-0.5 truncate text-xs text-muted">
         {% if u.last_played %}Last played {{ u.last_played | relative }}{% else %}Never played anything{% endif %}

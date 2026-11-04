@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "macros/ui.html" import page_header, empty_state %}
+{% from "macros/ui.html" import page_header, empty_state, confirm_button %}
 {% from "macros/icons.html" import icon %}
 {% block title %}Notifications · Binge Stats{% endblock %}
 {% block content %}
@@ -59,7 +59,7 @@
         <span class="min-w-0 flex-1 truncate font-medium {{ 'opacity-60' if not c.enabled }}">{{ c.name }}{% if not c.enabled %} <span class="text-xs text-muted">(off)</span>{% endif %}</span>
         <span class="hidden text-xs text-muted sm:inline">{% if c.fails_24h %}<span class="text-danger">{{ c.fails_24h | plural('failure') }} today</span> · {% endif %}{{ ('last delivered ' ~ (c.last_ok | relative)) if c.last_ok else 'nothing delivered yet' }}</span>
         <button class="btn-ghost py-1.5" hx-post="{{ url_for('notify.channel_test', channel_id=c.id) }}" hx-target="#toasts" hx-swap="beforeend">{{ icon('send', 'h-4 w-4') }} Test</button>
-        <button type="button" class="btn-icon" @click="edit = !edit" title="Edit">{{ icon('settings', 'h-4 w-4') }}</button>
+        <button type="button" class="btn-icon" @click="edit = !edit" aria-label="Edit" title="Edit">{{ icon('pencil', 'h-4 w-4') }}</button>
       </div>
       <form x-cloak x-show="edit" method="post" action="{{ url_for('notify.channel_update', channel_id=c.id) }}" class="mt-3 grid gap-3 sm:grid-cols-3">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -68,7 +68,7 @@
         <div class="flex items-end gap-2">
           <label class="flex items-center gap-2 py-2 text-sm"><input type="checkbox" name="enabled" {{ 'checked' if c.enabled }} class="rounded"> On</label>
           <button class="btn-primary">Save</button>
-          <button class="btn-icon text-danger" formaction="{{ url_for('notify.channel_delete', channel_id=c.id) }}" title="Delete" onclick="return confirm('Delete this channel?')">{{ icon('trash', 'h-4 w-4') }}</button>
+          {{ confirm_button('Delete', 'Delete this channel? Nothing more is sent to it.', 'Delete channel', cls='btn-icon text-danger', glyph='trash', icon_only=True, formaction=url_for('notify.channel_delete', channel_id=c.id)) }}
         </div>
       </form>
     </li>
