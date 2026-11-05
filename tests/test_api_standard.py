@@ -228,16 +228,16 @@ def test_meta(client, read_token, app_conn):
     assert m["app"] == "binge-stats" and m["name"] == "Binge Stats" and m["api"] == 1
     assert m["accent"] == "violet" and m["time_zone"] == "America/New_York"
     assert re.match(r"^\d+\.\d+\.\d+", m["version"]) and "sha" in m
-    assert m["feeds"] == [] and m["actions"] == [] and m["displays"] == [] and m["events"] == []
+    assert m["actions"] == [] and m["displays"] == [] and m["events"] == []
 
 
 def test_meta_lists_only_what_is_registered_and_allowed(client, core, read_token):
     allowed = {"on": False}
-    core.add_feed("arrivals", "Just arrived", 300, {"kind": "movie | show"})
+    core.add_feed("test_feed", "A test feed", 300, {"kind": "movie | show"})
     core.add_action("move_download", "Move a download", {"nzo_id": "str"}, when=lambda: allowed["on"])
     core.add_events(["arrival", "arrival", "playback.start"])
     m = client.get("/api/v1/meta", headers=bearer(read_token)).get_json()
-    assert [f["name"] for f in m["feeds"]] == ["arrivals"]
+    assert m["feeds"][-1]["name"] == "test_feed"
     assert m["actions"] == [] and m["events"] == ["arrival", "playback.start"]
     allowed["on"] = True
     m = client.get("/api/v1/meta", headers=bearer(read_token)).get_json()

@@ -48,6 +48,7 @@ def ensure_client_id(conn) -> str:
 class Worker:
     def __init__(self, cfg: config_mod.Config):
         self.cfg = cfg
+        self._pruned_at = 0.0
         self.stop = threading.Event()
         self.nudge = threading.Event()
         self.conn = db.connect(cfg.db_path)
@@ -124,6 +125,17 @@ class Worker:
             self.nudger.close()
             self.nudger = None
 
+    def prune_images(self, now: float | None = None) -> None:
+        """The API's resized images (API standard section 6): oldest first above 500 MB, hourly."""
+        now = now or time.time()
+        if now - self._pruned_at < 3600:
+            return
+        self._pruned_at = now
+        from ..web.api_core import prune_image_cache
+        n = prune_image_cache(self.cfg.data_dir / "image-cache")
+        if n:
+            log.info("image cache: removed %d old file(s)", n)
+
     def heartbeat(self, error: str = "") -> None:
         settings.set(self.conn, "worker.heartbeat_at", int(time.time()))
         if settings.get(self.conn, "worker.last_error") != error:
@@ -161,6 +173,10 @@ class Worker:
                 self.mqtt.tick()
             except Exception:  # noqa: BLE001
                 log.exception("MQTT publish failed")
+            try:
+                self.prune_images()
+            except Exception:  # noqa: BLE001
+                log.exception("image cache prune failed")
             interval = settings.get(self.conn, "poll.interval_s")
             # A websocket nudge cuts the wait short, debounced by 1 s so a burst
             # of notifications becomes one poll.
