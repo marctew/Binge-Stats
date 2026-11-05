@@ -1,6 +1,6 @@
 # Spec: pins and the pinned calendar (Pinnarr folded into Binge Stats)
 
-Status: planned, 2026-11-05. Not built.
+Status: agreed 2026-11-05. Not built.
 
 ## Why
 
@@ -19,8 +19,8 @@ What Pinnarr adds is a layer on top: pins, the calendar, episode states, the out
 |---|---|
 | **Binge stays read-only** (Marc, 2026-11-05) | Pins live only in Binge. These Pinnarr features are **not ported**: Sonarr tag two-way sync, Plex Watchlist sync, marking watched in Plex, and Overseerr requests. DESIGN.md section 1's read-only rule and section 3's limits on Plex calls are unchanged. |
 | **TMDB, GET only** | A new outside service, needed for the outlook (cancelled vs ended vs in production). Optional: without a key, the outlook uses Sonarr alone and never says `cancelled`, `in_production` or `dormant`. |
-| **Pins belong to Plex users** (proposed; Marc to confirm) | `pins.user_id` is `users.id`. The admin pins as their own Plex user (`users.is_owner`). Viewers pin from `/me`. |
-| **Arrival = in Plex, by polling** (proposed; Marc to confirm) | No Sonarr webhook. "Arrived" means the recently-added check has seen the episode in Plex, which is a stronger claim than Sonarr's `has_file`. The delay is up to `library.recent_check_min` (10; can be set to 2–3). |
+| **Pins belong to Plex users** (Marc, 2026-11-05) | `pins.user_id` is `users.id`. The admin pins as their own Plex user (`users.is_owner`). Viewers pin from `/me`. |
+| **Arrival = in Plex, by polling** (Marc, 2026-11-05) | No Sonarr webhook. "Arrived" means the recently-added check has seen the episode in Plex, which is a stronger claim than Sonarr's `has_file`. The delay is up to `library.recent_check_min` (10; can be set to 2–3). |
 
 Not ported, because Binge already covers it: Tautulli sync, Pinnarr's own users, auth, API keys, backups, health, poster cache, the `plex_availability` job, and the films sync.
 
