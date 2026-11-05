@@ -416,6 +416,27 @@ def concurrent_series(conn: sqlite3.Connection, rng: Range, group: str | None = 
 TOP_KINDS = ("users", "shows", "movies", "artists", "platforms", "players")
 
 
+def current_items(conn: sqlite3.Connection, rows: list[dict], *, id_key: str = "rating_key",
+                  guid_key: str = "guid") -> list[dict]:
+    """Point rows built from plays at what Plex has now. When Plex re-adds something it gets a new
+    rating key, and the old key's artwork and page are gone, but the guid stays the same. So each
+    row whose guid is in the library takes the library's rating key and artwork (the newest, if
+    there are two). Rows for things no longer in Plex keep what the plays say."""
+    guids = list({r[guid_key] for r in rows if r.get(guid_key)})
+    found: dict[str, sqlite3.Row] = {}
+    for i in range(0, len(guids), 500):
+        chunk = guids[i:i + 500]
+        for m in conn.execute(f"SELECT guid, rating_key, thumb FROM media_items WHERE is_present = 1 "
+                              f"AND guid IN ({','.join('?' * len(chunk))}) ORDER BY rating_key", chunk):
+            found[m["guid"]] = m
+    for r in rows:
+        m = found.get(r.get(guid_key))
+        if m is not None:
+            r[id_key] = m["rating_key"]
+            r["thumb"] = m["thumb"] or r.get("thumb")
+    return rows
+
+
 def top(conn: sqlite3.Connection, rng: Range, *, kind: str = "shows", metric: str = "plays", limit: int = 10,
         user_id: int | None = None, library_id: int | None = None) -> dict:
     kind = kind if kind in TOP_KINDS else "shows"
@@ -436,11 +457,13 @@ def top(conn: sqlite3.Connection, rng: Range, *, kind: str = "shows", metric: st
                f"LEFT JOIN users u ON u.id = p.user_id WHERE {w} GROUP BY p.user_id")
     elif kind == "shows":
         sql = (f"SELECT MAX(p.grandparent_rating_key) AS id, p.grandparent_title AS name, MAX(p.thumb) AS thumb, "
+               f"MAX(p.grandparent_guid) AS guid, "
                f"{plays}, COUNT(DISTINCT p.user_id) AS users, MAX(p.started_at) AS last_played FROM plays p "
                f"WHERE {w} AND p.media_type = 'episode' AND p.grandparent_title IS NOT NULL "
                f"GROUP BY COALESCE(p.grandparent_guid, p.grandparent_title)")
     elif kind == "movies":
         sql = (f"SELECT MAX(p.rating_key) AS id, p.title AS name, MAX(p.thumb) AS thumb, MAX(p.year) AS year, "
+               f"MAX(p.guid) AS guid, "
                f"{plays}, COUNT(DISTINCT p.user_id) AS users, MAX(p.started_at) AS last_played FROM plays p "
                f"WHERE {w} AND p.media_type = 'movie' GROUP BY COALESCE(p.guid, p.title)")
     elif kind == "artists":
@@ -452,8 +475,10 @@ def top(conn: sqlite3.Connection, rng: Range, *, kind: str = "shows", metric: st
         sql = (f"SELECT {col} AS id, COALESCE({col}, 'Unknown') AS name, NULL AS thumb, {plays}, "
                f"COUNT(DISTINCT p.user_id) AS users, MAX(p.started_at) AS last_played FROM plays p "
                f"WHERE {w} GROUP BY {col}")
-    rows = conn.execute(f"{sql} ORDER BY {order} LIMIT ?", params + [max(1, min(limit, 100))]).fetchall()
-    return {"kind": kind, "metric": metric, "items": [dict(r) for r in rows]}
+    rows = [dict(r) for r in conn.execute(f"{sql} ORDER BY {order} LIMIT ?", params + [max(1, min(limit, 100))])]
+    if kind in ("shows", "movies"):
+        current_items(conn, rows, id_key="id")
+    return {"kind": kind, "metric": metric, "items": rows}
 
 
 def recently_added(conn: sqlite3.Connection, limit: int = 12) -> list[dict]:

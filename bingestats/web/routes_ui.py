@@ -627,6 +627,9 @@ def library_page(library_id: int):
 
 @bp.route("/item/<int:rating_key>")
 def item_page(rating_key: int):
+    moved = libraries.moved_to(_db(), rating_key)
+    if moved is not None:                 # Plex re-added it under a new key: go to that page
+        return redirect(url_for("ui.item_page", rating_key=moved))
     item = libraries.get_item(_db(), rating_key)
     if item is None:
         return render_template("pages/not_found.html", what="item"), 404
