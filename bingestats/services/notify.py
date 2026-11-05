@@ -49,6 +49,9 @@ TRIGGERS: dict[str, dict] = {
     "transcode_limit": {"label": "Transcode limit reached", "group": "limit"},
     "concurrent_ips": {"label": "Same account, different places", "group": "limit"},
     "new_country": {"label": "Played from a new country", "group": "limit"},
+    "pin_arrived": {"label": "Pinned show arrived", "group": "pins"},
+    "pin_schedule_changed": {"label": "Pinned episode's air date moved", "group": "pins"},
+    "pins_week": {"label": "Pinned shows: the week ahead (Mondays)", "group": "pins"},
 }
 
 DECISION_LABELS = {"direct_play": "Direct Play", "direct_stream": "Direct Stream", "transcode": "Transcode"}
@@ -89,6 +92,9 @@ FIELDS: dict[str, list[tuple]] = {
     "added": [("kind", "What was added", "choice", "added_kinds"), ("library.id", "Library", "choice", "libraries"),
               ("count", "Number of items", "int", None), ("show", "Show or artist", "str", None)],
     "server": [],
+    # One event per person who pinned the show: "Pinned by" picks whose, so each can have their own channel.
+    "pins": [("pinner.id", "Pinned by", "choice", "users"), ("show", "Show", "str", None),
+             ("count", "Number of episodes", "int", None)],
     "limit": [("user.id", "Person", "choice", "users"), ("stopped", "Stream was stopped", "bool", None),
               ("count", "Number of streams", "int", None)],
 }
@@ -322,6 +328,9 @@ def build_context(conn: sqlite3.Connection, trigger: str, event: dict) -> dict:
                "show": event.get("show"), "season": event.get("season"), "count": len(event.get("items") or []),
                "items": event.get("items") or [], "headline": event.get("headline"),
                "_poster": event.get("poster"), "_key": event.get("key")}
+    elif group == "pins":
+        ctx = {k: v for k, v in event.items() if k not in ("poster", "key")}
+        ctx.update(_poster=event.get("poster"), _key=event.get("key"))
     elif group == "limit":
         ctx = session_context(conn, event.get("session") or {})
         d = event.get("detail") or {}
@@ -369,6 +378,24 @@ def _sample_session(trigger: str) -> dict:
     return ctx
 
 
+def _sample_pins(trigger: str) -> dict:
+    who = {"id": 1001, "name": "Sarah"}
+    if trigger == "pin_arrived":
+        items = [{"title": f"Episode {n}", "season": 5, "episode": n, "year": 2026,
+                  "display_title": f"Slow Horses · S05E0{n} · Episode {n}"} for n in (1, 2)]
+        return {"pinner": who, "show": "Slow Horses", "season": 5, "count": 2, "items": items,
+                "headline": "Slow Horses · Season 5 · 2 episodes", "_poster": None, "_key": "sample"}
+    if trigger == "pin_schedule_changed":
+        return {"pinner": who, "show": "Slow Horses", "season": 5, "episode": 4, "code": "S05E04",
+                "title": "Scars", "old_text": "Wed 12 Nov, 21:00", "new_text": "Wed 19 Nov, 21:00", "later": True,
+                "count": 1, "_poster": None, "_key": "sample"}
+    days = [{"label": "Wednesday 12 November", "episodes": [
+                {"show": "Slow Horses", "text": "Slow Horses S05E04 · Scars · 21:00", "count": 1}]},
+            {"label": "Friday 14 November", "episodes": [
+                {"show": "Black Doves", "text": "Black Doves S02E01–E06 · 6 episodes · 09:00", "count": 6}]}]
+    return {"pinner": who, "days": days, "count": 7, "show": None, "_poster": None, "_key": "sample"}
+
+
 def sample_context(trigger: str) -> dict:
     group = TRIGGERS[trigger]["group"]
     if group in ("session", "stop"):
@@ -387,6 +414,8 @@ def sample_context(trigger: str) -> dict:
         ctx = {"kind": "episode", "kind_label": "TV episodes", "library": {"id": 5, "name": "TV Programmes"},
                "show": "Slow Horses", "season": 5, "count": 3, "items": items,
                "headline": "Slow Horses · Season 5 · 3 new episodes", "_poster": None, "_key": "sample"}
+    elif group == "pins":
+        ctx = _sample_pins(trigger)
     else:
         ctx = {"down_for": 754, "error": "Cannot connect", "_poster": None, "_key": "sample"}
     ctx.update(server={"name": "DS9 - Terok Nor"}, trigger=trigger, trigger_label=TRIGGERS[trigger]["label"],

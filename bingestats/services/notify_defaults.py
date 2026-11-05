@@ -66,3 +66,32 @@ LIMIT_RULES = [
         "cooldown_s": 21600,
     },
 ]
+
+
+# Added by migration 12 (pins, stage 3). One event per person who pinned the show; to send each
+# person their own, copy a rule and add the condition "Pinned by is one of <them>" with their channel.
+PIN_RULES = [
+    {
+        "name": "Pinned show arrived",
+        "trigger": "pin_arrived",
+        "title": "{{ headline }} is in Plex",
+        "body": ("{% for i in items[:10] %}• {{ i.display_title }}\n{% endfor %}"
+                 "{% if items | length > 10 %}…and {{ items | length - 10 }} more\n{% endif %}"
+                 "Ready to watch on {{ server.name }}."),
+    },
+    {
+        "name": "Pinned episode moved",
+        "trigger": "pin_schedule_changed",
+        "title": "{{ show }} {{ code }} has moved",
+        "body": "Now {{ new_text }} (was {{ old_text }}).",
+        "include_poster": False,
+    },
+    {
+        "name": "Your week ahead",
+        "trigger": "pins_week",
+        "title": "{{ pinner.name }}'s week: {{ count | plural('episode') }} coming",
+        "body": ("{% for d in days %}{{ d.label }}\n{% for e in d.episodes %}• {{ e.text }}\n{% endfor %}{% endfor %}"),
+        "include_poster": False,
+    },
+]
+

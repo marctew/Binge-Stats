@@ -198,6 +198,30 @@ Per tracked user:
 
 Both are published with the rest of state.
 
+### Stage 3 as built (2026-11-05)
+
+`services/pin_notify.py`, migration v12, the worker loop and `worker/mqtt.py`.
+
+- **Arrived (`pin_arrived`):**
+  - Each TV event from the recently-added digest becomes one event per person who pinned the show (with notify on), carrying only the episodes they haven't been told about.
+  - The key is `ep:<tvdb>:<season>:<episode>` in `pin_notified`, by episode number rather than rating key. A Sonarr upgrade, or Plex re-adding the episode under a new key, can't send it again.
+- **Moved (`pin_schedule_changed`):**
+  - The Sonarr sync and the pin-guides job compare pinned shows' air times before and after reading.
+  - A move of an hour or more, where the old or new time is still to come, is queued in `pin_events` (one per pinner, once per new time). The worker sends it on its next pass.
+  - Context: `show`, `code` (S01E02), `title`, `old_text`, `new_text`, `later`.
+- **The week ahead (`pins_week`):**
+  - Monday from 08:00 in `ui.timezone` (`pins.last_week_at`), once per person per ISO week, and only if something of theirs airs in the next 7 days.
+  - Context: `days` (each with `label` and `episodes`, each with `text`), condensed like the calendar.
+- **Rules:**
+  - The condition field "Pinned by" (`pinner.id`) sends each person their own.
+  - Three default rules ("Pinned show arrived", "Pinned episode moved", "Your week ahead") ship disabled with no channel, like the others.
+  - With no condition, a rule sends everyone's events to its channels, which suits a household channel.
+- **Home Assistant**, per tracked person:
+  - Two sensors read `{base}/user/{id}/pins`.
+  - `{name} next pinned`: "Show S01E02" or `none`; attributes `air_at`, `title`, `state`.
+  - `{name} pinned ready`: episodes of their pinned shows that arrived in Plex in the last 30 days and they haven't finished (by guid); attribute `episodes`.
+  - Worked out at most once a minute.
+
 ## REST API
 
 All read scope, except pin and unpin (write scope). They act for `user_id` (default: the owner).

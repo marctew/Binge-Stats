@@ -22,6 +22,7 @@ from .jobs_runner import JobRunner, schedule_due
 from .downloads import DownloadWatcher
 from .mqtt import MqttBridge
 from .poller import Poller
+from ..services import pin_notify
 from .recently_added import check_recent, digest
 
 log = logging.getLogger("bingestats.worker")
@@ -84,6 +85,13 @@ class Worker:
                 log.info("recent check queued %d new item(s)", n)
         for event in digest(self.conn, now):
             self.on_event("recently_added", event)
+            for pin_event in pin_notify.arrivals(self.conn, event, now):
+                self.on_event(pin_notify.ARRIVED, pin_event)
+        for trigger, pin_event in pin_notify.pending(self.conn, now):     # air dates moved (from the Sonarr sync)
+            self.on_event(trigger, pin_event)
+        if pin_notify.week_due(self.conn, now):
+            for pin_event in pin_notify.week_events(self.conn, now):
+                self.on_event(pin_notify.WEEK, pin_event)
 
     def _setup_plex(self) -> bool:
         url = settings.get(self.conn, "plex.url")

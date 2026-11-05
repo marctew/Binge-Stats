@@ -27,6 +27,7 @@ import queue
 import re
 import sqlite3
 import time
+from datetime import datetime, timezone
 from typing import Any, Callable
 
 from .. import __version__
@@ -35,6 +36,7 @@ from ..services import activity, alerts, settings, stats
 log = logging.getLogger("bingestats.mqtt")
 
 REPUBLISH_S = 60
+PINS_EVERY_S = 60     # next pinned / pinned ready are worked out at most this often
 PAYLOAD_PRESS = "PRESS"
 
 # key, name, component, extra discovery fields
@@ -137,6 +139,19 @@ def _session_attrs(a) -> dict:
             "player": s.player_title or s.product, "progress": round(a.progress_pct)}
 
 
+def pins_state(conn: sqlite3.Connection, user_id: int, now: float) -> dict:
+    """Next pinned episode and how many pinned episodes are waiting, for one person's two sensors."""
+    from ..services import pins
+    nxt = pins.next_up(conn, user_id, now)
+    waiting = pins.ready(conn, user_id, now)
+    code = lambda s, e: f"S{int(s):02d}E{int(e):02d}" if s is not None and e is not None else ""  # noqa: E731
+    return {"next": f"{nxt['show']} {code(nxt['season'], nxt['episode'])}".strip() if nxt else "none",
+            "next_attrs": {"air_at": datetime.fromtimestamp(nxt["air_at"], timezone.utc).isoformat() if nxt else None,
+                           "title": nxt.get("title") if nxt else None, "state": nxt["state"] if nxt else None},
+            "ready": len(waiting),
+            "ready_attrs": {"episodes": [f"{w['show']} {code(w['season'], w['episode'])}".strip() for w in waiting[:20]]}}
+
+
 def user_state(user_id: int, active: list) -> dict:
     mine = [a for a in active if a.user_id == user_id]
     if not mine:
@@ -180,6 +195,20 @@ def discovery(cfg: dict, users: list, server_name: str | None, sab: bool = False
             "object_id": f"binge_stats_{_slug(name)}_watching", "icon": "mdi:television-play",
             "state_topic": f"{base}/user/{uid}", "value_template": "{{ value_json.state }}",
             "json_attributes_topic": f"{base}/user/{uid}", **common}, sort_keys=True)
+        pins_topic = f"{base}/user/{uid}/pins"
+        out[f"{prefix}/sensor/{node}/user_{uid}_next_pinned/config"] = json.dumps({
+            "name": f"{name} next pinned", "unique_id": f"{node}_user_{uid}_next_pinned",
+            "object_id": f"binge_stats_{_slug(name)}_next_pinned", "icon": "mdi:calendar-star",
+            "state_topic": pins_topic, "value_template": "{{ value_json.next }}",
+            "json_attributes_topic": pins_topic, "json_attributes_template": "{{ value_json.next_attrs | tojson }}",
+            **common}, sort_keys=True)
+        out[f"{prefix}/sensor/{node}/user_{uid}_pinned_ready/config"] = json.dumps({
+            "name": f"{name} pinned ready", "unique_id": f"{node}_user_{uid}_pinned_ready",
+            "object_id": f"binge_stats_{_slug(name)}_pinned_ready", "icon": "mdi:television-classic",
+            "state_topic": pins_topic, "value_template": "{{ value_json.ready }}", "state_class": "measurement",
+            "unit_of_measurement": "episodes",
+            "json_attributes_topic": pins_topic, "json_attributes_template": "{{ value_json.ready_attrs | tojson }}",
+            **common}, sort_keys=True)
         out[f"{prefix}/button/{node}/user_{uid}_stop/config"] = json.dumps({
             "name": f"Stop {name}'s streams", "unique_id": f"{node}_user_{uid}_stop",
             "object_id": f"binge_stats_stop_{_slug(name)}", "icon": "mdi:stop-circle-outline",
@@ -191,7 +220,9 @@ def discovery(cfg: dict, users: list, server_name: str | None, sab: bool = False
 def removed_user_topics(cfg: dict, user_id: int) -> list[str]:
     base, prefix, node = cfg["mqtt.base_topic"], cfg["mqtt.discovery_prefix"], _slug(cfg["mqtt.base_topic"])
     return [f"{prefix}/sensor/{node}/user_{user_id}_watching/config",
-            f"{prefix}/button/{node}/user_{user_id}_stop/config", f"{base}/user/{user_id}"]
+            f"{prefix}/sensor/{node}/user_{user_id}_next_pinned/config",
+            f"{prefix}/sensor/{node}/user_{user_id}_pinned_ready/config",
+            f"{prefix}/button/{node}/user_{user_id}_stop/config", f"{base}/user/{user_id}", f"{base}/user/{user_id}/pins"]
 
 
 # -- the bridge -----------------------------------------------------------------------
@@ -220,6 +251,7 @@ class MqttBridge:
         self._just_connected = False
         self._sent: dict[str, str] = {}
         self._last_full = 0.0
+        self._pins_at = 0.0
         self.commands: queue.Queue[int] = queue.Queue()
 
     # paho thread ----------------------------------------------------------------------
@@ -347,6 +379,10 @@ class MqttBridge:
         self._publish(f"{base}/sessions", json.dumps({"sessions": [_session_attrs(a) for a in active]}), force)
         for uid in sorted(live):
             self._publish(f"{base}/user/{uid}", json.dumps(user_state(uid, active), sort_keys=True), force)
+        if force or now - self._pins_at >= PINS_EVERY_S:     # pins change slowly; no need every pass
+            self._pins_at = now
+            for uid in sorted(live):
+                self._publish(f"{base}/user/{uid}/pins", json.dumps(pins_state(self.conn, uid, now), sort_keys=True), force)
 
     def _drain_commands(self, tracked: set[int] | None) -> None:
         while True:

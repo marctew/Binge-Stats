@@ -349,3 +349,36 @@ def for_item(conn: sqlite3.Connection, item: dict, user_id: int | None) -> dict 
     o = outlook_svc.for_shows(conn, [tvdb]).get(tvdb) or {}
     return {"tvdb_id": tvdb, "pinned": tvdb in pinned(conn, user_id), "outlook": o.get("outlook"),
             "next_at": o.get("next_at")}
+
+
+# -- for Home Assistant (and later the API): what's next, and what's waiting ------------------------
+
+READY_DAYS = 30
+
+
+def next_up(conn: sqlite3.Connection, user_id: int, now: float | None = None) -> dict | None:
+    """The next pinned episode still to air (today's later ones count), or None."""
+    now = now or time.time()
+    for ep in _episodes(conn, user_id, int(now), int(now) + 120 * 86400, now, stats._tz(conn)):
+        if ep["state"] in (UPCOMING, AIRING_TODAY):
+            return ep
+    return None
+
+
+def ready(conn: sqlite3.Connection, user_id: int, now: float | None = None, days: int = READY_DAYS) -> list[dict]:
+    """Episodes of this person's pinned shows that arrived in Plex in the last `days` and they haven't
+    finished (by guid, so a re-added file still counts as watched). Newest first."""
+    now = int(now or time.time())
+    tvdb_ids = sorted(pinned(conn, user_id))
+    if not tvdb_ids:
+        return []
+    rows = conn.execute(
+        "SELECT e.rating_key, e.guid, e.title, e.season_index, e.episode_index, e.added_at, s.title AS show, s.tvdb_id "
+        "FROM media_items e JOIN media_items s ON s.rating_key = e.grandparent_rating_key "
+        f"WHERE e.type = 'episode' AND e.is_present = 1 AND s.tvdb_id IN ({','.join('?' * len(tvdb_ids))}) "
+        "AND e.added_at >= ? AND (e.season_index IS NULL OR e.season_index > 0) "
+        "AND NOT EXISTS (SELECT 1 FROM plays p WHERE p.user_id = ? AND p.watched = 1 AND p.guid = e.guid) "
+        "ORDER BY e.added_at DESC, s.title, e.season_index, e.episode_index",
+        [*tvdb_ids, now - days * 86400, user_id]).fetchall()
+    return [{"rating_key": r["rating_key"], "show": r["show"], "tvdb_id": r["tvdb_id"], "season": r["season_index"],
+             "episode": r["episode_index"], "title": r["title"], "added_at": r["added_at"]} for r in rows]

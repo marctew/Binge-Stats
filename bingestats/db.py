@@ -379,7 +379,22 @@ def _m11(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX tmdb_shows_fetched ON tmdb_shows(fetched_at)")
 
 
-MIGRATIONS = [_m1, _m2, _m3, _m4, _m5, _m6, _m7, _m8, _m9, _m10, _m11]
+def _m12(conn: sqlite3.Connection) -> None:
+    """Pin notifications (pins stage 3): events made outside the worker (the Sonarr sync runs in the
+    job thread) wait here for the worker to send; plus three default rules, disabled."""
+    conn.execute("""CREATE TABLE pin_events (
+        id INTEGER PRIMARY KEY, trigger TEXT NOT NULL, payload TEXT NOT NULL,
+        created_at INTEGER NOT NULL, sent_at INTEGER)""")
+    conn.execute("CREATE INDEX pin_events_pending ON pin_events(sent_at)")
+    from .services.notify_defaults import PIN_RULES
+    for r in PIN_RULES:
+        conn.execute(
+            "INSERT INTO notify_rules (name, enabled, trigger, conditions, title_template, body_template, channel_ids, "
+            "cooldown_s, include_poster, created_at) VALUES (?, 0, ?, '[]', ?, ?, '[]', 0, ?, strftime('%s','now'))",
+            (r["name"], r["trigger"], r["title"], r["body"], int(r.get("include_poster", True))))
+
+
+MIGRATIONS = [_m1, _m2, _m3, _m4, _m5, _m6, _m7, _m8, _m9, _m10, _m11, _m12]
 LATEST = len(MIGRATIONS)
 
 
