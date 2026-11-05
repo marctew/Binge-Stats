@@ -10,6 +10,7 @@ services:
       TZ: Europe/London        # your timezone, for "today" and the nightly backup
       PUID: "1000"             # the user that owns ./data
       PGID: "1000"
+      API_PUBLIC: "1"          # 0: refuse /api/v1 and /display requests that came through the Cloudflare tunnel
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8181/api/v1/health', timeout=5)"]

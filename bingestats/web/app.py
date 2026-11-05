@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import os
 import subprocess
+from importlib import import_module
 from datetime import timedelta
 from pathlib import Path
 
@@ -22,6 +23,31 @@ def _git_sha() -> str:
                               cwd=Path(__file__).parent, timeout=2).stdout.strip()
     except Exception:  # noqa: BLE001
         return ""
+
+
+def _install_api(app: Flask) -> None:
+    """The outside API standard's gate (api_core): tokens, limits, ETags and the meta registry."""
+    import hmac
+
+    from flask import request, session
+
+    from ..services import api_tokens, settings
+    from . import api_core
+    from .routes_api import _err
+
+    def csrf_ok() -> bool:
+        sent = request.headers.get("X-CSRF-Token", "")
+        return bool(sent) and hmac.compare_digest(sent, session.get("csrf", ""))
+
+    api_core.init_api(
+        app, name="binge-stats", title="Binge Stats", version=__version__, sha=lambda: app.config["BS_SHA"],
+        accent="violet", icon="/static/img/icon.svg",
+        time_zone=lambda: settings.get(app.get_db(), "ui.timezone"),
+        check_token=lambda t: api_tokens.check(app.get_db(), t),
+        is_admin_session=lambda: bool(session.get("admin")),
+        csrf_ok=csrf_ok,
+        legacy_error=lambda code, message, status: _err(code, message, status),
+    ).open_endpoints.add("api.health")
 
 
 def build_app(data_dir: str | None = None, *, testing: bool = False) -> Flask:
@@ -74,6 +100,8 @@ def build_app(data_dir: str | None = None, *, testing: bool = False) -> Flask:
     from .routes_ui import bp as ui_bp
 
     install_auth(app)
+    _install_api(app)
+    import_module(".routes_api_std", __package__)  # the API standard's routes, added to the api blueprint
     app.register_blueprint(auth_bp)
     app.register_blueprint(ui_bp)
     app.register_blueprint(img_bp)

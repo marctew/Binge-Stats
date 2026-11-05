@@ -12,7 +12,8 @@ from functools import wraps
 from flask import Blueprint, current_app, jsonify, request, session
 
 from ..plex.client import PlexError
-from ..services import (activity, alerts, api_tokens, arr, binges, collection, completion, history, insights, libraries,
+from . import api_core
+from ..services import (activity, alerts, arr, binges, collection, completion, history, insights, libraries,
                         playback, settings, stats)
 
 bp = Blueprint("api", __name__, url_prefix="/api/v1")
@@ -27,23 +28,21 @@ def _db():
 
 
 def require(scope: str):
+    """Scope check for Binge's own /api/v1 routes, which keep their {"error": {"code", "message"}} shape.
+    Who's asking (header token, ?token= read token, or the admin session) is worked out by api_core."""
     def deco(fn):
         @wraps(fn)
         def wrapper(*a, **kw):
-            auth = request.headers.get("Authorization", "")
-            if auth.startswith("Bearer "):
-                tok = api_tokens.check(_db(), auth[7:])
-                if tok is None:
-                    return _err("unauthorised", "Unknown API token", 401)
-                if scope == "write" and tok["scope"] != "write":
+            who = api_core.identity()
+            if who is None:
+                return _err("unauthorised", "Send Authorization: Bearer <token>", 401)
+            if scope == "write":
+                if who.scope != "write":
                     return _err("forbidden", "This token is read-only", 403)
-            elif session.get("admin"):
-                if scope == "write":
+                if who.kind == "session":
                     sent = request.headers.get("X-CSRF-Token", "")
                     if not sent or not hmac.compare_digest(sent, session.get("csrf", "")):
                         return _err("csrf", "Missing CSRF token", 400)
-            else:
-                return _err("unauthorised", "Send Authorization: Bearer <token>", 401)
             return fn(*a, **kw)
         return wrapper
     return deco
