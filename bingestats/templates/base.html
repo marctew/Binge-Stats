@@ -24,10 +24,10 @@
                ('ui.settings_page', 'Settings', 'settings', ['ui.settings_page', 'ui.import_page', 'ui.job_page'])] %}
 {% set viewer = session.get('viewer') %}
 {% if sab_configured and not viewer %}{% set nav = nav[:2] + [('ui.downloads_page', 'Downloads', 'download', ['ui.downloads_page'])] + nav[2:] %}{% endif %}
-{% if sonarr_configured and not viewer %}{% set nav = nav[:1] + [('pins.calendar_page', 'Calendar', 'calendar', ['pins.calendar_page'])] + nav[1:] %}{% endif %}
+{% if sonarr_configured and not viewer %}{% set nav = nav[:1] + [('pins.calendar_page', 'Calendar', 'calendar', ['pins.calendar_page']), ('pins.shows_page', 'Shows', 'tv', ['pins.shows_page'])] + nav[1:] %}{% endif %}
 {% set home_ep = 'me.home' if viewer else 'ui.index' %}
 {% if viewer %}
-{% set nav = [('me.home', 'Home', 'home', ['me.home'])] + ([('me.calendar_page', 'Calendar', 'calendar', ['me.calendar_page'])] if sonarr_configured else []) + [('me.history_page', 'History', 'history', ['me.history_page']),
+{% set nav = [('me.home', 'Home', 'home', ['me.home'])] + ([('me.calendar_page', 'Calendar', 'calendar', ['me.calendar_page']), ('me.shows_page', 'Shows', 'tv', ['me.shows_page'])] if sonarr_configured else []) + [('me.history_page', 'History', 'history', ['me.history_page']),
                ('me.wrapped_page', 'Wrapped', 'bulb', ['me.wrapped_page']), ('me.account', 'Account', 'user', ['me.account'])] %}
 {% endif %}
 <div class="lg:pl-64">

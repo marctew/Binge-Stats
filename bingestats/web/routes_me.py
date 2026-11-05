@@ -123,6 +123,24 @@ def calendar_page():
     return render_calendar(_uid(), viewer=True)
 
 
+@bp.route("/shows")
+def shows_page():
+    from .routes_pins import render_shows
+    return render_shows(_uid(), viewer=True)
+
+
+@bp.route("/shows/pin-all", methods=["POST"])
+def shows_pin_all():
+    from .routes_pins import do_pin_all
+    return do_pin_all(_uid(), viewer=True)
+
+
+@bp.route("/shows/undo", methods=["POST"])
+def shows_undo():
+    from .routes_pins import do_undo
+    return do_undo(_uid(), viewer=True)
+
+
 @bp.route("/calendar/body")
 def calendar_body():
     from .routes_pins import render_calendar

@@ -152,6 +152,14 @@ All admin pages also work as viewer pages under `me`, scoped to `session["viewer
   - **URL:** filters live in the query string.
   - **Pin all shown:** posts the query string, not ids, re-runs the filter on the server, and asks first with the count. "Undo last bulk pin" uses `pins.batch`.
   - **Phones:** the facet rail becomes a sheet.
+  - **As built (2026-11-05, P2 step 3)** in `services/shows.py`, `templates/pages/shows.html`:
+    - **Which shows:** every show with a TVDB id, from Plex or Sonarr (Sonarr-only shows count as library "Not in Plex").
+    - **Filters:** genre is Sonarr's genres plus TMDB's. Network is Sonarr's, else TMDB's first.
+    - **"Recently watched"** is your own plays, matched to the show by guid or rating key.
+    - **"Pin all"** only appears once something is filtered, and asks first with the count. "Undo last bulk pin" removes the newest batch.
+    - **Updating:** changing a filter swaps the page in place and keeps the URL short (empty fields left out). The search box keeps focus. A pin reloads the counts.
+    - **Pin icons:** on posters, a pinned show's icon is a filled circle.
+    - **In the nav** next to Calendar, while Sonarr is set up, and linked from the calendar's search box.
 - **Item page (show):** a pin toggle; outlook badge; the next episode and its state.
 - **`/me/calendar`, `/me/shows`:** the same templates, on the viewer's own pins.
 - **Lists** (tabs on `/calendar`):

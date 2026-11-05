@@ -6,9 +6,10 @@ two can't drift apart. Routes stay thin: everything is in services/pins.py.
 """
 from __future__ import annotations
 
-from flask import Blueprint, abort, current_app, redirect, render_template, request, url_for
+from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, url_for
 
 from ..services import arr, pins
+from ..services import shows as shows_svc
 
 bp = Blueprint("pins", __name__)
 
@@ -45,8 +46,9 @@ def do_toggle(user_id: int | None, tvdb_id: int, *, viewer: bool):
         abort(404, str(e))
     if request.headers.get("HX-Request"):
         # pins-changed: the calendar reloads its body and search results, so a new pin shows at once
-        return render_template("partials/pin_button.html", tvdb_id=tvdb_id, pinned=now_pinned, viewer=viewer,
-                               compact=request.args.get("compact") == "1"), {"HX-Trigger": "pins-changed"}
+        html = render_template("partials/pin_button.html", tvdb_id=tvdb_id, pinned=now_pinned, viewer=viewer,
+                               compact=request.args.get("compact") == "1", overlay=request.args.get("overlay") == "1")
+        return html, {"HX-Trigger": "pins-changed"}
     nxt = request.form.get("next") or ""
     home = url_for("me.calendar_page" if viewer else "pins.calendar_page")
     if viewer and not nxt.startswith("/me"):
@@ -72,3 +74,52 @@ def find():
 @bp.route("/pins/<int:tvdb_id>", methods=["POST"])
 def toggle(tvdb_id: int):
     return do_toggle(pins.owner_id(_db()), tvdb_id, viewer=False)
+
+
+# -- the shows browser -----------------------------------------------------------------------
+
+def _ep(viewer: bool, name: str) -> str:
+    return f"me.{name}" if viewer else f"pins.{name}"
+
+
+def render_shows(user_id: int | None, *, viewer: bool):
+    if user_id is None:
+        return render_calendar(None, viewer=viewer)          # says why: no owner to pin for
+    f = shows_svc.Filter.from_args(request.args)
+    data = shows_svc.browse(_db(), user_id, f)
+    return render_template("pages/shows.html", d=data, f=f, viewer=viewer, sorts=shows_svc.SORTS,
+                           shows_ep=_ep(viewer, "shows_page"), pin_all_ep=_ep(viewer, "shows_pin_all"),
+                           undo_ep=_ep(viewer, "shows_undo"))
+
+
+def do_pin_all(user_id: int | None, *, viewer: bool):
+    if user_id is None:
+        abort(409, "Pins need the Plex server owner in Users. Sync users from Settings first.")
+    f = shows_svc.Filter.from_args(request.form)
+    n = shows_svc.pin_all(_db(), user_id, f)
+    flash(f"Pinned {n:,} show{'s' if n != 1 else ''}" if n else "They were all pinned already", "ok")
+    return redirect(url_for(_ep(viewer, "shows_page"), **f.query()))
+
+
+def do_undo(user_id: int | None, *, viewer: bool):
+    if user_id is None:
+        abort(409)
+    n = shows_svc.undo_last(_db(), user_id)
+    flash(f"Unpinned the {n:,} show{'s' if n != 1 else ''} from the last bulk pin" if n else "Nothing to undo", "ok")
+    f = shows_svc.Filter.from_args(request.form)
+    return redirect(url_for(_ep(viewer, "shows_page"), **f.query()))
+
+
+@bp.route("/shows")
+def shows_page():
+    return render_shows(pins.owner_id(_db()), viewer=False)
+
+
+@bp.route("/shows/pin-all", methods=["POST"])
+def shows_pin_all():
+    return do_pin_all(pins.owner_id(_db()), viewer=False)
+
+
+@bp.route("/shows/undo", methods=["POST"])
+def shows_undo():
+    return do_undo(pins.owner_id(_db()), viewer=False)

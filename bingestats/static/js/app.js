@@ -82,3 +82,17 @@ document.addEventListener("alpine:init", () => {
     };
   });
 });
+
+// Filter forms marked data-tidy-query leave out empty fields (and defaults named in the
+// attribute, e.g. "sort=recent"), so the address bar and bookmarks stay short.
+document.addEventListener("htmx:configRequest", (e) => {
+  const form = e.detail.elt;
+  if (!form.matches || !form.matches("form[data-tidy-query]")) return;
+  const defaults = new Set((form.dataset.tidyQuery || "").split(" ").filter(Boolean));
+  const p = e.detail.formData;
+  for (const k of [...new Set(p.keys())]) {
+    const keep = p.getAll(k).filter((v) => v !== "" && !defaults.has(`${k}=${v}`));
+    p.delete(k);
+    keep.forEach((v) => p.append(k, v));
+  }
+});

@@ -14,7 +14,10 @@
 
 {% if cal %}
 <section class="card p-4 sm:p-5">
-  <label for="pin-q" class="label">Pin a show</label>
+  <div class="flex items-baseline justify-between gap-3">
+    <label for="pin-q" class="label">Pin a show</label>
+    <a href="{{ url_for('me.shows_page' if viewer else 'pins.shows_page') }}" class="text-xs text-muted hover:text-accent">Browse all shows →</a>
+  </div>
   <input id="pin-q" name="q" type="search" class="input mt-1 w-full" placeholder="Search Plex and Sonarr by title" autocomplete="off"
          hx-get="{{ find_url }}" hx-trigger="input changed delay:300ms, search, pins-changed from:body" hx-target="#pin-results">
   <div id="pin-results"></div>
