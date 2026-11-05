@@ -57,7 +57,7 @@ def test_ready(lib):
 
 def test_retire_groups_undo(lib):
     groups = {g["key"]: [s["title"] for s in g["shows"]] for g in pin_lists.retire(lib, OWNER, NOW)}
-    assert groups == {"finished": ["Done And Dusted"], "cold": ["Sonarr Only"]}   # Pinned Show has 2 waiting
+    assert groups == {"finished": ["Done And Dusted"]}      # Pinned Show was watched 10 days ago; Sonarr Only isn't in Plex
     lib.execute("UPDATE pins SET notify = 0 WHERE tvdb_id = 777")
     assert pin_lists.retire_group(lib, OWNER, "finished", now=NOW) == 1
     assert pins.pinned(lib, OWNER) == {111, 222}
@@ -69,9 +69,17 @@ def test_retire_groups_undo(lib):
     assert pin_lists.last_retired(lib, OWNER) is None and pin_lists.undo_retire(lib, OWNER) == 0
 
 
-def test_recently_pinned_isnt_cold(lib):
-    pins.pin(lib, ALEX, 222, now=NOW - 5 * D)
-    assert pin_lists.retire(lib, ALEX, NOW) == []
+def test_gone_cold_means_stopped_part_way(lib):
+    lib.execute("UPDATE plays SET started_at = started_at - 400 * 86400 WHERE grandparent_rating_key = 10")
+    [g] = [g for g in pin_lists.retire(lib, OWNER, NOW) if g["key"] == "cold"]
+    assert [(s["title"], s["waiting"]) for s in g["shows"]] == [("Pinned Show", 2)]
+    for t in (102, 103):                                                    # catch up: up to date and waiting
+        lib.execute("INSERT INTO plays (server_id, user_id, started_at, stopped_at, play_s, media_type, title, guid, "
+                    "grandparent_guid, grandparent_rating_key, watched) VALUES (1, ?, ?, ?, 60, 'episode', 'x', ?, "
+                    "'plex://show/p', 10, 1)", (OWNER, int(NOW) - 400 * D, int(NOW) - 400 * D + 60, f"plex://ep/{t - 100}"))
+    assert all(g["key"] != "cold" for g in pin_lists.retire(lib, OWNER, NOW))   # for a new season is what pins are for
+    pins.pin(lib, ALEX, 111, now=NOW - 5 * D)
+    assert pin_lists.retire(lib, ALEX, NOW) == []                           # pinned recently, never played: not yet
 
 
 def test_discover(lib):
@@ -83,7 +91,7 @@ def test_discover(lib):
 
 
 def test_counts(lib):
-    assert pin_lists.counts(lib, OWNER, NOW) == {"ready": 1, "retire": 2, "discover": 1}
+    assert pin_lists.counts(lib, OWNER, NOW) == {"ready": 1, "retire": 1, "discover": 1}
 
 
 def test_discover_nudge_once(lib):
@@ -136,11 +144,11 @@ def site(logged_in, app_conn):
 
 def test_pages(site, app_conn):
     cal = site.get("/calendar").data.decode()
-    assert 'href="/calendar/ready"' in cal and "Ready (1)" in cal and "Retire (2)" in cal and "Discover (1)" in cal
+    assert 'href="/calendar/ready"' in cal and "Ready (1)" in cal and "Retire (1)" in cal and "Discover (1)" in cal
     ready = site.get("/calendar/ready").data.decode()
     assert "Next S01E02" in ready and "2 waiting" in ready and 'href="/item/102"' in ready
     retire = site.get("/calendar/retire").data.decode()
-    assert "Finished" in retire and "Gone cold" in retire and "Unpin it" in retire
+    assert "Finished" in retire and "Unpin it" in retire
     assert "Unpinned" in site.get("/calendar/discover").data.decode()
     r = site.post("/calendar/retire/finished")
     assert r.status_code == 302 and 777 not in pins.pinned(app_conn, OWNER)
