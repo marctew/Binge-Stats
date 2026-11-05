@@ -293,6 +293,138 @@ def standard(scope: str = "read"):
     return deco
 
 
+# -- images (API standard section 6) ---------------------------------------------------------------
+
+IMAGE_WIDTHS = (80, 160, 320, 640, 1280)
+IMAGE_MAX_AGE = 86400
+IMAGE_CACHE_BYTES = 500 * 1024 * 1024
+
+
+def snap(n: int) -> int:
+    return next((w for w in IMAGE_WIDTHS if w >= n), IMAGE_WIDTHS[-1])
+
+
+@dataclass(frozen=True)
+class ImageAsk:
+    """What a reader asked for, after snapping and clamping."""
+    width: int | None
+    height: int | None
+    fmt: str               # webp | jpeg
+    quality: int
+    gray: bool
+
+    @property
+    def box(self) -> int:
+        """The size to fetch the original at: the snapped width (or height)."""
+        return self.width or self.height or 320
+
+    def key(self, kind: str, ident: str) -> str:
+        import hashlib
+        raw = f"{kind}|{ident}|{self.width}|{self.height}|{self.fmt}|{self.quality}|{int(self.gray)}"
+        return hashlib.sha256(raw.encode()).hexdigest()[:40]
+
+
+def image_ask(args, accept: str) -> ImageAsk:
+    def num(name):
+        try:
+            return int(args.get(name) or 0) or None
+        except ValueError:
+            return None
+    w, h = num("w"), num("h")
+    w = snap(w) if w else None
+    h = snap(h) if h and not w else None
+    if not w and not h:
+        w = 320
+    fmt = (args.get("fmt") or "").lower()
+    if fmt not in ("webp", "jpeg"):
+        fmt = "webp" if "image/webp" in (accept or "") else "jpeg"
+    q = num("q") or 80
+    return ImageAsk(w, h, fmt, max(40, min(95, q)), args.get("gray") in ("1", "true"))
+
+
+def render_image(original: bytes, ask: ImageAsk) -> bytes:
+    """Resize (never up), optionally greyscale, and encode."""
+    import io
+
+    from PIL import Image, ImageOps
+    with Image.open(io.BytesIO(original)) as im:
+        im = ImageOps.exif_transpose(im)
+        if ask.gray:
+            im = im.convert("L")
+        elif im.mode not in ("RGB", "L"):
+            im = im.convert("RGBA" if ask.fmt == "webp" and "A" in im.getbands() else "RGB")
+        if ask.width and im.width > ask.width:
+            im = im.resize((ask.width, max(1, round(im.height * ask.width / im.width))), Image.LANCZOS)
+        elif ask.height and im.height > ask.height:
+            im = im.resize((max(1, round(im.width * ask.height / im.height)), ask.height), Image.LANCZOS)
+        if ask.fmt == "jpeg" and im.mode == "RGBA":
+            im = im.convert("RGB")
+        out = io.BytesIO()
+        im.save(out, "WEBP" if ask.fmt == "webp" else "JPEG", quality=ask.quality,
+                **({"optimize": True, "progressive": True} if ask.fmt == "jpeg" else {"method": 4}))
+        return out.getvalue()
+
+
+def image_response(cache_dir, kind: str, ident: str, fetch: Callable[[int], bytes | None]):
+    """GET /api/v1/images/<kind>/<id>: from the disk cache, else `fetch(box)` (the original, at
+    least `box` wide, fetched with the app's own credentials) resized here. 404 if there's none."""
+    from pathlib import Path
+
+    from flask import send_file
+    ask = image_ask(request.args, request.headers.get("Accept", ""))
+    d = Path(cache_dir)
+    d.mkdir(parents=True, exist_ok=True)
+    key = ask.key(kind, ident)
+    path = d / f"{key}.{'webp' if ask.fmt == 'webp' else 'jpg'}"
+    if not path.exists():
+        try:
+            original = fetch(ask.box)
+        except Exception:  # noqa: BLE001 - any failure upstream is just "no image"
+            original = None
+        if not original:
+            return ApiCore.error("not_found", "There's no image for that.", 404)
+        try:
+            data = render_image(original, ask)
+        except Exception:  # noqa: BLE001 - not an image we can read
+            return ApiCore.error("not_found", "There's no image for that.", 404)
+        tmp = path.with_suffix(".tmp")
+        tmp.write_bytes(data)
+        os.replace(tmp, path)
+    resp = send_file(path, mimetype=f"image/{ask.fmt}", conditional=True, etag=key, max_age=IMAGE_MAX_AGE)
+    resp.headers["Cache-Control"] = f"public, max-age={IMAGE_MAX_AGE}"
+    resp.headers["Vary"] = "Accept"
+    return resp
+
+
+def prune_image_cache(cache_dir, max_bytes: int = IMAGE_CACHE_BYTES) -> int:
+    """Delete the oldest files (by mtime) until the cache is under max_bytes. Returns how many went.
+    Run from a background job, never in a request."""
+    from pathlib import Path
+    d = Path(cache_dir)
+    if not d.is_dir():
+        return 0
+    files = []
+    for p in d.iterdir():
+        try:
+            st = p.stat()
+        except OSError:
+            continue
+        if p.is_file():
+            files.append((st.st_mtime, st.st_size, p))
+    total = sum(f[1] for f in files)
+    gone = 0
+    for _mtime, size, p in sorted(files):
+        if total <= max_bytes:
+            break
+        try:
+            p.unlink()
+        except OSError:
+            continue
+        total -= size
+        gone += 1
+    return gone
+
+
 def cached(resp, refresh_s: int):
     """Cache-Control for status and feeds: private, half the refresh interval."""
     resp.headers["Cache-Control"] = f"private, max-age={max(0, refresh_s // 2)}"

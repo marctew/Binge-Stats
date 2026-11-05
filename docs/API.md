@@ -21,6 +21,8 @@ Binge has two kinds of route under `/api/v1/`:
 |---|---|---|
 | GET | `/meta` | Who Binge is and what it offers: `app`, `name`, `version`, `sha`, `api` (1), `accent`, `icon`, `time_zone`, and the lists `feeds`, `actions`, `displays`, `events` (empty until later stages) |
 | GET | `/status` | The one-glance summary, below. `Cache-Control: private, max-age=7` |
+| GET | `/feeds/{name}` | A list in the common item shape, below |
+| GET | `/images/{kind}/{id}` | Artwork, resized here: `poster/{rating_key}`, `art/{rating_key}`, `show/{tvdb_id}` |
 
 **`/status`**, from the database only (it never waits on Plex or the *arrs):
 
@@ -39,6 +41,33 @@ Binge has two kinds of route under `/api/v1/`:
 - `state`: `error` (Plex not set up, Plex down, or the worker not running; the headline says which), else `warning` (unacknowledged alerts, or Sonarr, Radarr, SABnzbd or TMDB failed its last read; `detail` says what), else `busy` (an import or other long job is running), else `ok`.
 - `headline` is what's playing ("Nothing playing" when nothing is) unless `state` is `error`.
 - `counts` keys are fixed: a Home Assistant REST sensor can read `counts[key=...]`. `alerts` has `"tone": "warning"` when above 0. `downloads` is TV and film jobs in SABnzbd's queue; `pins_ready` is episodes waiting for the Plex owner.
+
+### Feeds
+
+Every feed answers `{"feed", "title", "items", "next_cursor", "generated_at", "refresh_s"}` and takes `limit` (default 20, max 100). Feeds ordered by time also take `since` (ISO time: items after it) and `cursor` (the last page's `next_cursor`). `Cache-Control` is half of `refresh_s`.
+
+Every item has `id` and `title`; any of `subtitle`, `at` (UTC, `...Z`), `at_label` ("Today 19:12", "Sat 7 Nov", "in 2 h", written in Binge's timezone), `tone` (`accent`, `success`, `warning`, `danger`), `image`, `url` and `meta` may be there. Fields with no value are left out.
+
+| Feed | Items | `refresh_s` | Params | `meta` |
+|---|---|---|---|---|
+| `now_playing` | Each stream: title, subtitle "S05E03 · Ep · User · Player", `at` = started, `tone: warning` when transcoding | 10 | — | `user_id`, `user_name`, `progress_pct`, `state`, `decision`, `bandwidth_kbps`, `player`, `rating_key`, `media_type` |
+| `arrivals` | Newest first: films, albums, and episodes of one season added within 6 hours of each other as one item ("Season 5 · 3 new episodes") | 300 | `kind=movie\|show\|album`, `since`, `cursor` | `kind`, `rating_key`, `library_id`, and for shows `show_id`, `show_title`, `season`, `episode`, `episodes` |
+| `history` | Finished plays, newest first; `at` = stopped | 60 | `user_id`, `kind=movie\|episode\|track`, `since`, `cursor` | `user_id`, `user_name`, `rating_key`, `media_type`, `play_s`, `decision`, `player`, `watched` |
+| `alerts` | Unacknowledged alerts, newest first | 60 | `all=1` for acknowledged ones too, `since`, `cursor` | `alert_id`, `kind`, `user_id`, `acknowledged` |
+| `downloads` | SABnzbd's TV and film jobs, in queue order; `at` = SABnzbd's finish estimate; `tone: warning` when stalled | 30 | — | `nzo_id`, `pct`, `eta_s`, `stalled`, `size_mb`, `category`, `app`, `pinned`, `rating_key` |
+| `pins_schedule` | Pinned episodes in air order; `at` = air time | 300 | `user_id`, `days` (0–60, 7), `back` (0–30, 1) | `tvdb_id`, `code`, `season`, `episode`, `state`, `downloading_pct`, `stalled`, `rating_key` |
+| `pins_ready` | Per pinned show, the next episode to watch, newest arrival first | 300 | `user_id` | `tvdb_id`, `next`, `next_rating_key`, `waiting`, `new` |
+
+`user_id` on the pins feeds defaults to the Plex server owner.
+
+### Images
+
+`GET /api/v1/images/poster/{rating_key}?w=320`. An episode or season gets its show's poster, a track its album's. `art/{rating_key}` is the background art; `show/{tvdb_id}` is a pinned show's poster from Plex, else Sonarr.
+
+- `w=` (or `h=`) snaps to 80, 160, 320, 640 or 1280. Images are never made bigger than the original.
+- WebP if the request's `Accept` lists `image/webp`, else JPEG (for ESP32 decoders). `fmt=webp|jpeg` forces one, `q=40..95` sets the quality (80), `gray=1` gives greyscale for e-ink.
+- `Cache-Control: public, max-age=86400` and an `ETag`. They're cached in `/data/image-cache/`; the worker trims it, oldest first, above 500 MB.
+- An image path in a feed works with the same token the feed was read with, URL token included. Images don't count towards the rate limit.
 
 Home Assistant:
 
