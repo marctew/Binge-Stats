@@ -1,0 +1,62 @@
+{# The calendar's month view: show names in each day cell (a grid on wider screens, a list of days on
+   phones, where seven columns are too narrow for names). Stepping months swaps only this section. #}
+{% from "macros/media.html" import section_title, episode_row %}
+{% from "macros/icons.html" import icon %}
+{% set month_ep = 'me.calendar_month' if viewer else 'pins.calendar_month' %}
+{% set dot = {'available': 'bg-success', 'on_disk': 'bg-info', 'downloading': 'bg-info', 'airing_today': 'bg-accent',
+              'awaiting': 'bg-warning', 'missing': 'bg-danger'} %}
+<section id="cal-month">
+  <div class="mb-3 mt-8 flex items-center justify-between gap-3">
+    <h2 class="text-lg font-semibold">{{ mon.title }}</h2>
+    <div class="flex items-center gap-1">
+      {% if not mon.is_this_month %}<button type="button" class="btn-ghost py-1.5 text-sm" hx-get="{{ url_for(month_ep) }}" hx-target="#cal-month" hx-swap="outerHTML">This month</button>{% endif %}
+      <button type="button" class="btn-icon" aria-label="Previous month" hx-get="{{ url_for(month_ep, m=mon.prev) }}" hx-target="#cal-month" hx-swap="outerHTML">{{ icon('chevron-down', 'h-4 w-4 rotate-90') }}</button>
+      <button type="button" class="btn-icon" aria-label="Next month" hx-get="{{ url_for(month_ep, m=mon.next) }}" hx-target="#cal-month" hx-swap="outerHTML">{{ icon('chevron-down', 'h-4 w-4 -rotate-90') }}</button>
+    </div>
+  </div>
+
+  <div class="card hidden overflow-hidden sm:block">
+    <div class="grid grid-cols-7 border-b border-border bg-surface-2/40 text-center text-xs font-semibold uppercase tracking-wide text-muted">
+      {% for d in ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] %}<div class="py-2">{{ d }}</div>{% endfor %}
+    </div>
+    {% for week in mon.weeks %}
+    <div class="grid grid-cols-7 divide-x divide-border{{ ' border-t border-border' if not loop.first }}">
+      {% for day in week %}
+      <div class="min-h-[6.5rem] min-w-0 p-1.5{{ ' bg-surface-2/20' if not day.in_month }}">
+        <div class="mb-1 flex justify-end">
+          <span class="flex h-6 w-6 items-center justify-center rounded-full text-xs tabular-nums {{ 'bg-accent font-semibold text-white' if day.today else ('text-muted' if day.in_month else 'text-faint') }}">{{ day.date.day }}</span>
+        </div>
+        {% set eps = day.episodes %}
+        {% for e in eps[:3] %}
+        {% set href = None if viewer else (url_for('ui.item_page', rating_key=e.rating_key) if e.rating_key else (url_for('ui.item_page', rating_key=e.show_rating_key) if e.show_rating_key else None)) %}
+        {% set tip = e.show ~ ' S%02dE%02d' % (e.season, e.episode) ~ ' · ' ~ e.label ~ ' · ' ~ (e.air_at | localtime('%H:%M')) %}
+        {% if href %}<a href="{{ href }}" title="{{ tip }}" class="flex items-center gap-1.5 truncate rounded px-1 py-0.5 text-xs hover:bg-surface-2{{ ' opacity-60' if not day.in_month }}">
+        {% else %}<div title="{{ tip }}" class="flex items-center gap-1.5 truncate rounded px-1 py-0.5 text-xs{{ ' opacity-60' if not day.in_month }}">{% endif %}
+          <span class="h-1.5 w-1.5 shrink-0 rounded-full {{ dot.get(e.state, 'bg-faint') }}"></span><span class="truncate">{{ e.show }}</span>
+        {% if href %}</a>{% else %}</div>{% endif %}
+        {% endfor %}
+        {% if eps | length > 3 %}<div class="px-1 text-[11px] text-muted" title="{{ eps[3:] | map(attribute='show') | join(', ') }}">+{{ eps | length - 3 }} more</div>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="card divide-y divide-border sm:hidden">
+    {% for day in mon.days %}{% for e in day.episodes %}
+    {% set href = None if viewer else (url_for('ui.item_page', rating_key=e.rating_key) if e.rating_key else (url_for('ui.item_page', rating_key=e.show_rating_key) if e.show_rating_key else None)) %}
+    <{{ 'a' if href else 'div' }}{% if href %} href="{{ href }}"{% endif %} class="flex items-center gap-3 px-4 py-2 text-sm">
+      <span class="w-12 shrink-0 text-xs tabular-nums {{ 'font-semibold text-accent' if day.today else 'text-muted' }}">{{ day.date.strftime('%a %-d') if loop.first else '' }}</span>
+      <span class="h-1.5 w-1.5 shrink-0 rounded-full {{ dot.get(e.state, 'bg-faint') }}"></span>
+      <span class="min-w-0 flex-1 truncate">{{ e.show }}</span>
+      <span class="shrink-0 text-xs text-muted">S{{ '%02d' % e.season }}E{{ '%02d' % e.episode }}</span>
+    </{{ 'a' if href else 'div' }}>
+    {% endfor %}{% endfor %}
+  </div>
+  <div class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
+    {% for state, label in [('available', 'In Plex'), ('downloading', 'Downloading or downloaded'), ('airing_today', 'Today'), ('awaiting', 'Expected'), ('missing', 'Missing'), ('upcoming', 'Upcoming')] %}
+    <span class="flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full {{ dot.get(state, 'bg-faint') }}"></span>{{ label }}</span>
+    {% endfor %}
+  </div>
+  {% if not mon.count %}<div class="card mt-3 p-6 text-center text-sm text-faint sm:mt-0 sm:hidden">Nothing you've pinned airs in {{ mon.title }}.</div>{% endif %}
+</section>

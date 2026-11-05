@@ -146,6 +146,11 @@ Port Pinnarr's engine (SPEC.md section 10 there) and its tests as they are, incl
 All admin pages also work as viewer pages under `me`, scoped to `session["viewer"]`. The admin's pins are the owner's.
 
 - **`/calendar`** (sidebar, under Dashboard): the next 14 days as an agenda (poster, show, episode, state badge, download % when downloading). Then "Aired, not arrived" (`awaiting` and `missing`). Then a month grid that names the shows on each day, linking to the item page. Then "Announced", "In production" and "Dormant" (collapsed). Empty state: "Pin some shows" with a link to `/shows`.
+  - **Month view, as built (2026-11-05, P2 done):** a "Month" section after "Coming up" (`partials/calendar_month.html`, `pins.month`).
+    - **Desktop:** a Monday-first grid. Each day names up to three shows, with a dot coloured by state, then "+N more". Each name links to the episode, else the show (admin only).
+    - **Phones:** one compact line per episode (day, dot, show, SxxEyy), since seven columns are too narrow for names.
+    - **Moving between months:** ‹ › and "This month" swap only the section (`/calendar/month?m=YYYY-MM`, `/me/calendar/month`).
+    - **Shared logic:** the month view uses the same episode logic as the agenda (`pins._episodes`), so they can't disagree.
 - **`/shows`**: the shows browser. Poster grid, 60 per page.
   - **Facets:** library, outlook, Sonarr status, genre, network, pinned. AND across facets, OR within one. Each facet's counts are worked out with that facet left out.
   - **Sort:** recently watched (by you), title, next airing, outlook.

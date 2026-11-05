@@ -14,7 +14,7 @@ import json
 import sqlite3
 import time
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 from . import settings, stats
 
@@ -174,6 +174,72 @@ def _day_label(d, today) -> str:
     return d.strftime("%A %-d %B")
 
 
+def _episodes(conn: sqlite3.Connection, user_id: int, start: int, end: int, now: float, tz) -> list[dict]:
+    """Pinned episodes airing in [start, end), with their state, in air order. Specials and episodes
+    Sonarr isn't fetching are left out unless the settings say to show them."""
+    show_specials = bool(settings.get(conn, "pins.show_specials"))
+    show_unmonitored = bool(settings.get(conn, "pins.show_unmonitored"))
+    tvdb_ids = sorted(pinned(conn, user_id))
+    shows = _shows(conn, tvdb_ids)
+    by_series = {s["series_id"]: s for s in shows.values() if s.get("series_id")}
+    if not by_series:
+        return []
+    plex = _in_plex(conn, tvdb_ids)
+    dl = downloading(conn)
+    rows = conn.execute(
+        f"SELECT * FROM sonarr_episodes WHERE series_id IN ({','.join('?' * len(by_series))}) "
+        "AND air_at >= ? AND air_at < ? ORDER BY air_at, season, episode", [*by_series, start, end]).fetchall()
+    out = []
+    for r in rows:
+        s = by_series[r["series_id"]]
+        if r["season"] == 0 and not show_specials:
+            continue
+        if not r["monitored"] and not show_unmonitored:
+            continue
+        key = (s["tvdb_id"], r["season"], r["episode"])
+        state = episode_state(r["air_at"], now=now, tz=tz, in_plex=key in plex, has_file=bool(r["has_file"]),
+                              monitored=bool(r["monitored"]), downloading=key in dl)
+        out.append({"show": s["title"], "tvdb_id": s["tvdb_id"], "series_id": s["series_id"],
+                    "show_rating_key": s["rating_key"], "thumb": s["thumb"], "season": r["season"],
+                    "episode": r["episode"], "title": r["title"], "air_at": r["air_at"], "state": state,
+                    "label": LABELS[state], "rating_key": plex.get(key), "pct": dl.get(key),
+                    "late_s": int(now - r["air_at"]) if r["air_at"] and r["air_at"] < now else 0,
+                    "day": datetime.fromtimestamp(r["air_at"], tz).date()})
+    return out
+
+
+def month(conn: sqlite3.Connection, user_id: int, ym: str | None = None, now: float | None = None) -> dict:
+    """One month of pinned episodes as Monday-first weeks, for the calendar's month view.
+    ym is 'YYYY-MM' (this month if missing or not a month)."""
+    now = now or time.time()
+    tz = stats._tz(conn)
+    today = datetime.fromtimestamp(now, tz).date()
+    try:
+        y, m = (int(x) for x in (ym or "").split("-"))
+        first = date(y, m, 1)
+    except ValueError:
+        first = today.replace(day=1)
+    nxt = (first.replace(day=28) + timedelta(days=4)).replace(day=1)
+    grid_start = first - timedelta(days=first.weekday())
+    grid_end = nxt + timedelta(days=(7 - nxt.weekday()) % 7)
+    at = lambda d: int(datetime.combine(d, datetime.min.time(), tz).timestamp())  # noqa: E731
+    by_day: dict = defaultdict(list)
+    for ep in _episodes(conn, user_id, at(grid_start), at(grid_end), now, tz):
+        by_day[ep["day"]].append(ep)
+    weeks, d = [], grid_start
+    while d < grid_end:
+        weeks.append([{"date": d + timedelta(days=i), "in_month": (d + timedelta(days=i)).month == first.month,
+                       "today": d + timedelta(days=i) == today, "episodes": by_day.get(d + timedelta(days=i), [])}
+                      for i in range(7)])
+        d += timedelta(days=7)
+    prev = (first - timedelta(days=1)).replace(day=1)
+    return {"title": first.strftime("%B %Y"), "ym": first.strftime("%Y-%m"), "weeks": weeks,
+            "prev": prev.strftime("%Y-%m"), "next": nxt.strftime("%Y-%m"),
+            "is_this_month": first == today.replace(day=1),
+            "days": [day for week in weeks for day in week if day["in_month"] and day["episodes"]],
+            "count": sum(len(day["episodes"]) for week in weeks for day in week if day["in_month"])}
+
+
 def calendar(conn: sqlite3.Connection, user_id: int, now: float | None = None) -> dict:
     """Everything /calendar shows for one person:
 
@@ -190,44 +256,18 @@ def calendar(conn: sqlite3.Connection, user_id: int, now: float | None = None) -
     today = datetime.fromtimestamp(now, tz).date()
     start = int(datetime.combine(today - timedelta(days=OVERDUE_DAYS), datetime.min.time(), tz).timestamp())
     end = int(datetime.combine(today + timedelta(days=AGENDA_DAYS), datetime.min.time(), tz).timestamp())
-    show_specials = bool(settings.get(conn, "pins.show_specials"))
-    show_unmonitored = bool(settings.get(conn, "pins.show_unmonitored"))
-
     tvdb_ids = sorted(pinned(conn, user_id))
     shows = _shows(conn, tvdb_ids)
-    by_series = {s["series_id"]: s for s in shows.values() if s.get("series_id")}
-    plex = _in_plex(conn, tvdb_ids)
-    dl = downloading(conn)
 
     agenda: dict = defaultdict(list)
     overdue, in_agenda, in_overdue = [], set(), set()
-    if by_series:
-        rows = conn.execute(
-            f"SELECT * FROM sonarr_episodes WHERE series_id IN ({','.join('?' * len(by_series))}) "
-            "AND air_at >= ? AND air_at < ? ORDER BY air_at, season, episode", [*by_series, start, end]).fetchall()
-    else:
-        rows = []
-    for r in rows:
-        s = by_series[r["series_id"]]
-        if r["season"] == 0 and not show_specials:
-            continue
-        if not r["monitored"] and not show_unmonitored:
-            continue
-        key = (s["tvdb_id"], r["season"], r["episode"])
-        state = episode_state(r["air_at"], now=now, tz=tz, in_plex=key in plex, has_file=bool(r["has_file"]),
-                              monitored=bool(r["monitored"]), downloading=key in dl)
-        ep = {"show": s["title"], "tvdb_id": s["tvdb_id"], "series_id": s["series_id"],
-              "show_rating_key": s["rating_key"], "thumb": s["thumb"], "season": r["season"],
-              "episode": r["episode"], "title": r["title"], "air_at": r["air_at"], "state": state,
-              "label": LABELS[state], "rating_key": plex.get(key), "pct": dl.get(key),
-              "late_s": int(now - r["air_at"]) if r["air_at"] and r["air_at"] < now else 0}
-        d = datetime.fromtimestamp(r["air_at"], tz).date()
-        if d >= today:
-            agenda[d].append(ep)
-            in_agenda.add(s["tvdb_id"])
-        elif state not in (AVAILABLE, UNMONITORED):     # aired and not watchable: expected, missing,
-            overdue.append(ep)                          # downloading, or on disk but not in Plex
-            in_overdue.add(s["tvdb_id"])
+    for ep in _episodes(conn, user_id, start, end, now, tz):
+        if ep["day"] >= today:
+            agenda[ep["day"]].append(ep)
+            in_agenda.add(ep["tvdb_id"])
+        elif ep["state"] not in (AVAILABLE, UNMONITORED):   # aired and not watchable: expected, missing,
+            overdue.append(ep)                              # downloading, or on disk but not in Plex
+            in_overdue.add(ep["tvdb_id"])
     overdue.sort(key=lambda e: -e["air_at"])
 
     from . import outlook as outlook_svc

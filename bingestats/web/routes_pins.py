@@ -22,9 +22,10 @@ def render_calendar(user_id: int | None, *, viewer: bool, body_only: bool = Fals
     """The calendar page, or just its body (body_only), which the page reloads after a pin changes."""
     conn = _db()
     cal = pins.calendar(conn, user_id) if user_id is not None else None
+    mon = pins.month(conn, user_id, request.args.get("m")) if user_id is not None else None
     if body_only:
-        return render_template("partials/calendar_body.html", cal=cal, viewer=viewer) if cal else ""
-    return render_template("pages/calendar.html", cal=cal, viewer=viewer, no_owner=user_id is None,
+        return render_template("partials/calendar_body.html", cal=cal, mon=mon, viewer=viewer) if cal else ""
+    return render_template("pages/calendar.html", cal=cal, mon=mon, viewer=viewer, no_owner=user_id is None,
                            sonarr=arr.configured(conn)["sonarr"],
                            find_url=url_for("me.calendar_find" if viewer else "pins.find"),
                            body_url=url_for("me.calendar_body" if viewer else "pins.calendar_body"))
@@ -64,6 +65,18 @@ def calendar_page():
 @bp.route("/calendar/body")
 def calendar_body():
     return render_calendar(pins.owner_id(_db()), viewer=False, body_only=True)
+
+
+def render_month(user_id: int | None, *, viewer: bool):
+    if user_id is None:
+        return ""
+    return render_template("partials/calendar_month.html", mon=pins.month(_db(), user_id, request.args.get("m")),
+                           viewer=viewer)
+
+
+@bp.route("/calendar/month")
+def calendar_month():
+    return render_month(pins.owner_id(_db()), viewer=False)
 
 
 @bp.route("/calendar/find")

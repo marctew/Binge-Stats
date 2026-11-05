@@ -147,6 +147,12 @@ def calendar_body():
     return render_calendar(_uid(), viewer=True, body_only=True)
 
 
+@bp.route("/calendar/month")
+def calendar_month():
+    from .routes_pins import render_month
+    return render_month(_uid(), viewer=True)
+
+
 @bp.route("/calendar/find")
 def calendar_find():
     from .routes_pins import render_find

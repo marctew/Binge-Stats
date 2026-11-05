@@ -348,3 +348,41 @@ def test_viewer_pins_are_their_own(app, site, app_conn):
     assert b.post("/pins/111").status_code == 403                  # the admin's pins are closed to them
     assert b.get("/calendar").status_code == 302
     assert "Pinned Show" in b.get("/me/calendar/find?q=pinned").data.decode()
+    part = b.get("/me/calendar/month").data.decode()
+    assert 'id="cal-month"' in part and "/me/calendar/month?m=" in part and "/item/" not in part
+
+
+# -- month view ------------------------------------------------------------------------------
+
+def test_month(lib):
+    pins.pin(lib, OWNER, 111)
+    m = pins.month(lib, OWNER, now=NOW)                                # November 2026 starts on a Sunday
+    assert (m["title"], m["prev"], m["next"], m["is_this_month"]) == ("November 2026", "2026-10", "2026-12", True)
+    assert len(m["weeks"]) == 6 and all(len(w) == 7 for w in m["weeks"])
+    assert m["weeks"][0][0]["date"].isoformat() == "2026-10-26" and not m["weeks"][0][0]["in_month"]
+    days = {d["date"].day: [(e["episode"], e["state"]) for e in d["episodes"]] for d in m["days"]}
+    assert days == {1: [(8, "on_disk")], 2: [(2, "missing")], 3: [(6, "downloading")], 4: [(3, "awaiting")],
+                    5: [(4, "airing_today")], 8: [(5, "upcoming")]}                # no special, no unmonitored
+    assert m["count"] == 6
+    [today] = [d for w in m["weeks"] for d in w if d["today"]]
+    assert today["date"].day == 5
+    oct26 = m["weeks"][0][0]
+    assert [e["episode"] for e in oct26["episodes"]] == [1]           # the grid's edge days carry their episodes too
+
+
+def test_month_other_months_and_bad_input(lib):
+    pins.pin(lib, OWNER, 111)
+    m = pins.month(lib, OWNER, "2026-09", now=NOW)
+    assert m["title"] == "September 2026" and not m["is_this_month"]
+    assert [d["date"].day for d in m["days"]] == [6]                   # "Ancient", 60 days back
+    assert pins.month(lib, OWNER, "nonsense", now=NOW)["title"] == "November 2026"
+    assert pins.month(lib, OWNER, "2026-13", now=NOW)["title"] == "November 2026"
+    assert pins.month(lib, ALEX, now=NOW)["count"] == 0
+
+
+def test_month_pages(site, app_conn):
+    pins.pin(app_conn, OWNER, 111)
+    page = site.get("/calendar").data.decode()
+    assert 'id="cal-month"' in page and "/calendar/month?m=" in page and "Pinned Show" in page
+    part = site.get("/calendar/month?m=2026-01", headers={"HX-Request": "true"}).data.decode()
+    assert "January 2026" in part and "<html" not in part and "This month" in part

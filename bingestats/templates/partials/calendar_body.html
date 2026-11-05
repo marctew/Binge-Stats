@@ -27,6 +27,8 @@
 </div>
 {% else %}<div class="card p-6 text-center text-sm text-faint">Nothing you've pinned airs in the next {{ cal.agenda_days }} days.</div>{% endif %}
 
+{% include "partials/calendar_month.html" %}
+
 {% if cal.later %}
 {{ section_title('Later') }}
 <div class="card divide-y divide-border">
