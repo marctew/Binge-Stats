@@ -23,6 +23,9 @@ ITEM_COLS = ["rating_key", "type", "guid", "parent_rating_key", "grandparent_rat
              "originally_available_at", "thumb", "art", "size_bytes", "video_codec", "video_resolution",
              "video_dynamic_range", "audio_codec", "audio_channels", "container", "bitrate_kbps",
              "tvdb_id", "tmdb_id", "imdb_id"]
+# A read that leaves these out (or a Plex that hasn't matched yet) mustn't wipe ids we already have:
+# pins, Sonarr/Radarr matching and "Open in" links all hang off them.
+EXTERNAL_IDS = {"tvdb_id", "tmdb_id", "imdb_id"}
 # Things a person adds to a library that are worth announcing.
 ANNOUNCE = {"movie", "episode", "album"}
 
@@ -92,7 +95,8 @@ def _upsert_items(conn: sqlite3.Connection, items: list[dict], library_id: int, 
             conn.execute(
                 f"INSERT INTO media_items ({', '.join(ITEM_COLS)}, server_id, library_id, is_present, synced_at) "
                 f"VALUES ({', '.join('?' * len(ITEM_COLS))}, ?, ?, 1, ?) ON CONFLICT(rating_key) DO UPDATE SET "
-                + ", ".join(f"{c} = excluded.{c}" for c in ITEM_COLS if c not in ("rating_key", "video_dynamic_range"))
+                + ", ".join(f"{c} = COALESCE(excluded.{c}, media_items.{c})" if c in EXTERNAL_IDS else f"{c} = excluded.{c}"
+                            for c in ITEM_COLS if c not in ("rating_key", "video_dynamic_range"))
                 + ", library_id = excluded.library_id, is_present = 1, synced_at = excluded.synced_at",
                 vals + [server_id, library_id, synced_at])
             if not existed:

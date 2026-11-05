@@ -2,10 +2,19 @@
 {% from "macros/icons.html" import icon %}
 
 {% macro poster(path, alt='', cls='w-24', shape='poster', w=300, src=None) -%}
-{%- set aspect = 'aspect-square' if shape == 'square' else ('aspect-video' if shape == 'art' else 'aspect-[2/3]') -%}
+{#- Square art (albums, artists, tracks) goes in the same 2:3 frame as TV and films, so grids and lists
+    line up: the art sits in the middle, over a blurred, enlarged copy of itself that fills the frame. -#}
+{%- set aspect = 'aspect-video' if shape == 'art' else 'aspect-[2/3]' -%}
 <div class="{{ cls }} {{ aspect }} relative shrink-0 overflow-hidden rounded-lg bg-surface-2 shadow-poster ring-1 ring-white/5">
-  <div class="flex h-full w-full items-center justify-center text-faint">{{ icon('tv', 'h-1/4 w-1/4 max-h-6 max-w-6') }}</div>
-  {%- if path or src %}<img src="{{ src or url_for('img.plex_image', path=path, w=w, shape=shape) }}" alt="{{ alt }}" loading="lazy" class="absolute inset-0 h-full w-full object-cover" onerror="this.remove()">{% endif -%}
+  <div class="flex h-full w-full items-center justify-center text-faint">{{ icon('music' if shape == 'square' else 'tv', 'h-1/4 w-1/4 max-h-6 max-w-6') }}</div>
+  {%- if path or src %}{% set url = src or url_for('img.plex_image', path=path, w=w, shape=shape) %}
+  {%- if shape == 'square' %}
+  <div class="absolute inset-0" data-square-art>
+    <img src="{{ url }}" alt="" aria-hidden="true" loading="lazy" class="absolute inset-0 h-full w-full scale-150 object-cover opacity-60 blur-lg" onerror="this.parentNode.remove()">
+    <img src="{{ url }}" alt="{{ alt }}" loading="lazy" class="absolute inset-x-0 top-1/2 aspect-square w-full -translate-y-1/2 object-cover shadow-lg" onerror="this.parentNode.remove()">
+  </div>
+  {%- else %}<img src="{{ url }}" alt="{{ alt }}" loading="lazy" class="absolute inset-0 h-full w-full object-cover" onerror="this.remove()">{% endif %}
+  {%- endif -%}
 </div>
 {%- endmacro %}
 
