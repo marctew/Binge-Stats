@@ -123,6 +123,12 @@ def calendar_page():
     return render_calendar(_uid(), viewer=True)
 
 
+@bp.route("/calendar/body")
+def calendar_body():
+    from .routes_pins import render_calendar
+    return render_calendar(_uid(), viewer=True, body_only=True)
+
+
 @bp.route("/calendar/find")
 def calendar_find():
     from .routes_pins import render_find

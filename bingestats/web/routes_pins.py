@@ -17,12 +17,16 @@ def _db():
     return current_app.get_db()
 
 
-def render_calendar(user_id: int | None, *, viewer: bool):
+def render_calendar(user_id: int | None, *, viewer: bool, body_only: bool = False):
+    """The calendar page, or just its body (body_only), which the page reloads after a pin changes."""
     conn = _db()
     cal = pins.calendar(conn, user_id) if user_id is not None else None
+    if body_only:
+        return render_template("partials/calendar_body.html", cal=cal, viewer=viewer) if cal else ""
     return render_template("pages/calendar.html", cal=cal, viewer=viewer, no_owner=user_id is None,
                            sonarr=arr.configured(conn)["sonarr"],
-                           find_url=url_for("me.calendar_find" if viewer else "pins.find"))
+                           find_url=url_for("me.calendar_find" if viewer else "pins.find"),
+                           body_url=url_for("me.calendar_body" if viewer else "pins.calendar_body"))
 
 
 def render_find(user_id: int | None, *, viewer: bool):
@@ -40,8 +44,9 @@ def do_toggle(user_id: int | None, tvdb_id: int, *, viewer: bool):
     except ValueError as e:
         abort(404, str(e))
     if request.headers.get("HX-Request"):
+        # pins-changed: the calendar reloads its body and search results, so a new pin shows at once
         return render_template("partials/pin_button.html", tvdb_id=tvdb_id, pinned=now_pinned, viewer=viewer,
-                               compact=request.args.get("compact") == "1")
+                               compact=request.args.get("compact") == "1"), {"HX-Trigger": "pins-changed"}
     nxt = request.form.get("next") or ""
     home = url_for("me.calendar_page" if viewer else "pins.calendar_page")
     if viewer and not nxt.startswith("/me"):
@@ -52,6 +57,11 @@ def do_toggle(user_id: int | None, tvdb_id: int, *, viewer: bool):
 @bp.route("/calendar")
 def calendar_page():
     return render_calendar(pins.owner_id(_db()), viewer=False)
+
+
+@bp.route("/calendar/body")
+def calendar_body():
+    return render_calendar(pins.owner_id(_db()), viewer=False, body_only=True)
 
 
 @bp.route("/calendar/find")

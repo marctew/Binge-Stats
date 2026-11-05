@@ -269,7 +269,7 @@ def test_calendar_page_and_nav(site, app_conn):
     assert 'href="/calendar"' in body and "Pin some shows" in body
     pins.pin(app_conn, OWNER, 111)
     body = site.get("/calendar").data.decode()
-    assert "Pinned Show" in body and "Coming up" in body and "Your 1 pinned show" in body
+    assert "Pinned Show" in body and "Coming up" in body and "1 show" in body
 
 
 def test_no_calendar_in_nav_without_sonarr(logged_in, app_conn):
@@ -281,6 +281,17 @@ def test_calendar_without_an_owner_says_why(logged_in, app_conn):
     body = logged_in.get("/calendar").data.decode()
     assert "server owner isn't in Users" in body
     assert logged_in.post("/pins/111").status_code == 409
+
+
+def test_a_pin_reloads_the_calendar_without_a_page_refresh(site, app_conn):
+    page = site.get("/calendar").data.decode()
+    assert 'hx-get="/calendar/body"' in page and "pins-changed from:body" in page
+    r = site.post("/pins/222", headers={"HX-Request": "true"})
+    assert r.headers["HX-Trigger"] == "pins-changed"              # tells the page to reload its body
+    body = site.get("/calendar/body", headers={"HX-Request": "true"}).data.decode()
+    assert "Sonarr Only" in body and "Pin some shows" not in body and "<html" not in body
+    site.post("/pins/222", headers={"HX-Request": "true"})
+    assert "Pin some shows" in site.get("/calendar/body").data.decode()
 
 
 def test_pin_from_the_page(site, app_conn):
@@ -315,7 +326,8 @@ def test_viewer_pins_are_their_own(app, site, app_conn):
     assert pins.pinned(app_conn, ALEX) == {222} and pins.pinned(app_conn, OWNER) == {111}
     body = b.get("/me/calendar").data.decode()
     assert "Sonarr Only" in body and "Pinned Show" not in body and "/item/" not in body
-    assert "/me/calendar/find" in body
+    assert "/me/calendar/find" in body and 'hx-get="/me/calendar/body"' in body
+    assert "Sonarr Only" in b.get("/me/calendar/body").data.decode()
     assert b.post("/pins/111").status_code == 403                  # the admin's pins are closed to them
     assert b.get("/calendar").status_code == 302
     assert "Pinned Show" in b.get("/me/calendar/find?q=pinned").data.decode()
