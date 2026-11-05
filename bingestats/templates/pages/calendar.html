@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% from "macros/ui.html" import page_header, empty_state, poster %}
+{% from "macros/media.html" import section_title, episode_row %}
+{% from "macros/icons.html" import icon %}
+{% block title %}Calendar · Binge Stats{% endblock %}
+{% block content %}
+{% call page_header('Calendar', ('Your ' ~ (cal.count | plural('pinned show'))) if cal and cal.count else 'The shows you pin, and when their episodes land') %}{% endcall %}
+
+{% if no_owner %}
+<div class="banner banner-warning mb-6">Pins belong to your Plex account, and the server owner isn't in Users yet. Sync users from Settings, then come back.</div>
+{% elif not sonarr %}
+<div class="banner banner-warning mb-6">{% if viewer %}Air dates come from Sonarr, which isn't connected, so there's nothing to show yet.{% else %}Air dates come from Sonarr. Connect it in <a class="underline" href="{{ url_for('ui.settings_page') }}">Settings</a> to fill the calendar.{% endif %}</div>
+{% endif %}
+
+{% if cal %}
+<section class="card p-4 sm:p-5">
+  <label for="pin-q" class="label">Pin a show</label>
+  <input id="pin-q" name="q" type="search" class="input mt-1 w-full" placeholder="Search Plex and Sonarr by title" autocomplete="off"
+         hx-get="{{ find_url }}" hx-trigger="input changed delay:300ms, search" hx-target="#pin-results">
+  <div id="pin-results"></div>
+</section>
+
+{% if not cal.count %}
+<div class="mt-6">{{ empty_state('Pin some shows', 'Search above for the shows you follow. You get their episodes here, and whether each one has made it into Plex.', 'calendar') }}</div>
+{% else %}
+
+{% if cal.overdue %}
+{{ section_title('Aired, not arrived', 'last ' ~ cal.overdue_days ~ ' days') }}
+<div class="card divide-y divide-border">
+  {% for e in cal.overdue %}{{ episode_row(e, (e.air_at | localtime('%a %-d %b')) ~ ' · ' ~ (e.air_at | relative), viewer) }}{% endfor %}
+</div>
+{% endif %}
+
+{{ section_title('Coming up', 'next ' ~ cal.agenda_days ~ ' days') }}
+{% if cal.agenda %}
+<div class="space-y-4">
+  {% for day in cal.agenda %}
+  <section>
+    <h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">{{ day.label }}</h3>
+    <div class="card divide-y divide-border">
+      {% for e in day.episodes %}{{ episode_row(e, e.air_at | localtime('%H:%M'), viewer) }}{% endfor %}
+    </div>
+  </section>
+  {% endfor %}
+</div>
+{% else %}<div class="card p-6 text-center text-sm text-faint">Nothing you've pinned airs in the next {{ cal.agenda_days }} days.</div>{% endif %}
+
+{% if cal.later %}
+{{ section_title('Later') }}
+<div class="card divide-y divide-border">
+  {% for s in cal.later %}
+  <div class="flex items-center gap-3 px-4 py-3">
+    {{ poster(s.thumb, s.title, 'w-9', 'poster', 150, src=None if s.thumb else (url_for('img.arr_poster', app='sonarr', item_id=s.series_id) if s.series_id else None)) }}
+    <div class="min-w-0 flex-1">
+      {% if s.rating_key and not viewer %}<a href="{{ url_for('ui.item_page', rating_key=s.rating_key) }}" class="block truncate text-sm font-medium hover:text-accent">{{ s.title }}</a>
+      {% else %}<div class="truncate text-sm font-medium">{{ s.title }}</div>{% endif %}
+      <div class="truncate text-xs text-muted">
+        {% if s.dated %}Next episode {{ s.next_airing | localtime('%a %-d %b %Y') }}
+        {% elif not s.series_id %}Not in Sonarr, so no air dates
+        {% elif s.status == 'ended' %}Ended
+        {% else %}No date yet{% endif %}
+      </div>
+    </div>
+    {% with tvdb_id=s.tvdb_id, pinned=True, compact=True %}{% include "partials/pin_button.html" %}{% endwith %}
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{{ section_title('Your pins', cal.count | plural('show')) }}
+<div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+  {% for s in cal.pins %}
+  <div class="card flex items-center gap-3 py-1.5 pl-4 pr-2">
+    <div class="min-w-0 flex-1 truncate text-sm">{{ s.title }}{% if s.year %} <span class="text-muted">({{ s.year }})</span>{% endif %}</div>
+    {% with tvdb_id=s.tvdb_id, pinned=True, compact=True %}{% include "partials/pin_button.html" %}{% endwith %}
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+{% endif %}
+{% endblock %}

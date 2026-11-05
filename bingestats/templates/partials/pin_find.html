@@ -1,0 +1,18 @@
+{# Results of the "pin a show" search on the calendar. #}
+{% from "macros/ui.html" import poster %}
+{% if q | length >= 2 %}
+{% if hits %}
+<div class="mt-3 divide-y divide-border rounded-lg border border-border">
+  {% for s in hits %}
+  <div class="flex items-center gap-3 px-3 py-2">
+    {{ poster(s.thumb, s.title, 'w-8', 'poster', 150, src=None if s.thumb else (url_for('img.arr_poster', app='sonarr', item_id=s.series_id) if s.series_id else None)) }}
+    <div class="min-w-0 flex-1">
+      <div class="truncate text-sm font-medium">{{ s.title }}{% if s.year %} <span class="text-muted">({{ s.year }})</span>{% endif %}</div>
+      <div class="truncate text-xs text-muted">{{ 'In Plex' if s.rating_key else 'Not in Plex yet' }}{% if not s.series_id %} · not in Sonarr, so no air dates{% endif %}</div>
+    </div>
+    {% with tvdb_id=s.tvdb_id, pinned=s.pinned, compact=False %}{% include "partials/pin_button.html" %}{% endwith %}
+  </div>
+  {% endfor %}
+</div>
+{% else %}<p class="mt-3 text-sm text-muted">No show in Plex or Sonarr matches "{{ q }}".</p>{% endif %}
+{% endif %}

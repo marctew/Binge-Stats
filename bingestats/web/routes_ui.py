@@ -36,11 +36,13 @@ def _layout_context():
     except Exception:  # noqa: BLE001 - no db yet (e.g. error pages)
         status = {"alive": True, "error": "", "plex_configured": True}
     try:
-        sab = arr.configured(_db())["sabnzbd"]
+        conf = arr.configured(_db())
+        sab, sonarr = conf["sabnzbd"], conf["sonarr"]
     except Exception:  # noqa: BLE001
-        sab = False
+        sab = sonarr = False
     return {"worker": status, "app_version": current_app.config["BS_VERSION"],
-            "app_sha": current_app.config["BS_SHA"], "sab_configured": sab}
+            "app_sha": current_app.config["BS_SHA"], "sab_configured": sab,
+            "sonarr_configured": sonarr}
 
 
 OSM_TILES = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -628,4 +630,6 @@ def item_page(rating_key: int):
     item = libraries.get_item(_db(), rating_key)
     if item is None:
         return render_template("pages/not_found.html", what="item"), 404
-    return render_template("pages/item.html", item=item, links=arr.item_links(_db(), item))
+    from ..services import pins
+    return render_template("pages/item.html", item=item, links=arr.item_links(_db(), item),
+                           pin=pins.for_item(_db(), item, pins.owner_id(_db())))

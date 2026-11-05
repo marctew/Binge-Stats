@@ -675,6 +675,7 @@ Every page is a Jinja template that extends `base.html`. Pages refresh their par
 | `/login` | |
 | `/` | **Dashboard.** Now-playing strip (compact session cards), today / 7d / 30d tiles (plays, watch time, users, peak concurrent), plays-per-day chart (stacked by media type), top 5 users / shows / movies for 30 days, unacknowledged alerts, recently added row |
 | `/activity` | **Activity.** Full session cards (poster, progress, user avatar, device, location, quality source → target, decision badge with reasons tooltip, bandwidth, stop button), totals bar, "nothing playing" empty state |
+| `/calendar` | **Calendar** (only while Sonarr is set up; `/me/calendar` for viewers, on their own pins). Pin-a-show search, aired-not-arrived (30 days), the next 14 days by day with each episode's state, later (pinned shows with nothing in two weeks), your pins. See `docs/specs/pins.md` |
 | `/history` | **History.** Filter bar (user, library, type, decision, platform, IP, date range, search). Table with poster thumb, title, user, started, duration, % bar, decision. Grouped resumes collapse into one row. 50 per page, paging by keyset on `started_at, id`, CSV export of the current filter |
 | `/users` | User cards / table: last seen, plays, watch time, last watched, active flag |
 | `/users/<id>` | **User.** Header with avatar + friendly name (editable) + limits. Tiles, watch time over time, heatmap, top content, devices, IPs on a map (Leaflet + OSM tiles; vendored, tiles from OSM), binges, completion and abandoned shows, alerts, recent history, Wrapped link |

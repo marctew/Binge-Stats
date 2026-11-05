@@ -67,3 +67,20 @@
 <div class="card p-6 text-center text-sm text-faint">{{ empty }}</div>
 {% endif %}
 {%- endmacro %}
+
+{# One episode of a pinned show on the calendar. `when` is what goes in the time slot; viewers get no links. #}
+{% macro episode_row(e, when, viewer=False) -%}
+{% from "macros/ui.html" import poster %}
+{%- set href = None if viewer else (url_for('ui.item_page', rating_key=e.rating_key) if e.rating_key else (url_for('ui.item_page', rating_key=e.show_rating_key) if e.show_rating_key else None)) -%}
+<{{ 'a href="' ~ href ~ '"' if href else 'div' }} class="flex items-center gap-3 px-4 py-3{{ ' transition hover:bg-surface-2/40' if href }}">
+  {{ poster(e.thumb, e.show, 'w-9', 'poster', 150, src=None if e.thumb else (url_for('img.arr_poster', app='sonarr', item_id=e.series_id) if e.series_id else None)) }}
+  <div class="min-w-0 flex-1">
+    <div class="truncate text-sm font-medium">{{ e.show }}</div>
+    <div class="truncate text-xs text-muted">S{{ '%02d' % e.season }}E{{ '%02d' % e.episode }}{% if e.title and e.title != 'TBA' %} · {{ e.title }}{% endif %}</div>
+    <div class="truncate text-xs text-faint sm:hidden">{{ when }}</div>
+  </div>
+  <span class="hidden shrink-0 text-right text-xs text-muted sm:block">{{ when }}</span>
+  <span class="{{ {'available': 'badge-success', 'on_disk': 'badge-info', 'downloading': 'badge-info', 'airing_today': 'badge-accent',
+                  'awaiting': 'badge-warning', 'missing': 'badge-danger'}.get(e.state, 'badge-muted') }} shrink-0">{{ e.label }}{% if e.state == 'downloading' and e.pct is not none %} {{ e.pct }}%{% endif %}</span>
+</{{ 'a' if href else 'div' }}>
+{%- endmacro %}

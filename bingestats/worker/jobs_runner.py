@@ -80,6 +80,13 @@ def run_job(conn, cfg, job: dict) -> dict:
         result = arr_sync.run(conn, progress)
         settings.set(conn, "arr.last_sync_at", int(time.time()))
         return result
+    if kind == "pin_guides":
+        from . import arr_sync
+        from ..services import arr as arr_svc
+        client = arr_svc.clients(conn).get("sonarr")
+        if client is None:
+            return {"skipped": "Sonarr isn't set up"}
+        return arr_sync.sync_guides(conn, client)
     if kind == "backup":
         result = backups.create(cfg.db_path, cfg.data_dir, int(settings.get(conn, "backup.keep")))
         settings.set(conn, "backup.last_run_at", int(time.time()))

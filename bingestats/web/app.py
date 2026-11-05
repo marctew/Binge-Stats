@@ -70,6 +70,7 @@ def build_app(data_dir: str | None = None, *, testing: bool = False) -> Flask:
     from .routes_me import bp as me_bp
     from .routes_wrapped import bp as wrapped_bp
     from .routes_notify import bp as notify_bp
+    from .routes_pins import bp as pins_bp
     from .routes_ui import bp as ui_bp
 
     install_auth(app)
@@ -81,6 +82,7 @@ def build_app(data_dir: str | None = None, *, testing: bool = False) -> Flask:
     app.register_blueprint(insights_bp)
     app.register_blueprint(wrapped_bp)
     app.register_blueprint(me_bp)
+    app.register_blueprint(pins_bp)
 
     @app.get("/healthz")
     def healthz():

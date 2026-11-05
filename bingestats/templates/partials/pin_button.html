@@ -1,0 +1,12 @@
+{# Pin / unpin one show. Swaps itself after the POST. compact: icon only, for lists. #}
+{% from "macros/icons.html" import icon %}
+<form method="post" action="{{ url_for('me.pin_toggle' if viewer else 'pins.toggle', tvdb_id=tvdb_id) }}"
+      hx-post="{{ url_for('me.pin_toggle' if viewer else 'pins.toggle', tvdb_id=tvdb_id, compact='1' if compact else None) }}" hx-swap="outerHTML" class="inline-flex shrink-0">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="next" value="{{ request.full_path if request.method == 'GET' and not request.headers.get('HX-Request') else '' }}">
+  {% if compact %}
+  <button class="btn-icon {{ 'text-accent' if pinned else 'text-muted' }}" title="{{ 'Unpin' if pinned else 'Pin' }}" aria-label="{{ 'Unpin' if pinned else 'Pin' }}" aria-pressed="{{ 'true' if pinned else 'false' }}">{{ icon('pin', 'h-4 w-4') }}</button>
+  {% else %}
+  <button class="{{ 'btn-primary' if not pinned else 'btn-ghost' }}" aria-pressed="{{ 'true' if pinned else 'false' }}">{{ icon('pin', 'h-4 w-4') }}{{ 'Pinned' if pinned else 'Pin' }}</button>
+  {% endif %}
+</form>

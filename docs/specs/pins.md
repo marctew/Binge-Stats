@@ -1,6 +1,15 @@
 # Spec: pins and the pinned calendar (Pinnarr folded into Binge Stats)
 
-Status: agreed 2026-11-05. Not built.
+Status: agreed 2026-11-05. **P1 built 2026-11-05** (pins, calendar, episode state, guide sync, `/me` versions). P2–P5 not built.
+
+Changes from the plan below, made while building P1:
+- **Guides are read on every Sonarr sync** (every `arr.sync_h`, 3 h), not nightly: it's one request per pinned show. A new pin queues a `pin_guides` job so the back catalogue shows within seconds. If a `pin_guides` job is already running when another show is pinned, that show waits for the next sync (the calendar window still covers it from −7 days).
+- **One more state, `on_disk`** ("Downloaded"): Sonarr has the file but Plex doesn't have the episode yet (not scanned, or the library path is wrong). Without it those episodes would read as missing.
+- **State order follows Pinnarr's code**, which differed from the table that was here: `airing_today` comes before `upcoming` and covers an episode that aired earlier today. See the table below.
+- **"Aired, not arrived"** lists everything that aired before today, within 30 days, and isn't in Plex or unmonitored: expected, missing, downloading and on disk.
+- **Pinning is from a search box on the calendar** (Plex and Sonarr shows by title) and from show, season and episode pages (admin). The shows browser in P2 adds the rest. Viewers can pin Sonarr-only shows, so `img.arr_poster` is on the viewer allow-list (posters only).
+- **The web process writes `pins`**, added to its list of writes in DESIGN.md section 3 and CLAUDE.md.
+- **Calendar** is in the sidebar (admin and viewers) only while Sonarr is set up.
 
 ## Why
 
@@ -80,7 +89,7 @@ Add a test that upgrades a v9 database.
 All read-only. These go in the existing `arr_sync` job unless stated otherwise.
 
 - **Sonarr calendar:** read −7 to +60 days for all series (one request) into `sonarr_episodes`. The current 8-day read stays for `sonarr_upcoming`.
-- **Full guides:** `episode?seriesId=` for each pinned show, nightly and when a show is first pinned (queue a `pin_guide` job). One request per pinned show, not per library show.
+- **Full guides:** `episode?seriesId=` for each pinned show, on every Sonarr sync and when a show is first pinned (a `pin_guides` job). One request per pinned show, not per library show. A show that can't be read is logged and skipped; it doesn't fail the sync.
 - **Series:** also store `network`, `genres` and `tmdbId` (Sonarr v4 returns `tmdbId` on series).
 - **TMDB:** a new `tmdb_sync` job, nightly. It reads `tv/{id}` for every pinned show, plus up to 200 never-fetched shows a night, most-watched first, so the browser's outlook facet fills in over a few nights. The client goes in `bingestats/tmdb/` (GET only, the key in Settings, masked). A failure goes in `arr_status` as `app = 'tmdb'`.
 - **Sonarr queue:** already read by the downloads watcher. The calendar uses its match (`downloadId` → episode) for the "downloading" state and its progress.
@@ -89,15 +98,17 @@ All read-only. These go in the existing `arr_sync` job unless stated otherwise.
 
 A pure function in `services/pins.py`, worked out when the page renders and never stored. First match wins:
 
-| State | Condition |
-|---|---|
-| `available` | In `media_items` (episode with this show's TVDB id, season and episode, `is_present = 1`) |
-| `unmonitored` | Sonarr's `monitored = 0` |
-| `downloading` | In the Sonarr queue now |
-| `upcoming` | `air_at` > now |
-| `airing_today` | Airs today in `ui.timezone`, not yet aired |
-| `awaiting` | Aired < 48 h ago, not in Plex |
-| `missing` | Aired ≥ 48 h ago, not in Plex |
+| State | Label | Condition |
+|---|---|---|
+| `available` | In Plex | In `media_items` (episode of the show with this TVDB id, season and episode, `is_present = 1`) |
+| `on_disk` | Downloaded | Sonarr has the file, Plex doesn't have the episode yet |
+| `unmonitored` | Not wanted | Sonarr's `monitored = 0` |
+| `downloading` | Downloading n% | In the live download queue (SABnzbd job matched to the episode through Sonarr's queue) |
+| `upcoming` | Upcoming | No air date |
+| `airing_today` | Today | Airs, or aired, today in `ui.timezone` |
+| `upcoming` | Upcoming | `air_at` > now |
+| `awaiting` | Expected | Aired < 48 h ago |
+| `missing` | Missing | Aired ≥ 48 h ago |
 
 Specials (season 0) and unmonitored episodes are hidden by default: settings `pins.show_specials` and `pins.show_unmonitored`, both false. An unmonitored episode never counts as missing. Port Pinnarr's tests for this ordering (`tests/test_calendar.py` there).
 

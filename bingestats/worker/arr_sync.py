@@ -54,6 +54,48 @@ def _categories(client: ArrClient, field: str) -> list[str]:
     return sorted(out)
 
 
+# The calendar's window, for every show (one request). Pinned shows also get their whole
+# episode list, so the calendar can say what's aired and still not here (docs/specs/pins.md).
+CAL_BACK_D, CAL_AHEAD_D = 7, 60
+
+
+def _pinned_series(conn: sqlite3.Connection, series: list[dict]) -> list[int]:
+    pinned = {r[0] for r in conn.execute("SELECT DISTINCT tvdb_id FROM pins")}
+    return [s["id"] for s in series if s["tvdb_id"] in pinned]
+
+
+def _guides(client: ArrClient, series_ids: list[int]) -> tuple[list[dict], list[int]]:
+    """Every episode of these series. A show that can't be read is left out (and logged),
+    not allowed to fail the whole sync."""
+    rows, done = [], []
+    for sid in series_ids:
+        try:
+            rows.extend(parse.episode(e) for e in client.get("episode", seriesId=sid) or [])
+            done.append(sid)
+        except ArrError as e:
+            log.warning("Sonarr episodes for series %s: %s", sid, e)
+    return rows, done
+
+
+def _episode_rows(calendar: list[dict], guides: list[dict]) -> list[dict]:
+    out = {}
+    for e in calendar + guides:              # a guide row wins: it's the fuller read
+        if e["series_id"] is not None and e["season"] is not None and e["episode"] is not None:
+            out[(e["series_id"], e["season"], e["episode"])] = e
+    return list(out.values())
+
+
+def sync_guides(conn: sqlite3.Connection, client: ArrClient, now: float | None = None) -> dict:
+    """Whole episode lists for pinned shows, between the 3-hourly syncs (queued when someone pins)."""
+    series = [{"id": r["id"], "tvdb_id": r["tvdb_id"]} for r in conn.execute("SELECT id, tvdb_id FROM sonarr_series")]
+    rows, done = _guides(client, _pinned_series(conn, series))
+    with db.transaction(conn):
+        for sid in done:
+            conn.execute("DELETE FROM sonarr_episodes WHERE series_id = ?", (sid,))
+        _insert(conn, "sonarr_episodes", rows)
+    return {"series": len(done), "episodes": len(rows)}
+
+
 def sync_sonarr(conn: sqlite3.Connection, client: ArrClient, now: float) -> dict:
     version = (client.get("system/status") or {}).get("version")
     series = [parse.series(s) for s in client.get("series")]
@@ -62,8 +104,13 @@ def sync_sonarr(conn: sqlite3.Connection, client: ArrClient, now: float) -> dict
     day = datetime.fromtimestamp(now, timezone.utc)
     upcoming = [parse.episode(e) for e in client.get("calendar", start=day.strftime("%Y-%m-%d"),
                                                      end=(day + timedelta(days=8)).strftime("%Y-%m-%d"))]
+    calendar = [parse.episode(e) for e in client.get(
+        "calendar", start=(day - timedelta(days=CAL_BACK_D)).strftime("%Y-%m-%d"),
+        end=(day + timedelta(days=CAL_AHEAD_D)).strftime("%Y-%m-%d"), unmonitored="true")]
+    guides, _ = _guides(client, _pinned_series(conn, series))
+    episodes = _episode_rows(calendar, guides)
     with db.transaction(conn):
-        for t in ("sonarr_series", "sonarr_missing", "sonarr_upcoming"):
+        for t in ("sonarr_series", "sonarr_missing", "sonarr_upcoming", "sonarr_episodes"):
             conn.execute(f"DELETE FROM {t}")
         conn.execute("DELETE FROM arr_cutoff WHERE app = 'sonarr'")
         _insert(conn, "sonarr_series", series)
@@ -71,7 +118,9 @@ def sync_sonarr(conn: sqlite3.Connection, client: ArrClient, now: float) -> dict
                                          for e in missing if e["series_id"] is not None])
         _insert(conn, "sonarr_upcoming", [e for e in upcoming if e["series_id"] is not None])
         _insert(conn, "arr_cutoff", cutoff)
+        _insert(conn, "sonarr_episodes", episodes)
         info = {"series": len(series), "missing": len(missing), "cutoff": len(cutoff), "upcoming": len(upcoming),
+                "episodes": len(episodes),
                 "categories": _categories(client, "tvCategory")}
         _status(conn, "sonarr", True, int(now), version=version, info=info)
     return info

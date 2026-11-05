@@ -337,7 +337,40 @@ def _m9(conn: sqlite3.Connection) -> None:
     conn.execute("ALTER TABLE sonarr_series ADD COLUMN title_slug TEXT")
 
 
-MIGRATIONS = [_m1, _m2, _m3, _m4, _m5, _m6, _m7, _m8, _m9]
+def _m10(conn: sqlite3.Connection) -> None:
+    """Pins (docs/specs/pins.md): who follows which show, Sonarr's episodes for the calendar,
+    TMDB production status for the season outlook, and per-person dedupe for pin messages."""
+    ddl = """
+    CREATE TABLE pins (
+        user_id INTEGER NOT NULL REFERENCES users(id), tvdb_id INTEGER NOT NULL,
+        pinned_at INTEGER NOT NULL, batch TEXT, notify INTEGER NOT NULL DEFAULT 1,
+        PRIMARY KEY (user_id, tvdb_id)
+    );
+    CREATE INDEX pins_tvdb ON pins(tvdb_id);
+    CREATE TABLE sonarr_episodes (
+        series_id INTEGER NOT NULL, season INTEGER NOT NULL, episode INTEGER NOT NULL,
+        title TEXT, air_at INTEGER, has_file INTEGER, monitored INTEGER,
+        PRIMARY KEY (series_id, season, episode)
+    );
+    CREATE INDEX sonarr_episodes_air ON sonarr_episodes(air_at);
+    CREATE TABLE tmdb_shows (
+        tmdb_id INTEGER PRIMARY KEY, tvdb_id INTEGER, status TEXT, in_production INTEGER,
+        last_air_date TEXT, next_season INTEGER, fetched_at INTEGER
+    );
+    CREATE INDEX tmdb_shows_tvdb ON tmdb_shows(tvdb_id);
+    CREATE TABLE pin_notified (
+        user_id INTEGER NOT NULL, key TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (user_id, key)
+    );
+    ALTER TABLE sonarr_series ADD COLUMN network TEXT;
+    ALTER TABLE sonarr_series ADD COLUMN genres TEXT NOT NULL DEFAULT '[]';
+    ALTER TABLE sonarr_series ADD COLUMN tmdb_id INTEGER
+    """
+    for stmt in ddl.split(";"):
+        if stmt.strip():
+            conn.execute(stmt)
+
+
+MIGRATIONS = [_m1, _m2, _m3, _m4, _m5, _m6, _m7, _m8, _m9, _m10]
 LATEST = len(MIGRATIONS)
 
 
