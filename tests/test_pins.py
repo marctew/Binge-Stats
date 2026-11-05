@@ -283,6 +283,7 @@ def test_calendar_page_and_nav(site, app_conn):
     body = site.get("/calendar").data.decode()
     assert "Pinned Show" in body and "Coming up" in body
     assert 'action="/pins/111"' in body                            # unpin straight from the episode row
+    assert 'href="/item/10"' in body and "&#34;" not in body       # the episode row links to the show, unescaped
     assert "No future dates planned" not in body                   # it's listed above already
 
 
