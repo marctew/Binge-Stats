@@ -8,7 +8,7 @@
 {% if cal.overdue %}
 {{ section_title('Aired, not arrived', 'last ' ~ cal.overdue_days ~ ' days') }}
 <div class="card divide-y divide-border">
-  {% for e in cal.overdue %}{{ episode_row(e, (e.air_at | localtime('%a %-d %b')) ~ ' · ' ~ (e.air_at | relative), viewer) }}{% endfor %}
+  {% for e in cal.overdue %}{{ episode_row(e, (e.air_at | localtime('%a %-d %b')) ~ ' · ' ~ (e.air_at | relative), viewer, pin=True) }}{% endfor %}
 </div>
 {% endif %}
 
@@ -19,7 +19,7 @@
   <section>
     <h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">{{ day.label }}</h3>
     <div class="card divide-y divide-border">
-      {% for e in day.episodes %}{{ episode_row(e, e.air_at | localtime('%H:%M'), viewer) }}{% endfor %}
+      {% for e in day.episodes %}{{ episode_row(e, e.air_at | localtime('%H:%M'), viewer, pin=True) }}{% endfor %}
     </div>
   </section>
   {% endfor %}
@@ -30,16 +30,13 @@
 {{ section_title('Later') }}
 <div class="card divide-y divide-border">
   {% for s in cal.later %}
-  <div class="flex items-center gap-3 px-4 py-3">
+  <div class="flex items-center gap-3 py-3 pl-4 pr-2">
     {{ poster(s.thumb, s.title, 'w-9', 'poster', 150, src=None if s.thumb else (url_for('img.arr_poster', app='sonarr', item_id=s.series_id) if s.series_id else None)) }}
     <div class="min-w-0 flex-1">
       {% if s.rating_key and not viewer %}<a href="{{ url_for('ui.item_page', rating_key=s.rating_key) }}" class="block truncate text-sm font-medium hover:text-accent">{{ s.title }}</a>
       {% else %}<div class="truncate text-sm font-medium">{{ s.title }}</div>{% endif %}
       <div class="truncate text-xs text-muted">
-        {% if s.dated %}Next episode {{ s.next_airing | localtime('%a %-d %b %Y') }}
-        {% elif not s.series_id %}Not in Sonarr, so no air dates
-        {% elif s.status == 'ended' %}Ended
-        {% else %}No date yet{% endif %}
+        Next episode {{ s.next_airing | localtime('%a %-d %b %Y') }}
       </div>
     </div>
     {% with tvdb_id=s.tvdb_id, pinned=True, compact=True %}{% include "partials/pin_button.html" %}{% endwith %}
@@ -48,13 +45,15 @@
 </div>
 {% endif %}
 
-{{ section_title('Your pins', cal.count | plural('show')) }}
+{% if cal.undated %}
+{{ section_title('No future dates planned', cal.undated | length | plural('show')) }}
 <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-  {% for s in cal.pins %}
-  <div class="card flex items-center gap-3 py-1.5 pl-4 pr-2">
+  {% for s in cal.undated %}
+  <div class="card flex items-center gap-3 py-1.5 pl-4 pr-2" title="{{ 'Not in Sonarr, so no air dates' if not s.series_id else ('Ended' if s.status == 'ended' else 'No date yet') }}">
     <div class="min-w-0 flex-1 truncate text-sm">{{ s.title }}{% if s.year %} <span class="text-muted">({{ s.year }})</span>{% endif %}</div>
     {% with tvdb_id=s.tvdb_id, pinned=True, compact=True %}{% include "partials/pin_button.html" %}{% endwith %}
   </div>
   {% endfor %}
 </div>
+{% endif %}
 {% endif %}

@@ -179,8 +179,10 @@ def calendar(conn: sqlite3.Connection, user_id: int, now: float | None = None) -
 
     - agenda: the next AGENDA_DAYS days, by local day;
     - overdue: aired before today (within OVERDUE_DAYS) and not in Plex, newest first;
-    - later: pinned shows with nothing in the agenda, by next air date (no date last);
-    - pins: every pin, with whether Sonarr has the show.
+    - later: pinned shows with a date past the agenda, soonest first;
+    - undated: pinned shows with no date to come that aren't listed above (ended, no date yet,
+      not in Sonarr), so every pin can be found and unpinned somewhere on the page;
+    - pins: every pin.
     """
     now = now or time.time()
     tz = stats._tz(conn)
@@ -197,7 +199,7 @@ def calendar(conn: sqlite3.Connection, user_id: int, now: float | None = None) -
     dl = downloading(conn)
 
     agenda: dict = defaultdict(list)
-    overdue, in_agenda = [], set()
+    overdue, in_agenda, in_overdue = [], set(), set()
     if by_series:
         rows = conn.execute(
             f"SELECT * FROM sonarr_episodes WHERE series_id IN ({','.join('?' * len(by_series))}) "
@@ -224,18 +226,19 @@ def calendar(conn: sqlite3.Connection, user_id: int, now: float | None = None) -
             in_agenda.add(s["tvdb_id"])
         elif state not in (AVAILABLE, UNMONITORED):     # aired and not watchable: expected, missing,
             overdue.append(ep)                          # downloading, or on disk but not in Plex
+            in_overdue.add(s["tvdb_id"])
     overdue.sort(key=lambda e: -e["air_at"])
 
-    later = [s for s in shows.values() if s["tvdb_id"] not in in_agenda]
-    later.sort(key=lambda s: (s["next_airing"] is None or s["next_airing"] < now, s["next_airing"] or 0,
-                              (s["title"] or "").lower()))
-    for s in later:
+    by_title = sorted(shows.values(), key=lambda s: (s["title"] or "").lower())
+    for s in by_title:
         s["dated"] = bool(s["next_airing"] and s["next_airing"] >= now)
+    later = sorted((s for s in by_title if s["dated"] and s["tvdb_id"] not in in_agenda),
+                   key=lambda s: s["next_airing"])
+    undated = [s for s in by_title if not s["dated"] and s["tvdb_id"] not in in_agenda | in_overdue]
 
     return {"agenda": [{"day": d.isoformat(), "label": _day_label(d, today), "episodes": eps}
                        for d, eps in sorted(agenda.items())],
-            "overdue": overdue, "later": later,
-            "pins": sorted(shows.values(), key=lambda s: (s["title"] or "").lower()),
+            "overdue": overdue, "later": later, "undated": undated, "pins": by_title,
             "count": len(tvdb_ids), "agenda_days": AGENDA_DAYS, "overdue_days": OVERDUE_DAYS}
 
 

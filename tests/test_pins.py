@@ -133,7 +133,19 @@ def test_calendar(lib):
     assert cal["overdue"][1]["pct"] == 40
     [later] = cal["later"]
     assert later["title"] == "Sonarr Only" and later["dated"] and later["rating_key"] is None
+    assert cal["undated"] == []                                    # every pin is listed above
     assert [s["title"] for s in cal["pins"]] == ["Pinned Show", "Sonarr Only"]
+
+
+def test_shows_with_nothing_to_come_are_listed_once(lib):
+    lib.execute("INSERT INTO sonarr_series (id, title, tvdb_id, status) VALUES (4, 'Finished', 444, 'ended')")
+    lib.execute("INSERT INTO sonarr_series (id, title, tvdb_id, status) VALUES (5, 'Stalled', 555, 'continuing')")
+    lib.execute("INSERT INTO sonarr_episodes VALUES (5, 2, 1, 'Lost', ?, 0, 1)", (NOW - 5 * D,))
+    for t in (111, 444, 555):
+        pins.pin(lib, OWNER, t)
+    cal = pins.calendar(lib, OWNER, now=NOW)
+    assert [s["title"] for s in cal["undated"]] == ["Finished"]     # Stalled is under aired-not-arrived
+    assert "Stalled" in [e["show"] for e in cal["overdue"]] and cal["later"] == []
     assert all(e["show"] != "Unpinned" for d in cal["agenda"] for e in d["episodes"])
 
 
@@ -269,7 +281,9 @@ def test_calendar_page_and_nav(site, app_conn):
     assert 'href="/calendar"' in body and "Pin some shows" in body
     pins.pin(app_conn, OWNER, 111)
     body = site.get("/calendar").data.decode()
-    assert "Pinned Show" in body and "Coming up" in body and "1 show" in body
+    assert "Pinned Show" in body and "Coming up" in body
+    assert 'action="/pins/111"' in body                            # unpin straight from the episode row
+    assert "No future dates planned" not in body                   # it's listed above already
 
 
 def test_no_calendar_in_nav_without_sonarr(logged_in, app_conn):
