@@ -20,7 +20,8 @@ Self-hosted Plex monitoring and stats, a modern Tautulli replacement. Read DESIG
 - All timestamps are UTC epoch seconds; display in the `ui.timezone` setting.
 - Long work runs as a row in `jobs`, picked up by the worker. Never do it in a request.
 - Settings live in the `settings` table, read only through `services/settings.py`.
-- UI follows the Design Uniformity spec (`C:/ClaudeCowork/Design Uniformity/DESIGN-SPEC.md` on Marc's PC). Its Tailwind preset and components are copied into `bingestats/static/css/design/`: don't edit them here; change the source and copy them back in. `input.css` holds only Binge-specific additions.
+- UI follows the Design Uniformity spec (`C:/ClaudeCowork/Design Uniformity/DESIGN-SPEC.md` on Marc's PC). Its Tailwind preset and components (`bingestats/static/css/design/`), `design-card.js`, the design card partial, `du_flask.py` and `docs/design/` are copied in and committed by the design updater (`/etc/design-uniformity/binge-stats.toml` on the host): don't edit them here; change Design Uniformity and release it. `input.css` holds only Binge-specific additions.
+- Built to `docs/design/APP-STANDARD.md`, as its exception: Binge stays in Docker and on Tailwind (section 1), but has `/healthz` (no login), `scripts/update.sh` (pull, rebuild, wait for health) and the Design system card in Settings.
 - Reuse the Jinja component macros and the shared ECharts theme; no page-specific one-offs. Every chart and list needs an empty state. Pages must work at phone width.
 - Front-end assets are pinned (version + sha256) in `bingestats/static/vendor/VERSIONS` and fetched at build time by `scripts/fetch-assets.sh`. No CDNs at runtime.
 - Runtime data (`/data`, `*.db`, caches, config with secrets) stays out of the tracked tree.
