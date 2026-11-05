@@ -435,3 +435,110 @@ def api_arr():
                     "collections": arr.collections(conn)[:_int_arg("limit", 50, 1, 5000)] if ready["radarr"] else [],
                     "missing_films": arr.missing_films(conn) if ready["radarr"] else [],
                     "below_cutoff": arr.below_cutoff(conn)})
+
+
+# -- pins (docs/API.md) ---------------------------------------------------------------------
+# Every pins endpoint is about one person: ?user_id, or the Plex server owner by default.
+
+def _pin_user():
+    from ..services import pin_api
+    uid = pin_api.resolve_user(_db(), _int_arg("user_id"))
+    if uid is None:
+        return None, _err("not_found", "No such user (and no Plex owner to default to)", 404)
+    return uid, None
+
+
+@bp.route("/pins")
+@require("read")
+def api_pins():
+    from ..services import pin_api
+    uid, err = _pin_user()
+    return err or jsonify({"user_id": uid, "pins": pin_api.pin_list(_db(), uid)})
+
+
+@bp.route("/pins/<int:tvdb_id>", methods=["PUT", "DELETE"])
+@require("write")
+def api_pin_set(tvdb_id: int):
+    from ..services import pins
+    uid, err = _pin_user()
+    if err:
+        return err
+    conn = _db()
+    if request.method == "DELETE":
+        return jsonify({"tvdb_id": tvdb_id, "pinned": False, "changed": pins.unpin(conn, uid, tvdb_id)})
+    if tvdb_id in pins.pinned(conn, uid):
+        return jsonify({"tvdb_id": tvdb_id, "pinned": True, "changed": False})
+    try:
+        pins.toggle(conn, uid, tvdb_id)
+    except ValueError as e:
+        return _err("not_found", str(e), 404)
+    return jsonify({"tvdb_id": tvdb_id, "pinned": True, "changed": True})
+
+
+@bp.route("/pins/next")
+@require("read")
+def api_pins_next():
+    from ..services import pin_api, pins
+    uid, err = _pin_user()
+    if err:
+        return err
+    nxt = pins.next_up(_db(), uid)
+    return jsonify({"user_id": uid, "next": pin_api.episode(_db(), nxt) if nxt else None})
+
+
+@bp.route("/pins/schedule")
+@require("read")
+def api_pins_schedule():
+    from ..services import pin_api
+    uid, err = _pin_user()
+    return err or jsonify({"user_id": uid, "episodes": pin_api.schedule(
+        _db(), uid, days=_int_arg("days", 7, 0, 60), back=_int_arg("back", 1, 0, 30))})
+
+
+@bp.route("/pins/arrivals")
+@require("read")
+def api_pins_arrivals():
+    from ..services import pin_api
+    uid, err = _pin_user()
+    return err or jsonify({"user_id": uid, "episodes": pin_api.arrivals(_db(), uid, hours=_int_arg("hours", 24, 1, 24 * 30))})
+
+
+@bp.route("/pins/<any(ready, retire, discover):which>")
+@require("read")
+def api_pins_list(which: str):
+    from ..services import pin_lists
+    uid, err = _pin_user()
+    if err:
+        return err
+    fn = {"ready": pin_lists.ready, "retire": pin_lists.retire, "discover": pin_lists.discover}[which]
+    return jsonify({"user_id": uid, which: fn(_db(), uid)})
+
+
+@bp.route("/pins/summary")
+@require("read")
+def api_pins_summary():
+    from ..services import pin_api
+    uid, err = _pin_user()
+    return err or jsonify(pin_api.summary(_db(), uid))
+
+
+@bp.route("/pins/widget")
+@require("read")
+def api_pins_widget():
+    from ..services import pin_api
+    uid, err = _pin_user()
+    return err or jsonify(pin_api.widget(_db(), uid, pin_api.public_url(_db())))
+
+
+@bp.route("/pins/poster/<int:tvdb_id>")
+@require("read")
+def api_pins_poster(tvdb_id: int):
+    """A pinned show's poster (Plex's, else Sonarr's), so a widget can show it with just its token."""
+    from ..services import pin_api
+    from .routes_img import arr_poster, plex_image_response
+    src = pin_api.poster_source(_db(), tvdb_id)
+    if src is None:
+        return _err("not_found", "No poster for that show", 404)
+    if src[0] == "plex":
+        return plex_image_response(src[1], "poster", request.args.get("w", "300"))
+    return arr_poster("sonarr", src[1])

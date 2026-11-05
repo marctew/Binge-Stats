@@ -264,6 +264,17 @@ All read scope, except pin and unpin (write scope). They act for `user_id` (defa
 
 Document these in `docs/API.md`. Port Pinnarr's Scriptable widget into `docs/widget/` and point it at `/api/v1/pins/widget`.
 
+
+### Stage 5 as built (2026-11-05)
+
+- **API:** the pin endpoints are in `docs/API.md` (`routes_api.py`, `services/pin_api.py`).
+  - Changed from the table above: Binge's tokens are admin-wide, so every endpoint takes `?user_id` and defaults to the Plex owner.
+  - Added beyond the plan: `/pins/next`, `/pins/ready`, `/pins/retire`, `/pins/discover` and `/pins/poster/{tvdb_id}`.
+- **Widget:** `docs/widget/binge-pins.js`, Pinnarr's widget adapted.
+  - Bearer token, optional third parameter `user_id`, Binge's purple.
+  - A season dropping at once shows as one headline ("S06E01–E06").
+  - Checked by running the script under node, with stand-ins for Scriptable's objects, against a live dev server: data, an unknown token, and an address that returns a login page.
+- **Pinnarr importer:** not built. Marc pinned his shows by hand (2026-11-05), so there's nothing to bring across.
 ## Importing from Pinnarr
 
 A job, `import_pinnarr`, run from Settings → Import, with a dry run first like the Tautulli importer. It reads an uploaded copy of `pinnarr.db`:
