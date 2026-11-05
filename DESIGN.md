@@ -15,6 +15,7 @@ This document records decisions that are already made. Build to it. `SPEC.md` ho
 | Stack | Python 3.12, Flask, Jinja, HTMX, Alpine.js, Tailwind, ECharts. |
 | Deployment | Docker Compose on an Ubuntu LXC. One image, two services (`web`, `worker`), one `/data` volume. |
 | Sonarr / Radarr / SABnzbd | **Optional and strictly read-only** (Marc, 2026-10-31). The worker snapshots them every 3 h for real gaps in shows, film collections, below-cutoff lists, what's airing this week and download history. The clients have no write methods, so nothing in them can be deleted, unmonitored or changed. **One exception** (Marc, 2026-11-04): SABnzbd's `mode=switch`, to move jobs in the queue from Downloads, behind a Settings switch that's off by default, admin only. No delete, pause or priority call. Shows and films are matched to Plex by TVDB / TMDB id, not by title. |
+| Pins (from Pinnarr) | **Pins live only in Binge, and Binge stays read-only** (Marc, 2026-11-05). Pinnarr's pins, calendar, episode states and season outlook move into Binge (`docs/specs/pins.md`). Its writes to other services are not ported: no Sonarr tag sync, no Plex Watchlist sync, no marking watched in Plex, no Overseerr requests. TMDB is added as an optional, GET-only source for the season outlook. |
 | Repo | `github.com/marctew/Binge-Stats` |
 
 ## 2. Environment
@@ -67,6 +68,7 @@ v1 scope. Section numbers match the milestones in `SPEC.md`.
 11. **Transcode insights:** why things transcode, by user, device and file. A list of the files that cause the most transcoding, as re-encode candidates.
 12. **Library health:** content nobody has watched in N months, never-watched content, storage per watched hour by show and movie. A "what to delete" view with sizes.
 13. **Wrapped:** a year in review per user and for the whole server. A good-looking page the admin can share with a signed, revocable link.
+14. **Pins and calendar:** each person pins the shows they follow and gets a calendar of just those, with honest episode states (awaiting, missing, in Plex), a season outlook (dated, announced, filming, hiatus, dormant, cancelled, ended), pin-scoped lists (ready to watch, retire, discover) and a message when a pinned episode is in Plex. Planned; see `docs/specs/pins.md`.
 
 ## 5. UI
 
@@ -98,3 +100,4 @@ v1 scope. Section numbers match the milestones in `SPEC.md`.
 - Multiple Plex servers in the UI. The schema carries `server_id` from day one, so adding this later is UI work only.
 - Plex OAuth sign-in for users. Viewer logins exist (password set by the admin, own data only). Signing in with a Plex account, and viewers seeing anything beyond their own data, are still v2.
 - Exports (CSV is in v1 for history. Anything more is v2).
+- From Pinnarr: an MCP server, cast cross-referencing, TMDB "more like this" suggestions, episode ratings and an iCal feed of pins.

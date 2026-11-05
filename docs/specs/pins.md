@@ -1,0 +1,203 @@
+# Spec: pins and the pinned calendar (Pinnarr folded into Binge Stats)
+
+Status: planned, 2026-11-05. Not built.
+
+## Why
+
+Pinnarr (`github.com/marctew/pinnarr`) is a separate app. You pin the handful of shows you care about, and it gives you a calendar of just those, honest episode states ("aired 3 days ago and still not here"), a season outlook (dated, announced, filming, hiatus, dormant, cancelled, ended) and a push when an episode is actually in Plex.
+
+Binge Stats already holds most of what Pinnarr has to sync for itself:
+- the library and when episodes arrive in Plex (the 10-minute recently-added check);
+- who has watched what (`plays`, `services/completion.py`);
+- the Sonarr snapshot, the Sonarr queue, users, films, API tokens, backups and `/healthz`.
+
+What Pinnarr adds is a layer on top: pins, the calendar, episode states, the outlook, and pin-scoped lists and notifications. This spec brings that layer into Binge so Pinnarr can be retired.
+
+## Decisions
+
+| Decision | Detail |
+|---|---|
+| **Binge stays read-only** (Marc, 2026-11-05) | Pins live only in Binge. These Pinnarr features are **not ported**: Sonarr tag two-way sync, Plex Watchlist sync, marking watched in Plex, and Overseerr requests. DESIGN.md section 1's read-only rule and section 3's limits on Plex calls are unchanged. |
+| **TMDB, GET only** | A new outside service, needed for the outlook (cancelled vs ended vs in production). Optional: without a key, the outlook uses Sonarr alone and never says `cancelled`, `in_production` or `dormant`. |
+| **Pins belong to Plex users** (proposed; Marc to confirm) | `pins.user_id` is `users.id`. The admin pins as their own Plex user (`users.is_owner`). Viewers pin from `/me`. |
+| **Arrival = in Plex, by polling** (proposed; Marc to confirm) | No Sonarr webhook. "Arrived" means the recently-added check has seen the episode in Plex, which is a stronger claim than Sonarr's `has_file`. The delay is up to `library.recent_check_min` (10; can be set to 2–3). |
+
+Not ported, because Binge already covers it: Tautulli sync, Pinnarr's own users, auth, API keys, backups, health, poster cache, the `plex_availability` job, and the films sync.
+
+Parked for later (don't build, don't block): the MCP server, cast cross-referencing, TMDB "more like this" suggestions, TMDB episode ratings, and an iCal feed.
+
+## Identity
+
+A show is identified by its **TVDB id**: `media_items.tvdb_id` on the Plex show row, and `sonarr_series.tvdb_id`. This is the same match the collection pages already use.
+
+You can only pin a show that is in Plex or in Sonarr. A Sonarr-only show (nothing on disk yet) can be pinned and shows on the calendar. It has no item page, so its card links to Sonarr.
+
+## Schema (migration v10)
+
+```sql
+CREATE TABLE pins (
+  user_id   INTEGER NOT NULL REFERENCES users(id),
+  tvdb_id   INTEGER NOT NULL,
+  pinned_at INTEGER NOT NULL,
+  batch     TEXT,                      -- set by a bulk pin, for undo
+  notify    INTEGER NOT NULL DEFAULT 1,
+  PRIMARY KEY (user_id, tvdb_id)
+);
+CREATE INDEX pins_tvdb ON pins(tvdb_id);
+
+-- Every Sonarr episode for shows anyone has pinned (full guide), plus the calendar window for all shows.
+CREATE TABLE sonarr_episodes (
+  series_id INTEGER NOT NULL, season INTEGER NOT NULL, episode INTEGER NOT NULL,
+  title TEXT, air_at INTEGER, has_file INTEGER, monitored INTEGER,
+  PRIMARY KEY (series_id, season, episode)
+);
+CREATE INDEX sonarr_episodes_air ON sonarr_episodes(air_at);
+
+-- TMDB production status, one row per show with a TMDB id.
+CREATE TABLE tmdb_shows (
+  tmdb_id INTEGER PRIMARY KEY, tvdb_id INTEGER, status TEXT,   -- Returning Series | In Production | Ended | Canceled | ...
+  in_production INTEGER, last_air_date TEXT, next_season INTEGER, fetched_at INTEGER
+);
+CREATE INDEX tmdb_shows_tvdb ON tmdb_shows(tvdb_id);
+
+-- Per-person dedupe for pin notifications.
+CREATE TABLE pin_notified (
+  user_id INTEGER NOT NULL, key TEXT NOT NULL, at INTEGER NOT NULL,   -- key: ep:<tvdb>:<s>:<e> | move:<tvdb>:<s>:<e>:<air_at> | ...
+  PRIMARY KEY (user_id, key)
+);
+
+ALTER TABLE sonarr_series ADD COLUMN network TEXT;
+ALTER TABLE sonarr_series ADD COLUMN genres TEXT NOT NULL DEFAULT '[]';
+ALTER TABLE sonarr_series ADD COLUMN tmdb_id INTEGER;
+```
+
+`sonarr_upcoming` stays as it is: the dashboard's "Airing this week" reads it. Once the calendar is built, it can read `sonarr_episodes` instead, and `sonarr_upcoming` can be dropped in a later migration.
+
+Add a test that upgrades a v9 database.
+
+## Sync
+
+All read-only. These go in the existing `arr_sync` job unless stated otherwise.
+
+- **Sonarr calendar:** read −7 to +60 days for all series (one request) into `sonarr_episodes`. The current 8-day read stays for `sonarr_upcoming`.
+- **Full guides:** `episode?seriesId=` for each pinned show, nightly and when a show is first pinned (queue a `pin_guide` job). One request per pinned show, not per library show.
+- **Series:** also store `network`, `genres` and `tmdbId` (Sonarr v4 returns `tmdbId` on series).
+- **TMDB:** a new `tmdb_sync` job, nightly. It reads `tv/{id}` for every pinned show, plus up to 200 never-fetched shows a night, most-watched first, so the browser's outlook facet fills in over a few nights. The client goes in `bingestats/tmdb/` (GET only, the key in Settings, masked). A failure goes in `arr_status` as `app = 'tmdb'`.
+- **Sonarr queue:** already read by the downloads watcher. The calendar uses its match (`downloadId` → episode) for the "downloading" state and its progress.
+
+## Episode state
+
+A pure function in `services/pins.py`, worked out when the page renders and never stored. First match wins:
+
+| State | Condition |
+|---|---|
+| `available` | In `media_items` (episode with this show's TVDB id, season and episode, `is_present = 1`) |
+| `unmonitored` | Sonarr's `monitored = 0` |
+| `downloading` | In the Sonarr queue now |
+| `upcoming` | `air_at` > now |
+| `airing_today` | Airs today in `ui.timezone`, not yet aired |
+| `awaiting` | Aired < 48 h ago, not in Plex |
+| `missing` | Aired ≥ 48 h ago, not in Plex |
+
+Specials (season 0) and unmonitored episodes are hidden by default: settings `pins.show_specials` and `pins.show_unmonitored`, both false. An unmonitored episode never counts as missing. Port Pinnarr's tests for this ordering (`tests/test_calendar.py` there).
+
+## Season outlook
+
+Port Pinnarr's engine (SPEC.md section 10 there) and its tests as they are, including `test_ended_outranks_hiatus` and `test_dated_beats_a_stale_ended_status`. First match wins:
+
+1. `dated`: next airing is in the future.
+2. `announced`: a later season exists with no air dates.
+3. `in_production`: TMDB says so, and nothing is scheduled.
+4. `cancelled`: TMDB `Canceled`.
+5. `ended`: TMDB `Ended`, or Sonarr `ended`.
+6. `between_seasons`: last aired within 9 months.
+7. `dormant`: last aired more than 18 months ago and not in production.
+8. `unknown`.
+
+Without TMDB, rungs 3, 4 and 7 never match: a show that would be dormant reads `unknown`, never `between_seasons`. The outlook is worked out on query in `services/pins.py`, with the same 10-minute per-process cache that completion uses.
+
+## Pages
+
+All admin pages also work as viewer pages under `me`, scoped to `session["viewer"]`. The admin's pins are the owner's.
+
+- **`/calendar`** (sidebar, under Dashboard): the next 14 days as an agenda (poster, show, episode, state badge, download % when downloading). Then "Aired, not arrived" (`awaiting` and `missing`). Then a month grid that names the shows on each day, linking to the item page. Then "Announced", "In production" and "Dormant" (collapsed). Empty state: "Pin some shows" with a link to `/shows`.
+- **`/shows`**: the shows browser. Poster grid, 60 per page.
+  - **Facets:** library, outlook, Sonarr status, genre, network, pinned. AND across facets, OR within one. Each facet's counts are worked out with that facet left out.
+  - **Sort:** recently watched (by you), title, next airing, outlook.
+  - **URL:** filters live in the query string.
+  - **Pin all shown:** posts the query string, not ids, re-runs the filter on the server, and asks first with the count. "Undo last bulk pin" uses `pins.batch`.
+  - **Phones:** the facet rail becomes a sheet.
+- **Item page (show):** a pin toggle; outlook badge; the next episode and its state.
+- **`/me/calendar`, `/me/shows`:** the same templates, on the viewer's own pins.
+- **Lists** (tabs on `/calendar`):
+  - **Ready to watch:** pinned shows with `available` episodes you haven't played (by guid, from `plays`), oldest unwatched first.
+  - **Retire:** pins that are `ended` or `cancelled` and fully watched. "Unpin these" re-runs the query; undo uses `batch`.
+  - **Discover:** unpinned shows you've watched before that have just got a date (`dated` with `next_airing` within 60 days). Admin and viewer.
+- **Downloads page:** a pin badge on jobs for shows the admin has pinned, and a "stalled" flag (no progress for 30 min).
+
+## Notifications
+
+New triggers in `services/notify.py`, group `pins`:
+
+| Trigger | When | Context |
+|---|---|---|
+| `pin_arrived` | The recently-added digest groups a show/season that someone has pinned | `pinner` (user), `show`, `season`, `count`, `items`, `headline` |
+| `pin_schedule_changed` | A pinned episode's `air_at` moves by more than 1 h, from the nightly sync | `pinner`, `show`, `episode`, `old_at`, `new_at` |
+| `pins_week` | Monday 08:00 in `ui.timezone` | `pinner`, `days` (episodes by day) |
+
+- **One event per pinner** whose pin has `notify = 1`. Condition field `pinner.id`, so the admin writes one rule per person with that person's channel. The rules engine is unchanged.
+- **Dedupe** goes through `pin_notified`, so an upgrade (same episode again) never fires twice and one person's message never suppresses another's.
+- **Default rules:** add "Pinned show arrived" and "Pinned week ahead", disabled and with no channel, like the existing defaults.
+
+## Home Assistant
+
+Per tracked user:
+- `{name} next pinned`: sensor; the state is "Show S01E02"; attributes: `air_at`, `state`.
+- `{name} pinned ready`: sensor; count of ready-to-watch episodes.
+
+Both are published with the rest of state.
+
+## REST API
+
+All read scope, except pin and unpin (write scope). They act for `user_id` (default: the owner).
+
+| Method | Path |
+|---|---|
+| GET | `/api/v1/pins?user_id` |
+| PUT / DELETE | `/api/v1/pins/{tvdb_id}?user_id` |
+| GET | `/api/v1/pins/summary?user_id`: next, today, aired not arrived, ready count, failing syncs. One call for a wall display |
+| GET | `/api/v1/pins/schedule?user_id&days=7&back=1` |
+| GET | `/api/v1/pins/arrivals?user_id&hours=24` |
+| GET | `/api/v1/pins/widget?user_id`: pre-worded lines for the Scriptable widget |
+
+Document these in `docs/API.md`. Port Pinnarr's Scriptable widget into `docs/widget/` and point it at `/api/v1/pins/widget`.
+
+## Importing from Pinnarr
+
+A job, `import_pinnarr`, run from Settings → Import, with a dry run first like the Tautulli importer. It reads an uploaded copy of `pinnarr.db`:
+
+- **Accounts:** each Pinnarr account maps to a Binge user by `users.plex_username` (case-insensitive). Accounts without one, or with no match, are listed in the dry run and skipped. An admin with no `plex_username` can be mapped to the owner by ticking a box.
+- **Pins:** `pins` → `series.tvdb_id`, keeping `pinned_at` and `notify`.
+- **Dedupe:** `episode_notifications` → `pin_notified`, so nothing that was already announced gets announced again.
+- **Repeats:** running the import twice changes nothing.
+
+Then Pinnarr can be stopped.
+
+## Milestones
+
+| # | Milestone | Done when |
+|---|---|---|
+| P1 | Migration v10, calendar and guide sync, episode state, `/calendar` agenda + "aired, not arrived", pin toggle on item pages, `/me` versions | Marc's pins (by hand) show the right states against the live server |
+| P2 | TMDB client and job, outlook, `/shows` browser with facets and bulk pin, month grid, announced / in production / dormant | The outlook of 20 shows checked by hand matches reality, or is wrong only where TMDB is |
+| P3 | Triggers, dedupe, default rules, HA sensors | An episode landing in Plex sends one message per pinner; an upgrade sends none |
+| P4 | Ready, retire, discover, downloads badge | The lists make sense against the real library |
+| P5 | API, widget, Pinnarr importer | Pinnarr's pins and notified log imported; Pinnarr stopped |
+
+Every milestone adds tests, as CLAUDE.md requires. Drive the sync with fixtures from Sonarr and TMDB in `tests/fixtures/`.
+
+## Verify against live
+
+Write findings in `docs/verification.md`:
+- Sonarr v4 `series` returns `tmdbId`, `network` and `genres`. What share of Marc's shows have a `tmdbId`?
+- How long `calendar` takes for −7 to +60 days across the library.
+- Whether a Sonarr upgrade gives the episode a new Plex rating key (if it does, the recently-added check sees it as new; `pin_notified` must still stop the repeat).
