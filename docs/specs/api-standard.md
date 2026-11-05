@@ -1,14 +1,14 @@
 # Spec: bringing the REST API to the API standard
 
-Status: agreed 5 Nov 2026, not built.
+Status: agreed 5 Nov 2026, not built. Matches API standard draft 2.
 
 ## Why
 
-Design Uniformity has a draft `API-STANDARD.md` (draft 1, 5 Nov 2026, `marctew/design-uniformity` commit `f865362`). It defines one outside API that every app offers, so that Docket briefs, Vital Signs, the ESP32 panels, Home Assistant, n8n and TRMNL can each have a reader written once.
+Design Uniformity's `API-STANDARD.md` (draft 2, 5 Nov 2026, `marctew/design-uniformity` commit `8d3a7cc`) defines one outside API that every app offers, so that Docket briefs, Vital Signs, the ESP32 panels, Home Assistant, n8n and TRMNL can each have a reader written once.
 
-**Binge is the pilot (Marc, 5 Nov 2026).** The standard's own rollout (its section 14) releases the shared `du_api.py` first and adopts it in Binge second. We're reversing that: Binge builds the standard first, against real data, and the generic parts are then lifted out into Design Uniformity's `tools/du_api.py`. To keep that lift cheap, the generic code goes in one module with no Binge imports (see Layout below).
+**Binge is the pilot (decided, API standard sections 12 and 14).** Binge builds the standard first, against real data, and the generic parts are then lifted out into Design Uniformity's `du_api.py` with as little change as possible. Binge then moves onto the shared copy through the design updater. To keep that lift cheap, the generic code goes in one module with no Binge imports (see Layout below).
 
-Until draft 2 is released, follow the draft as written except where this spec says otherwise. Everything this spec changes is listed in "Feedback for draft 2" at the end, so the standard and Binge end up agreeing.
+The standard isn't released to the apps yet, so `docs/design/API-STANDARD.md` isn't copied in. Build to draft 2 as it stands in the Design Uniformity repo. Draft 2 already takes in this plan's six changes (its section 16), so the two agree. Anything else the pilot finds goes back to Design Uniformity before the release (API standard section 14, step 2).
 
 ## Decisions
 
@@ -196,7 +196,7 @@ CREATE TABLE api_audit (
 - `w=` or `h=` snaps to 80, 160, 320, 640 or 1280.
 - The answer is `image/webp`, or `image/jpeg` when the reader's `Accept` doesn't list `image/webp`. `fmt=jpeg|webp`, `q=40..95` (default 80) and `gray=1` are honoured.
 - Resizing is done with Pillow in `api_core`. Plex hands over its image at the nearest width ≥ the target, and Pillow converts it.
-- Cache files go in `/data/image-cache/v1/<sha256 of kind,id,w,fmt,q,gray>`. Send an ETag and `Cache-Control: public, max-age=86400`. Pruning is LRU by mtime over 500 MB, done by the worker.
+- Cache files go in `/data/image-cache/`, named by the sha256 of kind, id, w, fmt, q and gray (API standard section 6). Send an ETag and `Cache-Control: public, max-age=86400`. Pruning is LRU by mtime over 500 MB, done by the worker.
 - Add Pillow to `requirements.txt`, pinned. It's a Python dependency, not a front-end asset, so it doesn't go in `vendor/VERSIONS`.
 - The old `/img/` and `/pins/poster/` routes are unchanged.
 
@@ -346,18 +346,6 @@ A second display (pins "Up next", built from `pins_schedule`) waits until Marc p
 
 Stages 1–3 are one PR each and don't depend on stage 4. Stage 4 is the biggest: migration, worker, web and Settings. Stage 5 needs stages 2 and 4. Stage 6 goes with stage 5. Keep `_m14` in stage 1 with all its tables, so there's one migration and not three.
 
-## Feedback for draft 2 of API-STANDARD.md
+## Checked against
 
-Found while planning this. Take these back to Design Uniformity:
-
-1. **More than one worker, and a separate worker process.** Section 8's in-memory event ring and the "8 streams per app" limit assume one gunicorn worker and that events start in the web process. Binge has two workers and a separate worker process. Suggest:
-   - events go through a small SQLite `events` table, with the row id as `Last-Event-ID`;
-   - the cap is "8 per app, split across workers";
-   - `du_api.publish()` writes the row, and the stream reads new rows.
-2. **The error shape for existing APIs.** Binge's v1 already answers `{"error": {"code", "message"}}`, and live readers depend on it. The standard should say: an app with an existing `/api/v1/` keeps the old shape on its old routes, and only the standard's routes (`meta`, `status`, `feeds`, `images`, `actions`, `events`) must use `{"error", "code"}`.
-3. **Which signed-in browsers can read.** Section 3 says any signed-in browser can read `/api/v1/` GETs. Make that "an admin session", for apps with viewer or non-admin logins (Binge).
-4. **Access logs.** Section 3 says apps never log query strings, but doesn't say how. Gunicorn's default access log includes them (`%(r)s`) and the referrer (`%(f)s`). Give the format line in `APP-STANDARD.md` deployment notes, and require `Referrer-Policy: no-referrer` on `/display/`.
-5. **Docker apps.** Section 6's cache path `/var/lib/<app>/image-cache/` should say "or the app's data volume" for apps in Docker (Binge, under its section 1 exception).
-6. **Rate limits with several workers.** In-memory limits are per worker. Say that this is acceptable, or `du_api` needs shared state.
-
-Last checked: `API-STANDARD.md` at `f865362`, `APP-STANDARD.md` v1.7 plus that commit's one-line change.
+`API-STANDARD.md` draft 2 at `8d3a7cc`, and `APP-STANDARD.md` v1.7 plus that commit's access-log section.
