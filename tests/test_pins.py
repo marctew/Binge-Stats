@@ -1,5 +1,6 @@
 """Pins and the pinned calendar (docs/specs/pins.md): episode state, sync, the service and the pages."""
 import json
+import time
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
@@ -399,3 +400,40 @@ def test_calendar_sections_fold(site, app_conn):
     assert set(tags) >= {"cal-agenda", "cal-month", "cal-later", "cal-undated"}
     assert all(" open" in tags[k] and "data-remember" in tags[k] for k in ("cal-agenda", "cal-month", "cal-later"))
     assert " open" not in tags["cal-undated"] and "data-remember" not in tags["cal-undated"]   # always starts folded
+
+
+# -- a whole series on one day is one row -------------------------------------------------------
+
+def ep_(day, tvdb, season, n, state, air=NOW):
+    return {"day": day, "tvdb_id": tvdb, "season": season, "episode": n, "state": state, "label": pins.LABELS[state],
+            "title": f"E{n}", "rating_key": 1000 + n, "pct": None, "air_at": air, "show": f"S{tvdb}"}
+
+
+def test_condense():
+    from datetime import date
+    d = date(2026, 11, 5)
+    rows = pins.condense([ep_(d, 1, 2, n, "available") for n in range(1, 7)] + [ep_(d, 2, 22, 10, "upcoming")])
+    assert [(r["show"], r["count"]) for r in rows] == [("S1", 6), ("S2", 1)]
+    run = rows[0]
+    assert (run["ep_first"], run["ep_last"], run["contiguous"], run["label"], run["rating_key"]) == (1, 6, True, "In Plex", None)
+    mixed = pins.condense([ep_(d, 1, 2, 1, "available"), ep_(d, 1, 2, 3, "missing"), ep_(d, 1, 2, 4, "missing")])[0]
+    assert (mixed["state"], mixed["label"], mixed["contiguous"]) == ("missing", "1 of 3 in Plex", False)
+    none_here = pins.condense([ep_(d, 1, 2, 1, "awaiting"), ep_(d, 1, 2, 2, "missing"), ep_(d, 1, 2, 3, "missing")])[0]
+    assert none_here["label"] == "2 missing"
+    assert mixed["detail"] == "E01 in plex, E03 missing, E04 missing"
+    other_day = pins.condense([ep_(d, 1, 2, 1, "available"), ep_(date(2026, 11, 6), 1, 2, 2, "available")])
+    assert len(other_day) == 2                                         # different days stay apart
+    assert rows[1]["rating_key"] == 1010 and rows[1]["title"] == "E10"  # a single episode is untouched
+
+
+def test_calendar_rows_a_season_drop_once(site, app_conn):
+    pins.pin(app_conn, OWNER, 222)                                     # "Sonarr Only", series 2
+    for n in range(1, 7):
+        app_conn.execute("INSERT INTO sonarr_episodes VALUES (2, 2, ?, ?, ?, 0, 1)", (n, f"Ep {n}", int(time.time()) + 3 * D))
+    cal = pins.calendar(app_conn, OWNER)
+    [row] = [r for d in cal["agenda"] for r in d["episodes"]]
+    assert row["count"] == 6 and (row["ep_first"], row["ep_last"]) == (1, 6)
+    body = site.get("/calendar").data.decode()
+    assert "S02E01–E06 · 6 episodes" in body and body.count("Sonarr Only") >= 1 and "Ep 3" not in body
+    mon = pins.month(app_conn, OWNER)
+    assert sum(len(v) for v in mon["rows"].values()) <= mon["count"]

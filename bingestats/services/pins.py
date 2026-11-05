@@ -208,6 +208,47 @@ def _episodes(conn: sqlite3.Connection, user_id: int, start: int, end: int, now:
     return out
 
 
+# Most in need of attention first: a run of episodes shows the first of these that any of them has.
+ATTENTION = [MISSING, AWAITING, DOWNLOADING, ON_DISK, AIRING_TODAY, UPCOMING, UNMONITORED, AVAILABLE]
+
+
+def _run_label(states: list[str], worst: str) -> str:
+    """'In Plex' when they all agree; '2 of 6 in Plex' when some are; else '3 missing'."""
+    if len(set(states)) == 1:
+        return LABELS[worst]
+    if AVAILABLE in states:
+        return f"{states.count(AVAILABLE)} of {len(states)} in Plex"
+    return f"{states.count(worst)} {LABELS[worst].lower()}"
+
+
+def condense(eps: list[dict]) -> list[dict]:
+    """One row per show, season and day: a whole series dropped on one day is one row, not six.
+    A single episode stays as it is (count 1). A run gets count, the episode numbers, and the state
+    that most needs attention, labelled with how many have it when they differ ("2 missing")."""
+    rows: list[dict] = []
+    runs: dict[tuple, dict] = {}
+    for e in eps:
+        key = (e["day"], e["tvdb_id"], e["season"])
+        if key in runs:
+            runs[key]["episodes"].append(e)
+        else:
+            runs[key] = {**e, "episodes": [e]}
+            rows.append(runs[key])
+    for r in rows:
+        eps_ = r["episodes"]
+        r["count"] = len(eps_)
+        if r["count"] == 1:
+            continue
+        nums = sorted(x["episode"] for x in eps_)
+        states = [x["state"] for x in eps_]
+        worst = min(states, key=ATTENTION.index)
+        r.update(state=worst, title=None, rating_key=None, pct=None, ep_first=nums[0], ep_last=nums[-1],
+                 contiguous=nums == list(range(nums[0], nums[-1] + 1)),
+                 label=_run_label(states, worst),
+                 detail=", ".join(f"E{x['episode']:02d} {LABELS[x['state']].lower()}" for x in sorted(eps_, key=lambda x: x["episode"])))
+    return rows
+
+
 def month(conn: sqlite3.Connection, user_id: int, ym: str | None = None, now: float | None = None) -> dict:
     """One month of pinned episodes as Monday-first weeks, for the calendar's month view.
     ym is 'YYYY-MM' (this month if missing or not a month)."""
@@ -237,7 +278,8 @@ def month(conn: sqlite3.Connection, user_id: int, ym: str | None = None, now: fl
             "prev": prev.strftime("%Y-%m"), "next": nxt.strftime("%Y-%m"),
             "is_this_month": first == today.replace(day=1),
             "days": [day for week in weeks for day in week if day["in_month"] and day["episodes"]],
-            "count": sum(len(day["episodes"]) for week in weeks for day in week if day["in_month"])}
+            "count": sum(len(day["episodes"]) for week in weeks for day in week if day["in_month"]),
+            "rows": {day["date"]: condense(day["episodes"]) for week in weeks for day in week}}
 
 
 def calendar(conn: sqlite3.Connection, user_id: int, now: float | None = None) -> dict:
@@ -268,7 +310,8 @@ def calendar(conn: sqlite3.Connection, user_id: int, now: float | None = None) -
         elif ep["state"] not in (AVAILABLE, UNMONITORED):   # aired and not watchable: expected, missing,
             overdue.append(ep)                              # downloading, or on disk but not in Plex
             in_overdue.add(ep["tvdb_id"])
-    overdue.sort(key=lambda e: -e["air_at"])
+    overdue.sort(key=lambda e: (-e["air_at"], e["episode"]))
+    overdue = condense(overdue)
 
     from . import outlook as outlook_svc
     looks = outlook_svc.for_shows(conn, tvdb_ids, now)
@@ -283,7 +326,7 @@ def calendar(conn: sqlite3.Connection, user_id: int, now: float | None = None) -
     groups = [{"outlook": k, "label": label, "shows": [s for s in undated if s["outlook"] == k]}
               for k, label in outlook_svc.LABELS.items() if k != outlook_svc.DATED]
 
-    return {"agenda": [{"day": d.isoformat(), "label": _day_label(d, today), "episodes": eps}
+    return {"agenda": [{"day": d.isoformat(), "label": _day_label(d, today), "episodes": condense(eps)}
                        for d, eps in sorted(agenda.items())],
             "overdue": overdue, "later": later, "undated": undated, "pins": by_title,
             "undated_groups": [g for g in groups if g["shows"]],

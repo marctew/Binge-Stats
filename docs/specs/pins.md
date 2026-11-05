@@ -151,6 +151,9 @@ All admin pages also work as viewer pages under `me`, scoped to `session["viewer
     - **Phones:** one compact line per episode (day, dot, show, SxxEyy), since seven columns are too narrow for names.
     - **Moving between months:** ‹ › and "This month" swap only the section (`/calendar/month?m=YYYY-MM`, `/me/calendar/month`).
     - **Shared logic:** the month view uses the same episode logic as the agenda (`pins._episodes`), so they can't disagree.
+  - **A season dropped on one day is one row** (`pins.condense`, Marc 2026-11-05): episodes of the same show and season airing on the same day become one row in Coming up, Aired not arrived and the month view.
+    - **Text:** "S02E01–E06 · 6 episodes" (or "S02 · N episodes" if there are gaps), linking to the show.
+    - **Badge:** the shared state when they all agree. Otherwise it takes the colour of the state that most needs attention and reads "2 of 6 in Plex", or "3 missing" if none are in. Hovering lists each episode.
 - **`/shows`**: the shows browser. Poster grid, 60 per page.
   - **Facets:** library, outlook, Sonarr status, genre, network, pinned. AND across facets, OR within one. Each facet's counts are worked out with that facet left out.
   - **Sort:** recently watched (by you), title, next airing, outlook.
