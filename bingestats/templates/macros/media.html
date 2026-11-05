@@ -70,6 +70,15 @@
 
 {# One episode of a pinned show on the calendar. `when` is what goes in the time slot; viewers get no links.
    pin: add an unpin button for the show (outside the link, so it can be a form). #}
+{# "S02E03", or for a run of episodes on one day (pins.condense) "S02E01–E06" ("S02" if there are gaps). #}
+{% macro ep_code(e) -%}
+{%- if e.count is defined and e.count > 1 -%}
+S{{ '%02d' % e.season }}{% if e.contiguous %}E{{ '%02d' % e.ep_first }}–E{{ '%02d' % e.ep_last }}{% endif %}
+{%- else -%}
+S{{ '%02d' % e.season }}E{{ '%02d' % e.episode }}
+{%- endif -%}
+{%- endmacro %}
+
 {% macro episode_row(e, when, viewer=False, pin=False) -%}
 {% from "macros/ui.html" import poster %}
 {%- set href = None if viewer else (url_for('ui.item_page', rating_key=e.rating_key) if e.rating_key else (url_for('ui.item_page', rating_key=e.show_rating_key) if e.show_rating_key else None)) -%}
@@ -79,12 +88,12 @@
   {{ poster(e.thumb, e.show, 'w-9', 'poster', 150, src=None if e.thumb else (url_for('img.arr_poster', app='sonarr', item_id=e.series_id) if e.series_id else None)) }}
   <div class="min-w-0 flex-1">
     <div class="truncate text-sm font-medium">{{ e.show }}</div>
-    <div class="truncate text-xs text-muted">S{{ '%02d' % e.season }}E{{ '%02d' % e.episode }}{% if e.title and e.title != 'TBA' %} · {{ e.title }}{% endif %}</div>
+    <div class="truncate text-xs text-muted">{{ ep_code(e) }}{% if e.count is defined and e.count > 1 %} · {{ e.count }} episodes{% elif e.title and e.title != 'TBA' %} · {{ e.title }}{% endif %}</div>
     <div class="truncate text-xs text-faint sm:hidden">{{ when }}</div>
   </div>
   <span class="hidden shrink-0 text-right text-xs text-muted sm:block">{{ when }}</span>
   <span class="{{ {'available': 'badge-success', 'on_disk': 'badge-info', 'downloading': 'badge-info', 'airing_today': 'badge-accent',
-                  'awaiting': 'badge-warning', 'missing': 'badge-danger'}.get(e.state, 'badge-muted') }} shrink-0">{{ e.label }}{% if e.state == 'downloading' and e.pct is not none %} {{ e.pct }}%{% endif %}</span>
+                  'awaiting': 'badge-warning', 'missing': 'badge-danger'}.get(e.state, 'badge-muted') }} shrink-0"{% if e.detail %} title="{{ e.detail }}"{% endif %}>{{ e.label }}{% if e.state == 'downloading' and e.pct is not none %} {{ e.pct }}%{% endif %}</span>
 {% if href %}</a>{% else %}</div>{% endif %}
 {% if pin %}{% with tvdb_id=e.tvdb_id, pinned=True, compact=True %}{% include "partials/pin_button.html" %}{% endwith %}{% endif %}
 </div>
