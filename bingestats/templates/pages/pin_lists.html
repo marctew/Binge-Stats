@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% from "macros/ui.html" import tabs as tabs_nav, page_header, empty_state, poster, outlook_badge, confirm_button %}
+{% from "macros/media.html" import section_title %}
+{% from "macros/icons.html" import icon %}
+{% block title %}{{ {'ready': 'Ready to watch', 'retire': 'Retire', 'discover': 'Discover'}[tab] }} · Binge Stats{% endblock %}
+{% block content %}
+{% call page_header('Calendar', 'The shows you pin, and when their episodes land') %}{% endcall %}
+{{ tabs_nav(tabs) }}
+
+{% macro show_art(s, cls='w-11') -%}
+{{ poster(s.thumb, s.title or s.show, cls, 'poster', 150, src=None if s.thumb else (url_for('img.arr_poster', app='sonarr', item_id=s.series_id) if s.series_id else None)) }}
+{%- endmacro %}
+{% macro show_link(s, rk, text) -%}
+{% if rk and not viewer %}<a href="{{ url_for('ui.item_page', rating_key=rk) }}" class="block truncate text-sm font-medium hover:text-accent">{{ text }}</a>
+{% else %}<div class="truncate text-sm font-medium">{{ text }}</div>{% endif %}
+{%- endmacro %}
+
+{% if tab == 'ready' %}
+<p class="mb-4 text-sm text-muted">Pinned shows with something in Plex after where you've got to. Newest arrivals first. Only your own plays count, so an episode marked watched in Plex without playing still shows here.</p>
+{% if rows %}
+<div class="card divide-y divide-border">
+  {% for r in rows %}
+  <div class="flex items-center gap-3 px-4 py-3">
+    {% if r.next_rating_key and not viewer %}<a href="{{ url_for('ui.item_page', rating_key=r.next_rating_key) }}" class="shrink-0">{{ show_art(r) }}</a>{% else %}{{ show_art(r) }}{% endif %}
+    <div class="min-w-0 flex-1">
+      {{ show_link(r, r.show_rating_key, r.show) }}
+      <div class="truncate text-xs text-muted">{{ 'Next' if r.started else 'Start at' }} {{ r.next_code }}{% if r.next_title %} · {{ r.next_title }}{% endif %}</div>
+    </div>
+    {% if r.new %}<span class="badge-accent hidden shrink-0 sm:inline-flex">New this week</span>{% endif %}
+    <span class="badge-success shrink-0">{{ r.waiting }} waiting</span>
+  </div>
+  {% endfor %}
+</div>
+{% else %}{{ empty_state("You're up to date", "Nothing from your pinned shows is waiting in Plex.", 'check') }}{% endif %}
+
+{% elif tab == 'retire' %}
+<p class="mb-4 text-sm text-muted">Pins that can't give you anything new, or that you've stopped watching. Unpinning a group can be undone.</p>
+{% if last_retired %}
+<form method="post" action="{{ url_for(undo_ep) }}" class="banner mb-4 flex flex-wrap items-center justify-between gap-3">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <span class="text-sm">You last unpinned {{ last_retired.count }} {{ 'show' if last_retired.count == 1 else 'shows' }} from here.</span>
+  <button class="btn-ghost">Undo, pin {{ 'it' if last_retired.count == 1 else 'them' }} again</button>
+</form>
+{% endif %}
+{% for g in rows %}
+<section class="{{ 'mt-8' if not loop.first }}">
+  <div class="mb-3 flex flex-wrap items-end justify-between gap-3">
+    <div><h2 class="text-lg font-semibold">{{ g.label }} <span class="text-sm font-normal text-muted">{{ g.shows | length }}</span></h2>
+      <p class="text-xs text-muted">{{ g.why }}</p></div>
+    <form method="post" action="{{ url_for(retire_ep, group=g.key) }}" class="inline-flex">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      {% set n = g.shows | length %}{{ confirm_button('Unpin it' if n == 1 else 'Unpin these ' ~ n, ('Unpin ' ~ g.shows[0].title if n == 1 else 'Unpin the ' ~ n ~ ' shows under ' ~ g.label) ~ '? You can undo it straight after.', 'Unpin', glyph='pin') }}
+    </form>
+  </div>
+  <div class="card divide-y divide-border">
+    {% for s in g.shows %}
+    <div class="flex items-center gap-3 py-3 pl-4 pr-2">
+      {{ show_art(s, 'w-9') }}
+      <div class="min-w-0 flex-1">
+        {{ show_link(s, s.rating_key, s.title) }}
+        <div class="truncate text-xs text-muted">
+          {% if g.key == 'cold' %}{{ ('Last played ' ~ (s.last | relative)) if s.last else 'Never played' }}{% if s.total %} · {{ s.finished }} of {{ s.total }} watched{% endif %}
+          {% else %}Watched all {{ s.total }} in Plex{% endif %}
+        </div>
+      </div>
+      {{ outlook_badge(s.outlook) }}
+      {% with tvdb_id=s.tvdb_id, pinned=True, compact=True %}{% include "partials/pin_button.html" %}{% endwith %}
+    </div>
+    {% endfor %}
+  </div>
+</section>
+{% else %}
+{{ empty_state('Nothing to retire', "Every pin still has something for you: episodes waiting, or more on the way.", 'pin') }}
+{% endfor %}
+
+{% else %}
+<p class="mb-4 text-sm text-muted">Shows you've watched before, not pinned, with something coming: a date in the next 60 days, or a new season announced or filming. Most watched first.</p>
+{% if rows %}
+<div class="card divide-y divide-border">
+  {% for s in rows %}
+  <div class="flex items-center gap-3 py-3 pl-4 pr-2">
+    {{ show_art(s, 'w-9') }}
+    <div class="min-w-0 flex-1">
+      {{ show_link(s, s.rating_key, s.title) }}
+      <div class="truncate text-xs text-muted">You watched {{ s.plays | plural('episode') }}{% if s.hours %} · {{ s.hours }}h{% endif %}{% if s.last %} · last {{ s.last | localtime('%b %Y') }}{% endif %}</div>
+    </div>
+    {{ outlook_badge(s.outlook, s.next_at) }}
+    {% with tvdb_id=s.tvdb_id, pinned=False, compact=False %}{% include "partials/pin_button.html" %}{% endwith %}
+  </div>
+  {% endfor %}
+</div>
+{% else %}{{ empty_state('Nothing to discover', "None of the shows you've watched and not pinned has anything coming.", 'search') }}{% endif %}
+{% endif %}
+{% endblock %}

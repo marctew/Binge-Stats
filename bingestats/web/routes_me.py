@@ -141,6 +141,36 @@ def shows_undo():
     return do_undo(_uid(), viewer=True)
 
 
+@bp.route("/calendar/ready")
+def ready_page():
+    from .routes_pins import render_list
+    return render_list(_uid(), "ready", viewer=True)
+
+
+@bp.route("/calendar/retire")
+def retire_page():
+    from .routes_pins import render_list
+    return render_list(_uid(), "retire", viewer=True)
+
+
+@bp.route("/calendar/retire/<group>", methods=["POST"])
+def retire_group(group: str):
+    from .routes_pins import do_retire
+    return do_retire(_uid(), group, viewer=True)
+
+
+@bp.route("/calendar/retire-undo", methods=["POST"])
+def retire_undo():
+    from .routes_pins import do_retire_undo
+    return do_retire_undo(_uid(), viewer=True)
+
+
+@bp.route("/calendar/discover")
+def discover_page():
+    from .routes_pins import render_list
+    return render_list(_uid(), "discover", viewer=True)
+
+
 @bp.route("/calendar/body")
 def calendar_body():
     from .routes_pins import render_calendar

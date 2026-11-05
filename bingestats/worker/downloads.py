@@ -43,6 +43,28 @@ FULL_TIMEOUT_S = 90        # SABnzbd is slow to list a big queue while it's busy
 MAX_ROWS = 400             # after grouping; a pathological queue still stays a sensible size
 
 MOVE_CHECK_S = 0.5         # how often the wait between reads looks for a move made from the page
+STALL_S = 30 * 60          # a job SABnzbd says is downloading that hasn't moved this long is "stalled"
+
+
+def mark_stalled(rows: list[dict], header: dict, st: dict, now: float) -> None:
+    """Set stalled_s on each job: how long a job SABnzbd says is *downloading* has gone without its MB
+    left changing, once that passes STALL_S (else 0). Only the front of the queue downloads, so jobs
+    waiting behind it never count, and a paused queue resets every clock."""
+    seen = st.setdefault("progress", {})       # nzo_id -> (mb_left, since)
+    live = set()
+    for r in rows:
+        if r.get("kind") != "job":
+            continue
+        nzo, left = r.get("nzo_id"), r.get("mb_left")
+        live.add(nzo)
+        active = r.get("status") == "Downloading" and not header.get("paused")
+        prev = seen.get(nzo)
+        if prev is None or prev[0] != left or not active:
+            seen[nzo] = (left, now)
+        since = seen[nzo][1]
+        r["stalled_s"] = int(now - since) if active and now - since >= STALL_S else 0
+    for k in [k for k in seen if k not in live]:
+        del seen[k]
 
 
 def group_rows(slots: list[dict], show) -> list[dict]:
@@ -174,6 +196,7 @@ def snapshot(conn, clients: dict, st: dict, now: float) -> dict:
         st["checked"] = st.get("checked", set()) | {p["nzo_id"] for p in pp}
 
     rows = refresh(st["base"], header, fresh, st["base_mb_left"])
+    mark_stalled(rows, header, st, now)
     return {"header": header, "rows": rows, "pp": pp, "recent": recent, "at": int(now), "full_at": round(st["full_at"], 3)}
 
 

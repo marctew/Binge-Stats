@@ -52,6 +52,7 @@ TRIGGERS: dict[str, dict] = {
     "pin_arrived": {"label": "Pinned show arrived", "group": "pins"},
     "pin_schedule_changed": {"label": "Pinned episode's air date moved", "group": "pins"},
     "pins_week": {"label": "Pinned shows: the week ahead (Mondays)", "group": "pins"},
+    "pins_discover": {"label": "Shows you've watched are coming back (Mondays)", "group": "pins"},
 }
 
 DECISION_LABELS = {"direct_play": "Direct Play", "direct_stream": "Direct Stream", "transcode": "Transcode"}
@@ -93,7 +94,7 @@ FIELDS: dict[str, list[tuple]] = {
               ("count", "Number of items", "int", None), ("show", "Show or artist", "str", None)],
     "server": [],
     # One event per person who pinned the show: "Pinned by" picks whose, so each can have their own channel.
-    "pins": [("pinner.id", "Pinned by", "choice", "users"), ("show", "Show", "str", None),
+    "pins": [("pinner.id", "Person", "choice", "users"), ("show", "Show", "str", None),
              ("count", "Number of episodes", "int", None)],
     "limit": [("user.id", "Person", "choice", "users"), ("stopped", "Stream was stopped", "bool", None),
               ("count", "Number of streams", "int", None)],
@@ -389,6 +390,10 @@ def _sample_pins(trigger: str) -> dict:
         return {"pinner": who, "show": "Slow Horses", "season": 5, "episode": 4, "code": "S05E04",
                 "title": "Scars", "old_text": "Wed 12 Nov, 21:00", "new_text": "Wed 19 Nov, 21:00", "later": True,
                 "count": 1, "_poster": None, "_key": "sample"}
+    if trigger == "pins_discover":
+        shows = [{"show": "Severance", "text": "Severance · season 3 on Thu 22 Jan"},
+                 {"show": "Shrinking", "text": "Shrinking · filming a new season"}]
+        return {"pinner": who, "shows": shows, "count": 2, "show": None, "_poster": None, "_key": "sample"}
     days = [{"label": "Wednesday 12 November", "episodes": [
                 {"show": "Slow Horses", "text": "Slow Horses S05E04 · Scars · 21:00", "count": 1}]},
             {"label": "Friday 14 November", "episodes": [

@@ -394,12 +394,16 @@ def download_queue(conn: sqlite3.Connection, now: float | None = None) -> dict |
         "SELECT rating_key, tvdb_id FROM media_items WHERE type = 'show' AND is_present = 1 AND tvdb_id IS NOT NULL")}
     plex_movies = {r["tmdb_id"]: r for r in conn.execute(
         "SELECT rating_key, tmdb_id FROM media_items WHERE type = 'movie' AND is_present = 1 AND tmdb_id IS NOT NULL")}
+    from . import pins
+    owner = pins.owner_id(conn)
+    pinned = pins.pinned(conn, owner) if owner is not None else set()
 
     def enrich(j: dict) -> dict:
         recs = known.get(j.get("nzo_id"))
         d = _describe(recs, plex_shows, plex_movies) if recs else {
             "app": None, "item_id": None, "title": _pretty(j.get("name")), "sub": "", "quality": None,
             "rating_key": None, "warning": None}
+        d["pinned"] = bool(recs and recs[0].get("app") == "sonarr" and recs[0].get("tvdb_id") in pinned)
         return {**j, **d}
 
     header = live.get("header") or {}

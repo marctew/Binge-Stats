@@ -259,3 +259,9 @@ I moved a job deep in the "other" part of the queue and put it back.
 - **TMDB's `in_production` flag doesn't mean filming.** It was true on every Returning Series, so Pinnarr's rule put 607 shows (46 of Marc's 66 pins, including Ted Lasso and Slow Horses) under Filming. Filming now comes only from TMDB's status, In Production or Post Production, and the flag is ignored.
 - **TVDB marks shows ended between series.** Sonarr had 24 Hours in Police Custody, Court Martial and The Terminal List: Dark Wolf as ended while TMDB had them as Returning Series. When TMDB has a status, it decides; Sonarr's "ended" counts only when TMDB has nothing.
 - **Line of Duty reads as Announced:** TMDB lists series 7, and the last aired is series 6.
+
+## Pin messages, first live run, 2026-11-05 (stage 3)
+
+- **Upgrades and new rating keys.** Only 2 of 40,715 episode guids in the library have ever appeared under more than one Plex rating key, so a Sonarr upgrade normally keeps the key. Arrival messages are deduped by show, season and episode number in any case (`pin_notified`), so the rare re-added episode can't be announced twice.
+- **The week ahead claimed this week on deploy** (a Thursday): the rules were still off, so nothing was sent, and the first digest goes out on Monday 9 November at 08:00.
+- **Sensors for Marc:** next pinned was The Simpsons S38E06 (Mon 9 Nov 01:00). Pinned ready was 83 episodes: pinned shows' episodes added in the last 30 days that he hasn't finished, including whole seasons that just landed (A Tale of Two Cities, Black Doves).

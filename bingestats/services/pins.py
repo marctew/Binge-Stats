@@ -164,6 +164,20 @@ def downloading(conn: sqlite3.Connection) -> dict[tuple, int]:
     return out
 
 
+def stalled(conn: sqlite3.Connection) -> set[tuple]:
+    """(tvdb, season, episode) of downloads the watcher has marked stalled (worker/downloads.py)."""
+    row = conn.execute("SELECT info FROM arr_status WHERE app = 'sabnzbd'").fetchone()
+    info = json.loads(row["info"]) if row else {}
+    live, known = info.get("live") or {}, info.get("live_map") or {}
+    out = set()
+    for r in live.get("rows") or []:
+        if r.get("kind") == "job" and r.get("stalled_s"):
+            for rec in known.get(r.get("nzo_id")) or []:
+                if rec.get("app") == "sonarr" and rec.get("tvdb_id") and rec.get("season") is not None:
+                    out.add((rec["tvdb_id"], rec["season"], rec["episode"]))
+    return out
+
+
 def _day_label(d, today) -> str:
     if d == today:
         return "Today"
@@ -186,6 +200,7 @@ def _episodes(conn: sqlite3.Connection, user_id: int, start: int, end: int, now:
         return []
     plex = _in_plex(conn, tvdb_ids)
     dl = downloading(conn)
+    stuck = stalled(conn)
     rows = conn.execute(
         f"SELECT * FROM sonarr_episodes WHERE series_id IN ({','.join('?' * len(by_series))}) "
         "AND air_at >= ? AND air_at < ? ORDER BY air_at, season, episode", [*by_series, start, end]).fetchall()
@@ -202,7 +217,8 @@ def _episodes(conn: sqlite3.Connection, user_id: int, start: int, end: int, now:
         out.append({"show": s["title"], "tvdb_id": s["tvdb_id"], "series_id": s["series_id"],
                     "show_rating_key": s["rating_key"], "thumb": s["thumb"], "season": r["season"],
                     "episode": r["episode"], "title": r["title"], "air_at": r["air_at"], "state": state,
-                    "label": LABELS[state], "rating_key": plex.get(key), "pct": dl.get(key),
+                    "label": "Stalled" if state == DOWNLOADING and key in stuck else LABELS[state],
+                    "stalled": state == DOWNLOADING and key in stuck, "rating_key": plex.get(key), "pct": dl.get(key),
                     "late_s": int(now - r["air_at"]) if r["air_at"] and r["air_at"] < now else 0,
                     "day": datetime.fromtimestamp(r["air_at"], tz).date()})
     return out
@@ -351,10 +367,7 @@ def for_item(conn: sqlite3.Connection, item: dict, user_id: int | None) -> dict 
             "next_at": o.get("next_at")}
 
 
-# -- for Home Assistant (and later the API): what's next, and what's waiting ------------------------
-
-READY_DAYS = 30
-
+# -- for Home Assistant (and later the API): what's next (what's waiting is pin_lists.ready) ------------------------
 
 def next_up(conn: sqlite3.Connection, user_id: int, now: float | None = None) -> dict | None:
     """The next pinned episode still to air (today's later ones count), or None."""
@@ -363,22 +376,3 @@ def next_up(conn: sqlite3.Connection, user_id: int, now: float | None = None) ->
         if ep["state"] in (UPCOMING, AIRING_TODAY):
             return ep
     return None
-
-
-def ready(conn: sqlite3.Connection, user_id: int, now: float | None = None, days: int = READY_DAYS) -> list[dict]:
-    """Episodes of this person's pinned shows that arrived in Plex in the last `days` and they haven't
-    finished (by guid, so a re-added file still counts as watched). Newest first."""
-    now = int(now or time.time())
-    tvdb_ids = sorted(pinned(conn, user_id))
-    if not tvdb_ids:
-        return []
-    rows = conn.execute(
-        "SELECT e.rating_key, e.guid, e.title, e.season_index, e.episode_index, e.added_at, s.title AS show, s.tvdb_id "
-        "FROM media_items e JOIN media_items s ON s.rating_key = e.grandparent_rating_key "
-        f"WHERE e.type = 'episode' AND e.is_present = 1 AND s.tvdb_id IN ({','.join('?' * len(tvdb_ids))}) "
-        "AND e.added_at >= ? AND (e.season_index IS NULL OR e.season_index > 0) "
-        "AND NOT EXISTS (SELECT 1 FROM plays p WHERE p.user_id = ? AND p.watched = 1 AND p.guid = e.guid) "
-        "ORDER BY e.added_at DESC, s.title, e.season_index, e.episode_index",
-        [*tvdb_ids, now - days * 86400, user_id]).fetchall()
-    return [{"rating_key": r["rating_key"], "show": r["show"], "tvdb_id": r["tvdb_id"], "season": r["season_index"],
-             "episode": r["episode_index"], "title": r["title"], "added_at": r["added_at"]} for r in rows]
