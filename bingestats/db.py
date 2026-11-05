@@ -408,7 +408,38 @@ def _m13(conn: sqlite3.Connection) -> None:
             (r["name"], r["trigger"], r["title"], r["body"], int(r.get("include_poster", True))))
 
 
-MIGRATIONS = [_m1, _m2, _m3, _m4, _m5, _m6, _m7, _m8, _m9, _m10, _m11, _m12, _m13]
+def _m14(conn: sqlite3.Connection) -> None:
+    """The outside API standard (docs/specs/api-standard.md), every table it needs in one migration.
+    The worker writes events and webhook deliveries; the web process writes webhooks (Settings),
+    idempotency keys and the audit log."""
+    _run_script_in_tx(conn, """
+CREATE TABLE events (
+  id INTEGER PRIMARY KEY, type TEXT NOT NULL, at INTEGER NOT NULL, title TEXT NOT NULL, item TEXT NOT NULL
+);
+CREATE INDEX events_at ON events (at);
+CREATE TABLE webhooks (
+  id INTEGER PRIMARY KEY, name TEXT NOT NULL, url TEXT NOT NULL, secret TEXT NOT NULL,
+  event_types TEXT NOT NULL DEFAULT '[]', enabled INTEGER NOT NULL DEFAULT 1, created_at INTEGER NOT NULL,
+  last_ok_at INTEGER, last_error TEXT, last_error_at INTEGER
+);
+CREATE TABLE webhook_deliveries (
+  id INTEGER PRIMARY KEY, webhook_id INTEGER NOT NULL REFERENCES webhooks(id) ON DELETE CASCADE,
+  event_id INTEGER NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, next_at INTEGER NOT NULL,
+  done_at INTEGER, error TEXT
+);
+CREATE INDEX webhook_deliveries_due ON webhook_deliveries (done_at, next_at);
+CREATE TABLE api_idempotency (
+  token_id INTEGER NOT NULL, key TEXT NOT NULL, action TEXT NOT NULL, status INTEGER NOT NULL,
+  body TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY (token_id, key)
+);
+CREATE TABLE api_audit (
+  id INTEGER PRIMARY KEY, at INTEGER NOT NULL, token_id INTEGER, token_name TEXT NOT NULL,
+  action TEXT NOT NULL, body TEXT NOT NULL, status INTEGER NOT NULL, message TEXT
+);
+""")
+
+
+MIGRATIONS = [_m1, _m2, _m3, _m4, _m5, _m6, _m7, _m8, _m9, _m10, _m11, _m12, _m13, _m14]
 LATEST = len(MIGRATIONS)
 
 

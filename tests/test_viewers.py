@@ -88,6 +88,7 @@ def test_viewer_is_sent_home_from_admin_pages(alex, url):
 
 
 @pytest.mark.parametrize("url", ["/api/v1/history", "/api/v1/users", "/api/v1/stats/summary", "/api/v1/activity",
+                                 "/api/v1/meta", "/api/v1/status",
                                  f"/api/v1/users/{SAM}/completion", "/api/v1/alerts"])
 def test_viewer_has_no_api(alex, url):
     assert alex.get(url).status_code in (401, 403)

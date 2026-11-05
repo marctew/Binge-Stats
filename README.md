@@ -53,7 +53,7 @@ docker compose up -d
 3. On the next screen your libraries and users sync on their own. Anything played from then on is recorded live.
 4. Coming from Tautulli? See below. Years of history take a couple of minutes.
 
-Set `TZ`, `PUID` and `PGID` in the compose file to suit. Everything lives in `./data`: the database, backups, the image cache and `config.toml` (which holds the secret key).
+Set `TZ`, `PUID` and `PGID` in the compose file to suit. `API_PUBLIC: "0"` makes the API refuse anything that came through a Cloudflare tunnel, so it only answers on the LAN. Everything lives in `./data`: the database, backups, the image cache and `config.toml` (which holds the secret key).
 
 **Updating:**
 
