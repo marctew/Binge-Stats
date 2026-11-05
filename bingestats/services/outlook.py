@@ -29,7 +29,7 @@ LABELS = {
 HAS_FUTURE = frozenset({DATED, ANNOUNCED, IN_PRODUCTION, BETWEEN_SEASONS})
 
 MONTH_S = 30.44 * 86400
-HIATUS_MONTHS, DORMANT_MONTHS = 9, 18
+HIATUS_MONTHS, DORMANT_MONTHS = 9, 24   # 24: Marc, 2026-11-05 (18 caught Black Mirror after 19 months)
 
 
 def compute(*, now: float, next_at: int | None = None, previous_at: int | None = None,
@@ -50,7 +50,7 @@ def compute(*, now: float, next_at: int | None = None, previous_at: int | None =
       described as merely on a break. When TMDB has a status, it decides ended; Sonarr's
       "ended" (from TVDB) counts only when TMDB has nothing, because TVDB marks shows ended
       between series that TMDB knows are coming back.
-    - then hiatus (aired within 18 months) or dormant ("probably over").
+    - then hiatus (aired within 24 months) or dormant ("probably over").
     """
     tmdb = (tmdb_status or "").strip().lower()
     sonarr = (sonarr_status or "").strip().lower()

@@ -127,11 +127,11 @@ Port Pinnarr's engine (SPEC.md section 10 there) and its tests as they are, incl
 4. `cancelled`: TMDB `Canceled`.
 5. `ended`: TMDB `Ended`, or Sonarr `ended`.
 6. `between_seasons`: last aired within 9 months.
-7. `dormant`: last aired more than 18 months ago and not in production.
+7. `dormant`: last aired more than 24 months ago and not in production (18 in the first plan; Marc moved it to 24 on 2026-11-05).
 8. `unknown`.
 
 **As built (2026-11-05, P2 step 2)**, in `services/outlook.py`, following Pinnarr's code where it differed from the list above:
-- **Hiatus vs dormant uses only the last air date:** dormant is more than 18 months, hiatus anything less (a 9–18 month gap is still hiatus). It works without TMDB. Without TMDB, only filming and cancelled can't be told.
+- **Hiatus vs dormant uses only the last air date:** dormant is more than 24 months, hiatus anything less. It works without TMDB. Without TMDB, only filming and cancelled can't be told.
 - **Planned:** a show that has never aired, with TMDB status Planned/Pilot or Sonarr status upcoming, is announced.
 - **Inputs:**
   - the next airing is Sonarr's, else TMDB's next episode date;

@@ -67,7 +67,8 @@ def test_ended_outranks_hiatus():
 def test_hiatus_and_dormant():
     assert c(previous_at=at(-60), sonarr_status="continuing") == ol.BETWEEN_SEASONS
     assert c(previous_at=at(-400), sonarr_status="continuing") == ol.BETWEEN_SEASONS   # long gap, not yet suspicious
-    assert c(previous_at=at(-700), sonarr_status="continuing") == ol.DORMANT
+    assert c(previous_at=at(-700), sonarr_status="continuing") == ol.BETWEEN_SEASONS   # 23 months: not yet
+    assert c(previous_at=at(-750), sonarr_status="continuing") == ol.DORMANT
 
 
 def test_dormant_threshold_is_adjustable():
@@ -110,7 +111,7 @@ def lib(conn):
     series(2, "Cancelled", 2, prev=at(-60)); tmdb(2, status="Canceled", last_season=2, max_season=2)
     series(3, "Filming", 3, prev=at(-800)); tmdb(3, status="In Production", in_production=1, last_season=2, max_season=2)
     series(4, "Season 3 Announced", 4, prev=at(-200), seasons=(1, 2, 3)); tmdb(4, last_season=2, max_season=3)
-    series(5, "Gone Quiet", 5, prev=at(-700))
+    series(5, "Gone Quiet", 5, prev=at(-800))
     series(6, "Unmonitored S3", 6, prev=at(-100), seasons=(1, 2, 3))              # no TMDB, not pinned
     series(7, "TMDB Has A Date", 7, prev=at(-300)); tmdb(7, next_date="2027-01-10", last_season=1, max_season=2)
     tmdb(8, status="Ended", last_date="2020-01-01")                              # TMDB only
