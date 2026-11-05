@@ -70,7 +70,6 @@ def test_old_keys_lead_to_the_new_item(lib):
 
 
 def test_item_page_redirects(logged_in, app_conn):
-    from tests.conftest import Browser  # noqa: F401  (logged_in is a Browser)
     app_conn.execute("INSERT INTO servers (id, machine_id, name) VALUES (1, 'm', 'Plex')")
     app_conn.execute("INSERT INTO users (id, username, friendly_name, share_salt) VALUES (7, 'marc', 'Marc', 's')")
     app_conn.execute("INSERT INTO media_items (rating_key, server_id, type, guid, title) VALUES "
