@@ -39,14 +39,25 @@ def test_announced_when_a_later_season_has_not_aired():
 
 
 def test_in_production():
-    assert c(in_production=True) == ol.IN_PRODUCTION
     assert c(tmdb_status="In Production") == ol.IN_PRODUCTION
+    assert c(tmdb_status="Post Production") == ol.IN_PRODUCTION
+
+
+def test_tmdbs_in_production_flag_is_ignored():
+    """TMDB sets it on every show it hasn't marked finished, so it says nothing about filming."""
+    assert c(tmdb_status="Returning Series", in_production=True, previous_at=at(-60)) == ol.BETWEEN_SEASONS
 
 
 def test_cancelled_and_ended_are_told_apart():
     assert c(tmdb_status="Canceled") == ol.CANCELLED
     assert c(tmdb_status="Ended") == ol.ENDED
     assert c(sonarr_status="ended") == ol.ENDED                      # Sonarr alone is enough for ended
+
+
+def test_tmdb_decides_ended_when_it_has_a_status():
+    """TVDB (so Sonarr) marks shows ended between series; TMDB knows they're coming back."""
+    assert c(sonarr_status="ended", tmdb_status="Returning Series", previous_at=at(-100)) == ol.BETWEEN_SEASONS
+    assert c(sonarr_status="ended", tmdb_status="Returning Series", previous_at=at(-1200)) == ol.DORMANT
 
 
 def test_ended_outranks_hiatus():
@@ -65,7 +76,7 @@ def test_dormant_threshold_is_adjustable():
 
 
 def test_filming_beats_a_long_silence():
-    assert c(previous_at=at(-900), in_production=True) == ol.IN_PRODUCTION
+    assert c(previous_at=at(-900), tmdb_status="In Production") == ol.IN_PRODUCTION
 
 
 def test_never_aired_but_planned():
@@ -97,7 +108,7 @@ def lib(conn):
 
     series(1, "Dated", 1, nxt=at(30), prev=at(-100))
     series(2, "Cancelled", 2, prev=at(-60)); tmdb(2, status="Canceled", last_season=2, max_season=2)
-    series(3, "Filming", 3, prev=at(-800)); tmdb(3, in_production=1, last_season=2, max_season=2)
+    series(3, "Filming", 3, prev=at(-800)); tmdb(3, status="In Production", in_production=1, last_season=2, max_season=2)
     series(4, "Season 3 Announced", 4, prev=at(-200), seasons=(1, 2, 3)); tmdb(4, last_season=2, max_season=3)
     series(5, "Gone Quiet", 5, prev=at(-700))
     series(6, "Unmonitored S3", 6, prev=at(-100), seasons=(1, 2, 3))              # no TMDB, not pinned

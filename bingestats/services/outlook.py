@@ -43,8 +43,13 @@ def compute(*, now: float, next_at: int | None = None, previous_at: int | None =
       whose finale hasn't aired yet is dated, not ended. A next date in the past is
       stale data and falls through.
     - filming beats a long silence: a show revived after years off is filming, not over.
+      Filming means TMDB's *status* "In Production" (or "Post Production"). TMDB's in_production
+      flag is no use for this: it's true for every show TMDB hasn't marked finished (checked
+      against Marc's library, 2026-11-05: 607 "Returning Series" had it), so it's ignored.
     - cancelled and ended come before hiatus and dormant, so a finished show is never
-      described as merely on a break.
+      described as merely on a break. When TMDB has a status, it decides ended; Sonarr's
+      "ended" (from TVDB) counts only when TMDB has nothing, because TVDB marks shows ended
+      between series that TMDB knows are coming back.
     - then hiatus (aired within 18 months) or dormant ("probably over").
     """
     tmdb = (tmdb_status or "").strip().lower()
@@ -53,11 +58,11 @@ def compute(*, now: float, next_at: int | None = None, previous_at: int | None =
         return DATED
     if latest_season is not None and latest_aired_season is not None and latest_season > latest_aired_season:
         return ANNOUNCED
-    if in_production or tmdb == "in production":
+    if tmdb in ("in production", "post production"):
         return IN_PRODUCTION
     if tmdb == "canceled":
         return CANCELLED
-    if tmdb == "ended" or sonarr == "ended":
+    if tmdb == "ended" or (not tmdb and sonarr == "ended"):
         return ENDED
     if previous_at:
         age = now - previous_at
