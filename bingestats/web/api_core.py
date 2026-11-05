@@ -213,7 +213,7 @@ class ApiCore:
             return self._refuse("forbidden", NOT_PUBLIC, 403)
         if request.endpoint in self.open_endpoints:
             return None
-        addr = request.remote_addr or "?"
+        addr = client_address()
         left = self.limiter.locked_for(addr)
         if left:
             return self._refuse("rate_limited", LOCKED_OUT, 429, left)
@@ -248,6 +248,14 @@ class ApiCore:
             resp.add_etag(weak=True)
             resp.make_conditional(request)
         return resp
+
+
+def client_address() -> str:
+    """Who to lock out. Through a Cloudflare tunnel every request arrives from cloudflared's address,
+    so one stranger's bad tokens would lock out every tunnel reader; Cloudflare sets
+    CF-Connecting-IP to the real client and overwrites any copy sent from outside, so use it when
+    it's there. (Faking it on the LAN only dodges the lockout, and tokens are 256-bit.)"""
+    return (request.headers.get("CF-Connecting-IP") or "").strip() or request.remote_addr or "?"
 
 
 def core() -> ApiCore:

@@ -160,6 +160,14 @@ def test_lockout_is_per_address(client, read_token, clock):
     assert other.status_code == 200
 
 
+def test_lockout_through_the_tunnel_is_per_real_client(client, read_token, clock):
+    """Every tunnel request comes from cloudflared's address; one stranger mustn't lock out the rest."""
+    for i in range(10):
+        client.get("/api/v1/status", headers={**bearer(f"bs_bad{i}"), "CF-Connecting-IP": "198.51.100.7"})
+    assert client.get("/api/v1/status", headers={**bearer(read_token), "CF-Connecting-IP": "198.51.100.7"}).status_code == 429
+    assert client.get("/api/v1/status", headers={**bearer(read_token), "CF-Connecting-IP": "203.0.113.20"}).status_code == 200
+
+
 def test_rate_limit_per_token(client, read_token, write_token, clock):
     for _ in range(120):
         assert client.get("/api/v1/meta", headers=bearer(read_token)).status_code == 200
