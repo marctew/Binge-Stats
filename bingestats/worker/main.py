@@ -92,6 +92,8 @@ class Worker:
         if pin_notify.week_due(self.conn, now):
             for pin_event in pin_notify.week_events(self.conn, now):
                 self.on_event(pin_notify.WEEK, pin_event)
+            for pin_event in pin_notify.discover_events(self.conn, now):
+                self.on_event(pin_notify.DISCOVER, pin_event)
 
     def _setup_plex(self) -> bool:
         url = settings.get(self.conn, "plex.url")

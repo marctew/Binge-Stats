@@ -394,7 +394,21 @@ def _m12(conn: sqlite3.Connection) -> None:
             (r["name"], r["trigger"], r["title"], r["body"], int(r.get("include_poster", True))))
 
 
-MIGRATIONS = [_m1, _m2, _m3, _m4, _m5, _m6, _m7, _m8, _m9, _m10, _m11, _m12]
+def _m13(conn: sqlite3.Connection) -> None:
+    """Pins stage 4: pins unpinned from Retire, kept so the last batch can be undone; and the
+    Monday "shows you've watched are coming back" rule, disabled."""
+    conn.execute("""CREATE TABLE pin_retired (
+        user_id INTEGER NOT NULL, tvdb_id INTEGER NOT NULL, pinned_at INTEGER, notify INTEGER NOT NULL DEFAULT 1,
+        pin_batch TEXT, batch TEXT NOT NULL, retired_at INTEGER NOT NULL, PRIMARY KEY (user_id, tvdb_id))""")
+    from .services.notify_defaults import DISCOVER_RULES
+    for r in DISCOVER_RULES:
+        conn.execute(
+            "INSERT INTO notify_rules (name, enabled, trigger, conditions, title_template, body_template, channel_ids, "
+            "cooldown_s, include_poster, created_at) VALUES (?, 0, ?, '[]', ?, ?, '[]', 0, ?, strftime('%s','now'))",
+            (r["name"], r["trigger"], r["title"], r["body"], int(r.get("include_poster", True))))
+
+
+MIGRATIONS = [_m1, _m2, _m3, _m4, _m5, _m6, _m7, _m8, _m9, _m10, _m11, _m12, _m13]
 LATEST = len(MIGRATIONS)
 
 

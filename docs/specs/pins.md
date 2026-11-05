@@ -222,6 +222,33 @@ Both are published with the rest of state.
   - `{name} pinned ready`: episodes of their pinned shows that arrived in Plex in the last 30 days and they haven't finished (by guid); attribute `episodes`.
   - Worked out at most once a minute.
 
+### Stage 4 as built (2026-11-05)
+
+`services/pin_lists.py`, `pages/pin_lists.html`, migration v13. Tabs on the calendar: **Calendar · Ready (n) · Retire (n) · Discover (n)**, under `/me/calendar/...` for viewers.
+
+- **Where you've got to (`progress`):** per show, the furthest episode in Plex you've finished, by guid from your own plays.
+  - Specials are left out.
+  - An episode marked watched in Plex without playing, or watched on someone else's account, isn't seen.
+- **Ready:**
+  - One row per pinned show with something in Plex after where you've got to, or from S01E01 if you haven't started.
+  - Each row shows the next episode and how many are waiting.
+  - Newest arrival first; "New this week" if one arrived in the last 7 days.
+  - The "pinned ready" sensor now counts these shows (unit "shows"), with the list as an attribute.
+- **Retire**, in groups:
+  - **Finished:** ended or cancelled, and you're up to date.
+  - **Probably over:** no episode for 24 months, and you're up to date.
+  - **Gone cold:** still running, but no play (or, never played, pinned) for 180 days.
+  - "Unpin" works out the group again on the server and keeps the pins in `pin_retired`, so the last batch can be put back exactly (pinned_at, notify, batch).
+- **Discover:**
+  - Unpinned shows you've played, that are dated within 60 days, or announced or filming.
+  - Most watched first.
+  - New trigger `pins_discover`: Monday, with the week ahead, once per show per date or outlook. A default rule ships disabled.
+- **Stalled downloads:**
+  - The download watcher marks a job that SABnzbd says is downloading as stalled when its MB left hasn't changed for 30 minutes. Jobs waiting behind it, or a paused queue, never count.
+  - `/downloads` shows "Stalled Nm", plus a "Pinned" badge on jobs for the admin's pinned shows.
+  - The calendar shows a stalled episode as "Stalled" (amber).
+- **"Pinned by" condition** is now labelled **Person**, since Discover events are for the viewer, not a pinner.
+
 ## REST API
 
 All read scope, except pin and unpin (write scope). They act for `user_id` (default: the owner).

@@ -60,9 +60,9 @@ def test_migration_2_upgrades_v1_database(tmp_path, monkeypatch):
     monkeypatch.undo()
     assert db.migrate(c) == db.LATEST
     names = [r[0] for r in c.execute("SELECT name FROM notify_rules ORDER BY id")]
-    from bingestats.services.notify_defaults import DEFAULT_RULES, LIMIT_RULES, PIN_RULES
+    from bingestats.services.notify_defaults import DEFAULT_RULES, DISCOVER_RULES, LIMIT_RULES, PIN_RULES
     assert names[0] == "mine" and "Recently added" in names and "Stream limit reached" in names
-    assert len(names) == 1 + len(DEFAULT_RULES) + len(LIMIT_RULES) + len(PIN_RULES)
+    assert len(names) == 1 + len(DEFAULT_RULES) + len(LIMIT_RULES) + len(PIN_RULES) + len(DISCOVER_RULES)
     assert c.execute("SELECT COUNT(*) FROM notify_rules WHERE enabled = 1 AND name != 'mine'").fetchone()[0] == 0
     c.execute("INSERT INTO notify_samples VALUES ('play_start', '{}', 0)")
 

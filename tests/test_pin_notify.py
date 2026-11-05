@@ -133,26 +133,23 @@ def test_migration_12(tmp_path, monkeypatch):
     monkeypatch.undo()
     assert db.migrate(c) == db.LATEST
     assert c.execute("SELECT COUNT(*) FROM pin_events").fetchone()[0] == 0
-    assert c.execute("SELECT COUNT(*) FROM notify_rules WHERE trigger LIKE 'pin%'").fetchone()[0] == 3
+    assert c.execute("SELECT COUNT(*) FROM notify_rules WHERE trigger IN "
+                     "('pin_arrived', 'pin_schedule_changed', 'pins_week')").fetchone()[0] == 3
 
 
 # -- Home Assistant -------------------------------------------------------------------------------
 
-def test_ready_and_next(lib):
+def test_next_and_ready_sensors(lib):
     lib.execute("UPDATE media_items SET added_at = ?, guid = 'plex://episode/1' WHERE rating_key = 101", (int(NOW) - D,))
     lib.execute("INSERT INTO media_items (rating_key, server_id, type, guid, title, grandparent_rating_key, season_index, "
                 "episode_index, added_at) VALUES (102, 1, 'episode', 'plex://episode/2', 'Two', 10, 1, 2, ?)", (int(NOW) - 2 * H,))
-    assert [(r["season"], r["episode"]) for r in pins.ready(lib, OWNER, NOW)] == [(1, 2), (1, 1)]
-    lib.execute("INSERT INTO plays (server_id, user_id, started_at, stopped_at, play_s, media_type, title, guid, watched) "
-                "VALUES (1, ?, ?, ?, 60, 'episode', 'Two', 'plex://episode/2', 1)", (OWNER, int(NOW), int(NOW) + 60))
-    assert [r["episode"] for r in pins.ready(lib, OWNER, NOW)] == [1]     # watched ones drop off
-    assert len(pins.ready(lib, ALEX, NOW)) == 2                           # it's per person
     nxt = pins.next_up(lib, OWNER, NOW)
     assert (nxt["episode"], nxt["state"]) == (4, "airing_today")
     st = mqtt.pins_state(lib, OWNER, NOW)
-    assert st["next"] == "Pinned Show S01E04" and st["ready"] == 1 and st["ready_attrs"]["episodes"] == ["Pinned Show S01E01"]
+    assert st["next"] == "Pinned Show S01E04" and st["ready"] == 1
+    assert st["ready_attrs"]["shows"] == ["Pinned Show · next S01E01 (2 waiting)"]
     assert mqtt.pins_state(lib, 999, NOW) == {"next": "none", "next_attrs": {"air_at": None, "title": None, "state": None},
-                                              "ready": 0, "ready_attrs": {"episodes": []}}
+                                              "ready": 0, "ready_attrs": {"shows": []}}
 
 
 def test_discovery_has_the_pin_sensors():
@@ -161,7 +158,7 @@ def test_discovery_has_the_pin_sensors():
     nxt = json.loads(out["homeassistant/sensor/bingestats/user_7_next_pinned/config"])
     ready = json.loads(out["homeassistant/sensor/bingestats/user_7_pinned_ready/config"])
     assert nxt["state_topic"] == ready["state_topic"] == "bingestats/user/7/pins"
-    assert nxt["name"] == "Alex next pinned" and ready["unit_of_measurement"] == "episodes"
+    assert nxt["name"] == "Alex next pinned" and ready["unit_of_measurement"] == "shows"
     gone = mqtt.removed_user_topics(cfg, 7)
     assert "homeassistant/sensor/bingestats/user_7_pinned_ready/config" in gone and "bingestats/user/7/pins" in gone
 

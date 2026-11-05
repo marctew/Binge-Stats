@@ -95,3 +95,14 @@ PIN_RULES = [
     },
 ]
 
+
+# Added by migration 13 (pins, stage 4).
+DISCOVER_RULES = [
+    {
+        "name": "Shows you've watched are coming back",
+        "trigger": "pins_discover",
+        "title": "{{ count | plural('show') }} you've watched {{ 'is' if count == 1 else 'are' }} coming back",
+        "body": "{% for s in shows %}• {{ s.text }}\n{% endfor %}Pin them from Calendar → Discover.",
+        "include_poster": False,
+    },
+]

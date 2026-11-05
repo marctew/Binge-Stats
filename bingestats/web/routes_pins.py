@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, url_for
 
-from ..services import arr, pins
+from ..services import arr, pin_lists, pins
 from ..services import shows as shows_svc
 
 bp = Blueprint("pins", __name__)
@@ -26,6 +26,7 @@ def render_calendar(user_id: int | None, *, viewer: bool, body_only: bool = Fals
     if body_only:
         return render_template("partials/calendar_body.html", cal=cal, mon=mon, viewer=viewer) if cal else ""
     return render_template("pages/calendar.html", cal=cal, mon=mon, viewer=viewer, no_owner=user_id is None,
+                           tabs=tab_items(user_id, viewer, "calendar") if user_id is not None else None,
                            sonarr=arr.configured(conn)["sonarr"],
                            find_url=url_for("me.calendar_find" if viewer else "pins.find"),
                            body_url=url_for("me.calendar_body" if viewer else "pins.calendar_body"))
@@ -136,3 +137,66 @@ def shows_pin_all():
 @bp.route("/shows/undo", methods=["POST"])
 def shows_undo():
     return do_undo(pins.owner_id(_db()), viewer=False)
+
+
+# -- Ready, Retire, Discover (tabs on the calendar) -----------------------------------------------
+
+LISTS = {"calendar": "Calendar", "ready": "Ready", "retire": "Retire", "discover": "Discover"}
+
+
+def tab_items(user_id: int, viewer: bool, active: str) -> list[tuple]:
+    n = pin_lists.counts(_db(), user_id)
+    eps = {"calendar": "calendar_page", "ready": "ready_page", "retire": "retire_page", "discover": "discover_page"}
+    return [(url_for(_ep(viewer, eps[k])), label + (f" ({n[k]})" if n.get(k) else ""), k == active)
+            for k, label in LISTS.items()]
+
+
+def render_list(user_id: int | None, tab: str, *, viewer: bool):
+    if user_id is None:
+        return render_calendar(None, viewer=viewer)
+    conn = _db()
+    data = {"ready": pin_lists.ready, "retire": pin_lists.retire, "discover": pin_lists.discover}[tab](conn, user_id)
+    return render_template("pages/pin_lists.html", tab=tab, rows=data, viewer=viewer,
+                           tabs=tab_items(user_id, viewer, tab), last_retired=pin_lists.last_retired(conn, user_id),
+                           retire_ep=_ep(viewer, "retire_group"), undo_ep=_ep(viewer, "retire_undo"))
+
+
+def do_retire(user_id: int | None, group: str, *, viewer: bool):
+    if user_id is None:
+        abort(409)
+    n = pin_lists.retire_group(_db(), user_id, group)
+    flash(f"Unpinned {n:,} show{'s' if n != 1 else ''}. Undo is at the top of the page." if n else "Nothing to unpin", "ok")
+    return redirect(url_for(_ep(viewer, "retire_page")))
+
+
+def do_retire_undo(user_id: int | None, *, viewer: bool):
+    if user_id is None:
+        abort(409)
+    n = pin_lists.undo_retire(_db(), user_id)
+    flash(f"Pinned {n:,} show{'s' if n != 1 else ''} again" if n else "Nothing to undo", "ok")
+    return redirect(url_for(_ep(viewer, "retire_page")))
+
+
+@bp.route("/calendar/ready")
+def ready_page():
+    return render_list(pins.owner_id(_db()), "ready", viewer=False)
+
+
+@bp.route("/calendar/retire")
+def retire_page():
+    return render_list(pins.owner_id(_db()), "retire", viewer=False)
+
+
+@bp.route("/calendar/retire/<group>", methods=["POST"])
+def retire_group(group: str):
+    return do_retire(pins.owner_id(_db()), group, viewer=False)
+
+
+@bp.route("/calendar/retire-undo", methods=["POST"])
+def retire_undo():
+    return do_retire_undo(pins.owner_id(_db()), viewer=False)
+
+
+@bp.route("/calendar/discover")
+def discover_page():
+    return render_list(pins.owner_id(_db()), "discover", viewer=False)

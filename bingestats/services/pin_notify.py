@@ -19,7 +19,7 @@ from datetime import datetime, timedelta
 
 from . import pins, settings, stats
 
-ARRIVED, MOVED, WEEK = "pin_arrived", "pin_schedule_changed", "pins_week"
+ARRIVED, MOVED, WEEK, DISCOVER = "pin_arrived", "pin_schedule_changed", "pins_week", "pins_discover"
 MOVE_MIN_S = 3600          # a shift smaller than this is Sonarr tidying up, not news
 WEEK_HOUR = 8
 
@@ -183,3 +183,36 @@ def week_events(conn: sqlite3.Connection, now: float | None = None) -> list[dict
         out.append({"pinner": {"id": uid, "name": name or "Someone"}, "days": days, "count": len(eps),
                     "show": None, "poster": None, "key": f"{uid}:week:{week}"})
     return out
+
+
+def discover_events(conn: sqlite3.Connection, now: float | None = None) -> list[dict]:
+    """Monday's nudge, alongside the week ahead: per person with pins, the shows on their Discover list
+    they haven't been told about for this run (a new date, or a new season announced or filming)."""
+    from . import outlook as outlook_svc
+    from . import pin_lists
+    now = int(now or time.time())
+    tz = stats._tz(conn)
+    out = []
+    users = conn.execute("SELECT DISTINCT p.user_id, COALESCE(u.friendly_name, u.username) FROM pins p "
+                         "JOIN users u ON u.id = p.user_id WHERE p.notify = 1 ORDER BY p.user_id").fetchall()
+    for uid, name in users:
+        rows = pin_lists.discover(conn, uid, now)
+        keys = {f"disc:{r['tvdb_id']}:{r['outlook']}:"
+                f"{datetime.fromtimestamp(r['next_at'], tz).date() if r['next_at'] else ''}": r for r in rows}
+        fresh = _claim(conn, uid, list(keys), now)
+        shows = []
+        for k, r in keys.items():
+            if k not in fresh:
+                continue
+            if r["outlook"] == outlook_svc.DATED and r["next_at"]:
+                text = f"{r['title']} · back on {datetime.fromtimestamp(r['next_at'], tz).strftime('%a %-d %b')}"
+            elif r["outlook"] == outlook_svc.IN_PRODUCTION:
+                text = f"{r['title']} · filming a new season"
+            else:
+                text = f"{r['title']} · new season announced"
+            shows.append({"show": r["title"], "text": text})
+        if shows:
+            out.append({"pinner": {"id": uid, "name": name or "Someone"}, "shows": shows, "count": len(shows),
+                        "show": None, "poster": None, "key": f"{uid}:discover:{now}"})
+    return out
+

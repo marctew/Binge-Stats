@@ -92,8 +92,8 @@ S{{ '%02d' % e.season }}E{{ '%02d' % e.episode }}
     <div class="truncate text-xs text-faint sm:hidden">{{ when }}</div>
   </div>
   <span class="hidden shrink-0 text-right text-xs text-muted sm:block">{{ when }}</span>
-  <span class="{{ {'available': 'badge-success', 'on_disk': 'badge-info', 'downloading': 'badge-info', 'airing_today': 'badge-accent',
-                  'awaiting': 'badge-warning', 'missing': 'badge-danger'}.get(e.state, 'badge-muted') }} shrink-0"{% if e.detail %} title="{{ e.detail }}"{% endif %}>{{ e.label }}{% if e.state == 'downloading' and e.pct is not none %} {{ e.pct }}%{% endif %}</span>
+  <span class="{{ 'badge-warning' if e.stalled else {'available': 'badge-success', 'on_disk': 'badge-info', 'downloading': 'badge-info', 'airing_today': 'badge-accent',
+                  'awaiting': 'badge-warning', 'missing': 'badge-danger'}.get(e.state, 'badge-muted') }} shrink-0"{% if e.detail %} title="{{ e.detail }}"{% endif %}>{{ e.label }}{% if e.state == 'downloading' and not e.stalled and e.pct is not none %} {{ e.pct }}%{% endif %}</span>
 {% if href %}</a>{% else %}</div>{% endif %}
 {% if pin %}{% with tvdb_id=e.tvdb_id, pinned=True, compact=True %}{% include "partials/pin_button.html" %}{% endwith %}{% endif %}
 </div>

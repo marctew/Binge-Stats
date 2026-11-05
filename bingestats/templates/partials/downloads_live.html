@@ -10,6 +10,8 @@
 {% else %}<span class="truncate font-medium">{{ j.title }}</span>{% endif %}
 {%- endmacro %}
 {% macro tags(j) -%}
+{% if j.pinned %}<span class="badge-accent" title="A show you've pinned">{{ icon('pin', 'h-3 w-3') }} Pinned</span>{% endif %}
+{% if j.stalled_s %}<span class="badge-warning" title="SABnzbd says it's downloading, but nothing has come in for {{ (j.stalled_s // 60) }} minutes">Stalled {{ j.stalled_s // 60 }}m</span>{% endif %}
 {% if j.app %}<span class="badge-muted">{{ 'Sonarr' if j.app == 'sonarr' else 'Radarr' }}</span>{% endif %}
 {% if j.quality %}<span class="badge-info">{{ j.quality }}</span>{% endif %}
 {%- endmacro %}

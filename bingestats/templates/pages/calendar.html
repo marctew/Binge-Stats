@@ -1,10 +1,11 @@
 {% extends "base.html" %}
-{% from "macros/ui.html" import page_header, empty_state, poster %}
+{% from "macros/ui.html" import tabs as tabs_nav, page_header, empty_state, poster %}
 {% from "macros/media.html" import section_title, episode_row %}
 {% from "macros/icons.html" import icon %}
 {% block title %}Calendar · Binge Stats{% endblock %}
 {% block content %}
 {% call page_header('Calendar', 'The shows you pin, and when their episodes land') %}{% endcall %}
+{% if tabs %}{{ tabs_nav(tabs) }}{% endif %}
 
 {% if no_owner %}
 <div class="banner banner-warning mb-6">Pins belong to your Plex account, and the server owner isn't in Users yet. Sync users from Settings, then come back.</div>

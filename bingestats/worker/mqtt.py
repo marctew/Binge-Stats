@@ -140,16 +140,17 @@ def _session_attrs(a) -> dict:
 
 
 def pins_state(conn: sqlite3.Connection, user_id: int, now: float) -> dict:
-    """Next pinned episode and how many pinned episodes are waiting, for one person's two sensors."""
-    from ..services import pins
+    """Next pinned episode, and how many pinned shows have something waiting (Calendar → Ready), for
+    one person's two sensors."""
+    from ..services import pin_lists, pins
     nxt = pins.next_up(conn, user_id, now)
-    waiting = pins.ready(conn, user_id, now)
+    waiting = pin_lists.ready(conn, user_id, now)
     code = lambda s, e: f"S{int(s):02d}E{int(e):02d}" if s is not None and e is not None else ""  # noqa: E731
     return {"next": f"{nxt['show']} {code(nxt['season'], nxt['episode'])}".strip() if nxt else "none",
             "next_attrs": {"air_at": datetime.fromtimestamp(nxt["air_at"], timezone.utc).isoformat() if nxt else None,
                            "title": nxt.get("title") if nxt else None, "state": nxt["state"] if nxt else None},
             "ready": len(waiting),
-            "ready_attrs": {"episodes": [f"{w['show']} {code(w['season'], w['episode'])}".strip() for w in waiting[:20]]}}
+            "ready_attrs": {"shows": [f"{w['show']} · next {w['next_code']} ({w['waiting']} waiting)" for w in waiting[:20]]}}
 
 
 def user_state(user_id: int, active: list) -> dict:
@@ -206,7 +207,7 @@ def discovery(cfg: dict, users: list, server_name: str | None, sab: bool = False
             "name": f"{name} pinned ready", "unique_id": f"{node}_user_{uid}_pinned_ready",
             "object_id": f"binge_stats_{_slug(name)}_pinned_ready", "icon": "mdi:television-classic",
             "state_topic": pins_topic, "value_template": "{{ value_json.ready }}", "state_class": "measurement",
-            "unit_of_measurement": "episodes",
+            "unit_of_measurement": "shows",
             "json_attributes_topic": pins_topic, "json_attributes_template": "{{ value_json.ready_attrs | tojson }}",
             **common}, sort_keys=True)
         out[f"{prefix}/button/{node}/user_{uid}_stop/config"] = json.dumps({
