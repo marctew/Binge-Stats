@@ -733,7 +733,7 @@ Every page is a Jinja template that extends `base.html`. Pages refresh their par
 | GET | `/wrapped/{user_id}/{year}` | read |
 | POST | `/jobs` `{kind, params}`, GET `/jobs/{id}` | write / read |
 
-Document it in `docs/API.md`, with an example per endpoint.
+Document it in `docs/API.md`, with an example per endpoint. The pin endpoints (`/api/v1/pins/...`) are documented there; see also `docs/widget/` for the iPhone widget that uses them.
 
 ---
 
