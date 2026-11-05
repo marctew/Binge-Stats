@@ -89,3 +89,16 @@
 {% if pin %}{% with tvdb_id=e.tvdb_id, pinned=True, compact=True %}{% include "partials/pin_button.html" %}{% endwith %}{% endif %}
 </div>
 {%- endmacro %}
+
+{# A page section whose heading folds it away. key names it, so it keeps its state when htmx swaps the
+   page around it (static/js/app.js); remember=True also keeps it across visits. #}
+{% macro collapsible(title, key, sub=None, open=True, remember=True) -%}
+{% from "macros/icons.html" import icon %}
+<details class="group/sec relative mt-8" data-section="{{ key }}"{% if remember %} data-remember{% endif %}{% if open %} open{% endif %}>
+  <summary class="mb-3 flex cursor-pointer list-none items-baseline justify-between gap-3 [&::-webkit-details-marker]:hidden">
+    <h2 class="flex items-center gap-1.5 text-lg font-semibold">{{ icon('chevron-down', 'h-4 w-4 self-center text-muted transition -rotate-90 group-open/sec:rotate-0') }}{{ title }}</h2>
+    {% if sub %}<span class="text-sm text-muted">{{ sub }}</span>{% endif %}
+  </summary>
+  {{ caller() }}
+</details>
+{%- endmacro %}

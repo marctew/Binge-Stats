@@ -386,3 +386,16 @@ def test_month_pages(site, app_conn):
     assert 'id="cal-month"' in page and "/calendar/month?m=" in page and "Pinned Show" in page
     part = site.get("/calendar/month?m=2026-01", headers={"HX-Request": "true"}).data.decode()
     assert "January 2026" in part and "<html" not in part and "This month" in part
+
+
+def test_calendar_sections_fold(site, app_conn):
+    import re
+    for t in (111, 222):
+        pins.pin(app_conn, OWNER, t)
+    app_conn.execute("INSERT INTO sonarr_series (id, title, tvdb_id, status) VALUES (9, 'Over', 999, 'ended')")
+    pins.pin(app_conn, OWNER, 999)
+    body = site.get("/calendar").data.decode()
+    tags = {m.group(1): m.group(0) for m in re.finditer(r'<details[^>]*data-section="([\w-]+)"[^>]*>', body)}
+    assert set(tags) >= {"cal-agenda", "cal-month", "cal-later", "cal-undated"}
+    assert all(" open" in tags[k] and "data-remember" in tags[k] for k in ("cal-agenda", "cal-month", "cal-later"))
+    assert " open" not in tags["cal-undated"] and "data-remember" not in tags["cal-undated"]   # always starts folded

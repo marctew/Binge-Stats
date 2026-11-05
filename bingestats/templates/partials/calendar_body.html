@@ -1,19 +1,20 @@
 {# The calendar below the search box. Reloaded in place whenever a pin changes (the pins-changed event). #}
 {% from "macros/ui.html" import empty_state, poster, outlook_badge %}
 {% from "macros/icons.html" import icon %}
-{% from "macros/media.html" import section_title, episode_row %}
+{% from "macros/media.html" import collapsible, episode_row %}
 {% if not cal.count %}
 <div class="mt-6">{{ empty_state('Pin some shows', 'Search above for the shows you follow. You get their episodes here, and whether each one has made it into Plex.', 'calendar') }}</div>
 {% else %}
 
 {% if cal.overdue %}
-{{ section_title('Aired, not arrived', 'last ' ~ cal.overdue_days ~ ' days') }}
+{% call collapsible('Aired, not arrived', 'cal-overdue', 'last ' ~ cal.overdue_days ~ ' days') %}
 <div class="card divide-y divide-border">
   {% for e in cal.overdue %}{{ episode_row(e, (e.air_at | localtime('%a %-d %b')) ~ ' · ' ~ (e.air_at | relative), viewer, pin=True) }}{% endfor %}
 </div>
+{% endcall %}
 {% endif %}
 
-{{ section_title('Coming up', 'next ' ~ cal.agenda_days ~ ' days') }}
+{% call collapsible('Coming up', 'cal-agenda', 'next ' ~ cal.agenda_days ~ ' days') %}
 {% if cal.agenda %}
 <div class="space-y-4">
   {% for day in cal.agenda %}
@@ -26,11 +27,12 @@
   {% endfor %}
 </div>
 {% else %}<div class="card p-6 text-center text-sm text-faint">Nothing you've pinned airs in the next {{ cal.agenda_days }} days.</div>{% endif %}
+{% endcall %}
 
 {% include "partials/calendar_month.html" %}
 
 {% if cal.later %}
-{{ section_title('Later') }}
+{% call collapsible('Later', 'cal-later', 'after the next ' ~ cal.agenda_days ~ ' days') %}
 <div class="card divide-y divide-border">
   {% for s in cal.later %}
   <div class="flex items-center gap-3 py-3 pl-4 pr-2">
@@ -46,10 +48,12 @@
   </div>
   {% endfor %}
 </div>
+{% endcall %}
 {% endif %}
 
 {% if cal.undated %}
-{{ section_title('No future dates planned', cal.undated | length | plural('show')) }}
+{# always starts folded: it's for pruning, not for looking forward to #}
+{% call collapsible('No future dates planned', 'cal-undated', cal.undated | length | plural('show'), open=False, remember=False) %}
 <div class="space-y-4">
   {% for g in cal.undated_groups %}
   {% set cards %}
@@ -76,5 +80,6 @@
   {% endif %}
   {% endfor %}
 </div>
+{% endcall %}
 {% endif %}
 {% endif %}

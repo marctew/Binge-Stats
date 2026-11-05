@@ -1,18 +1,17 @@
 {# The calendar's month view: show names in each day cell (a grid on wider screens, a list of days on
    phones, where seven columns are too narrow for names). Stepping months swaps only this section. #}
-{% from "macros/media.html" import section_title, episode_row %}
+{% from "macros/media.html" import collapsible, episode_row %}
 {% from "macros/icons.html" import icon %}
 {% set month_ep = 'me.calendar_month' if viewer else 'pins.calendar_month' %}
 {% set dot = {'available': 'bg-success', 'on_disk': 'bg-info', 'downloading': 'bg-info', 'airing_today': 'bg-accent',
               'awaiting': 'bg-warning', 'missing': 'bg-danger'} %}
 <section id="cal-month">
-  <div class="mb-3 mt-8 flex items-center justify-between gap-3">
-    <h2 class="text-lg font-semibold">{{ mon.title }}</h2>
-    <div class="flex items-center gap-1">
+{% call collapsible(mon.title, 'cal-month') %}
+  {# outside the summary (a click there would fold the section), placed over its right-hand end #}
+  <div class="absolute right-0 top-0 flex items-center gap-1">
       {% if not mon.is_this_month %}<button type="button" class="btn-ghost py-1.5 text-sm" hx-get="{{ url_for(month_ep) }}" hx-target="#cal-month" hx-swap="outerHTML">This month</button>{% endif %}
       <button type="button" class="btn-icon" aria-label="Previous month" hx-get="{{ url_for(month_ep, m=mon.prev) }}" hx-target="#cal-month" hx-swap="outerHTML">{{ icon('chevron-down', 'h-4 w-4 rotate-90') }}</button>
       <button type="button" class="btn-icon" aria-label="Next month" hx-get="{{ url_for(month_ep, m=mon.next) }}" hx-target="#cal-month" hx-swap="outerHTML">{{ icon('chevron-down', 'h-4 w-4 -rotate-90') }}</button>
-    </div>
   </div>
 
   <div class="card hidden overflow-hidden sm:block">
@@ -59,4 +58,5 @@
     {% endfor %}
   </div>
   {% if not mon.count %}<div class="card mt-3 p-6 text-center text-sm text-faint sm:mt-0 sm:hidden">Nothing you've pinned airs in {{ mon.title }}.</div>{% endif %}
+{% endcall %}
 </section>
