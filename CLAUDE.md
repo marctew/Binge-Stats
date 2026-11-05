@@ -7,6 +7,7 @@ Self-hosted Plex monitoring and stats, a modern Tautulli replacement. Read DESIG
 - `bingestats/` the app: Flask + plain `sqlite3` (schema and migrations in `bingestats/db.py`), Jinja + HTMX + Alpine + Tailwind, ECharts. No ORM, no JS framework, no Node.
 - `bingestats/plex/` the only code that knows Plex's API shape. Everything else uses its dataclasses.
 - `bingestats/arr/` the only code that knows Sonarr, Radarr and SABnzbd's APIs. GET only, except `SabClient.move` (SABnzbd `mode=switch`, behind `sabnzbd.allow_moves`). Never add another write call.
+- `bingestats/tmdb/` the only code that knows TMDB's API. GET only.
 - `bingestats/worker/` the only process that writes sessions, plays, library and user data. The web process writes settings, rules, tokens, jobs, alert acknowledgements, viewer logins, share salts and pins only.
 - `bingestats/services/` all business operations. UI routes and the REST API both call these; routes stay thin.
 - `docker/` Dockerfile and compose. `scripts/build-css.sh` for local CSS builds.

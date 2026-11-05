@@ -91,7 +91,12 @@ All read-only. These go in the existing `arr_sync` job unless stated otherwise.
 - **Sonarr calendar:** read −7 to +60 days for all series (one request) into `sonarr_episodes`. The current 8-day read stays for `sonarr_upcoming`.
 - **Full guides:** `episode?seriesId=` for each pinned show, on every Sonarr sync and when a show is first pinned (a `pin_guides` job). One request per pinned show, not per library show. A show that can't be read is logged and skipped; it doesn't fail the sync.
 - **Series:** also store `network`, `genres` and `tmdbId` (Sonarr v4 returns `tmdbId` on series).
-- **TMDB:** a new `tmdb_sync` job, nightly. It reads `tv/{id}` for every pinned show, plus up to 200 never-fetched shows a night, most-watched first, so the browser's outlook facet fills in over a few nights. The client goes in `bingestats/tmdb/` (GET only, the key in Settings, masked). A failure goes in `arr_status` as `app = 'tmdb'`.
+- **TMDB** (built 2026-11-05, P2 step 1): the `tmdb_sync` job reads `tv/{id}` for every show with a TMDB id (from Plex or Sonarr). Changed from the plan of 200 a night (Marc, 2026-11-05):
+  - **The first run reads everything** (about 1,900 shows, a few minutes at ~20 requests a second). Rows are written every 50, so a run that stops keeps what it read.
+  - **After that** the job runs every 6 hours and reads what's due: pinned shows after 20 hours (so about daily), everything else after 7 days. Pinned shows go first.
+  - **Stored** in `tmdb_shows` (migration v11 adds `name`, `next_air_date`, `last_season`, `max_season`, `genres`, `networks`). A 404 keeps a row with no status, so the id isn't asked for again until the weekly refresh.
+  - **The key** is in Settings → TMDB (masked, `tmdb.api_key`). TMDB's API key (sent as `api_key=`) or its read access token (sent as a bearer token) both work. Saving a key starts a read straight away.
+  - **The client** is in `bingestats/tmdb/` and has GET only. It waits and retries on 429. A failure is kept in `arr_status` as `app = 'tmdb'` and shown in Settings.
 - **Sonarr queue:** already read by the downloads watcher. The calendar uses its match (`downloadId` → episode) for the "downloading" state and its progress.
 
 ## Episode state

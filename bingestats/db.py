@@ -370,7 +370,16 @@ def _m10(conn: sqlite3.Connection) -> None:
             conn.execute(stmt)
 
 
-MIGRATIONS = [_m1, _m2, _m3, _m4, _m5, _m6, _m7, _m8, _m9, _m10]
+def _m11(conn: sqlite3.Connection) -> None:
+    """TMDB detail for the season outlook and the shows browser (docs/specs/pins.md, P2)."""
+    for col, typ in (("name", "TEXT"), ("next_air_date", "TEXT"), ("last_season", "INTEGER"),
+                     ("max_season", "INTEGER"), ("genres", "TEXT NOT NULL DEFAULT '[]'"),
+                     ("networks", "TEXT NOT NULL DEFAULT '[]'")):
+        conn.execute(f"ALTER TABLE tmdb_shows ADD COLUMN {col} {typ}")
+    conn.execute("CREATE INDEX tmdb_shows_fetched ON tmdb_shows(fetched_at)")
+
+
+MIGRATIONS = [_m1, _m2, _m3, _m4, _m5, _m6, _m7, _m8, _m9, _m10, _m11]
 LATEST = len(MIGRATIONS)
 
 

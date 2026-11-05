@@ -6,6 +6,7 @@ from flask import (Blueprint, Response, current_app, flash, jsonify, redirect, r
 
 from ..arr.client import ArrError
 from ..plex.client import PlexError
+from ..services import tmdb
 from ..services import (accounts, activity, alerts, api_tokens, arr, backups, binges, completion, geo, history, homeassistant, jobs,
                         libraries, plex_setup, settings, stats, wrapped)
 
@@ -346,6 +347,7 @@ def _render_settings(conn, **extra):
                            backup_list=backups.list_backups(current_app.config["BS_CONFIG"].data_dir),
                            backup_keep=settings.get(conn, "backup.keep"),
                            backup_last=settings.get(conn, "backup.last_run_at"), arr_apps=arr.view(conn),
+                           tmdb=tmdb.view(conn),
                            sab_categories=settings.get(conn, "sabnzbd.categories"),
                            sab_allow_moves=settings.get(conn, "sabnzbd.allow_moves"))
 
@@ -447,6 +449,20 @@ def downloads_move():
 @bp.route("/downloads/front", methods=["POST"])
 def downloads_front():
     return _move_result(lambda: arr.shown_first(_db()))
+
+
+@bp.route("/settings/tmdb", methods=["POST"])
+def settings_tmdb():
+    conn = _db()
+    try:
+        changed = tmdb.save(conn, request.form)
+    except ValueError as e:
+        flash(str(e), "error")
+        return redirect(url_for("ui.settings_page") + "#tmdb")
+    if tmdb.configured(conn) and (changed or request.form.get("action") == "sync"):
+        return redirect(url_for("ui.job_page", job_id=jobs.ensure(conn, "tmdb_sync")))
+    flash("Saved" if not changed else "TMDB disconnected", "ok")
+    return redirect(url_for("ui.settings_page") + "#tmdb")
 
 
 @bp.route("/settings/arr", methods=["POST"])

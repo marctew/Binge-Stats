@@ -56,6 +56,8 @@ DEFAULTS: dict[str, Any] = {
     "sabnzbd.moved_at": 0.0,       # set by the web process after a move; the download watcher rereads the queue
     "arr.sync_h": 3,
     "arr.last_sync_at": 0,
+    "tmdb.api_key": "",              # TMDB API key or read access token, for the season outlook
+    "tmdb.last_run_at": 0,
     "pins.show_specials": False,     # season 0 on the calendar
     "pins.show_unmonitored": False,  # episodes Sonarr isn't fetching
     "backup.keep": 7,
@@ -70,7 +72,7 @@ DEFAULTS: dict[str, Any] = {
 
 # Keys never shown back in the UI or logged.
 SECRET_KEYS = {"plex.token", "plex.pending_token", "mqtt.password", "wrapped.server_salt",
-               "sonarr.api_key", "radarr.api_key", "sabnzbd.api_key"}
+               "sonarr.api_key", "radarr.api_key", "sabnzbd.api_key", "tmdb.api_key"}
 
 # Bounds for numeric settings edited in the UI.
 BOUNDS: dict[str, tuple[int, int]] = {

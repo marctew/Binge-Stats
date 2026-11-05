@@ -691,7 +691,7 @@ Every page is a Jinja template that extends `base.html`. Pages refresh their par
 | `/wrapped/<user_id>/<year>` | Admin view |
 | `/wrapped/s/<token>` | Public share (no auth) |
 | `/notifications` | Rules list, rule editor (trigger → conditions → template with live preview → channels), channels, delivery log |
-| `/settings` | Tabs: Plex, General (timezone, theme, thresholds), Home Assistant, Geo, Import, API tokens, Backups, About (version, DB size, worker heartbeat) |
+| `/settings` | Tabs: Plex, General (timezone, theme, thresholds), Home Assistant, Geo, Import, API tokens, Backups, About (version, DB size, worker heartbeat). Also Sonarr/Radarr/SABnzbd and TMDB cards |
 | `/jobs/<id>` | Job progress, HTMX-polled |
 
 **Worker heartbeat:** the worker writes `worker.heartbeat_at` to settings every poll. If it is older than 60 s, the UI shows a banner saying the worker isn't running.

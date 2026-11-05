@@ -21,6 +21,7 @@ KINDS = {
     "backup": "Back up the database",
     "arr_sync": "Read Sonarr, Radarr and SABnzbd",
     "pin_guides": "Read episode lists for pinned shows",
+    "tmdb_sync": "Read show status from TMDB",
 }
 
 
