@@ -115,6 +115,56 @@ def wrapped_revoke():
     return redirect(url_for("me.wrapped_page", year=year) if year else url_for("me.wrapped_page"))
 
 
+# -- pins and the calendar (same pages as the admin's, on this person's own pins) ---------
+
+@bp.route("/calendar")
+def calendar_page():
+    from .routes_pins import render_calendar
+    return render_calendar(_uid(), viewer=True)
+
+
+@bp.route("/shows")
+def shows_page():
+    from .routes_pins import render_shows
+    return render_shows(_uid(), viewer=True)
+
+
+@bp.route("/shows/pin-all", methods=["POST"])
+def shows_pin_all():
+    from .routes_pins import do_pin_all
+    return do_pin_all(_uid(), viewer=True)
+
+
+@bp.route("/shows/undo", methods=["POST"])
+def shows_undo():
+    from .routes_pins import do_undo
+    return do_undo(_uid(), viewer=True)
+
+
+@bp.route("/calendar/body")
+def calendar_body():
+    from .routes_pins import render_calendar
+    return render_calendar(_uid(), viewer=True, body_only=True)
+
+
+@bp.route("/calendar/month")
+def calendar_month():
+    from .routes_pins import render_month
+    return render_month(_uid(), viewer=True)
+
+
+@bp.route("/calendar/find")
+def calendar_find():
+    from .routes_pins import render_find
+    return render_find(_uid(), viewer=True)
+
+
+@bp.route("/pins/<int:tvdb_id>", methods=["POST"])
+def pin_toggle(tvdb_id: int):
+    from .routes_pins import do_toggle
+    return do_toggle(_uid(), tvdb_id, viewer=True)
+
+
 # -- account ------------------------------------------------------------------------------
 
 @bp.route("/account", methods=["GET", "POST"])

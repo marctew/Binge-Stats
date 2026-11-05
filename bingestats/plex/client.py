@@ -101,6 +101,7 @@ class PlexClient:
         return self._request(f"/library/sections/{int(section_id)}/all", {
             "type": plex_type, "sort": "addedAt:desc", "X-Plex-Container-Start": 0,
             "X-Plex-Container-Size": size, "excludeElements": self.LEAN,
+            "includeGuids": 1,   # without it these rows would have no tvdb/tmdb/imdb ids
         })
 
     # -- plex.tv (account-level, uses the same token) --------------------------

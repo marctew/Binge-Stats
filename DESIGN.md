@@ -15,6 +15,7 @@ This document records decisions that are already made. Build to it. `SPEC.md` ho
 | Stack | Python 3.12, Flask, Jinja, HTMX, Alpine.js, Tailwind, ECharts. |
 | Deployment | Docker Compose on an Ubuntu LXC. One image, two services (`web`, `worker`), one `/data` volume. |
 | Sonarr / Radarr / SABnzbd | **Optional and strictly read-only** (Marc, 2026-10-31). The worker snapshots them every 3 h for real gaps in shows, film collections, below-cutoff lists, what's airing this week and download history. The clients have no write methods, so nothing in them can be deleted, unmonitored or changed. **One exception** (Marc, 2026-11-04): SABnzbd's `mode=switch`, to move jobs in the queue from Downloads, behind a Settings switch that's off by default, admin only. No delete, pause or priority call. Shows and films are matched to Plex by TVDB / TMDB id, not by title. |
+| Pins (from Pinnarr) | **Pins live only in Binge, and Binge stays read-only** (Marc, 2026-11-05). Pinnarr's pins, calendar, episode states and season outlook move into Binge (`docs/specs/pins.md`). Its writes to other services are not ported: no Sonarr tag sync, no Plex Watchlist sync, no marking watched in Plex, no Overseerr requests. TMDB is added as an optional, GET-only source for the season outlook. |
 | Repo | `github.com/marctew/Binge-Stats` |
 
 ## 2. Environment
@@ -43,7 +44,7 @@ This document records decisions that are already made. Build to it. `SPEC.md` ho
 ```
 
 - **The worker owns ingest.** It is the only process that writes sessions, history, library and user data. Exactly one worker runs. Running the poller inside gunicorn would duplicate it per worker process, which is why it's separate.
-- **The web process reads, plus writes config.** Settings, rules, tokens, jobs it creates, alert acknowledgements and rotating a user's Wrapped share salt are its only writes. Anything long-running (Tautulli import, library sync on demand, rebuilding derived tables) is queued as a row in `jobs` and the worker picks it up.
+- **The web process reads, plus writes config.** Settings, rules, tokens, jobs it creates, alert acknowledgements, pins and rotating a user's Wrapped share salt are its only writes. Anything long-running (Tautulli import, library sync on demand, rebuilding derived tables) is queued as a row in `jobs` and the worker picks it up.
 - **Two direct Plex calls from the web process are allowed:** terminating a stream (one request, the user is waiting on it) and the image proxy. Nothing else from web talks to Plex. The image proxy also fetches Sonarr/Radarr posters (`/img/arr/...`, for downloads not yet in Plex), with their API keys kept server-side like the Plex token.
 - **One other outside call from the web process:** the "Test" button on a notification channel sends a single message and shows the result straight away. All real notifications are sent by the worker.
 - **Ingest is polling.** `GET /status/sessions` every 5 s (configurable 2–30 s). The Plex websocket (`/:/websockets/notifications`) is used only as a trigger to poll right away when playback state changes, so pause and stop are picked up in under a second. If the websocket drops, polling carries on alone. Plex webhooks are not used (they need Plex Pass and an inbound route).
@@ -67,6 +68,7 @@ v1 scope. Section numbers match the milestones in `SPEC.md`.
 11. **Transcode insights:** why things transcode, by user, device and file. A list of the files that cause the most transcoding, as re-encode candidates.
 12. **Library health:** content nobody has watched in N months, never-watched content, storage per watched hour by show and movie. A "what to delete" view with sizes.
 13. **Wrapped:** a year in review per user and for the whole server. A good-looking page the admin can share with a signed, revocable link.
+14. **Pins and calendar:** each person pins the shows they follow and gets a calendar of just those, with honest episode states (awaiting, missing, in Plex), a season outlook (dated, announced, filming, hiatus, dormant, cancelled, ended), pin-scoped lists (ready to watch, retire, discover) and a message when a pinned episode is in Plex. See `docs/specs/pins.md`: the calendar and pinning are built (P1), the rest is to come.
 
 ## 5. UI
 
@@ -98,3 +100,4 @@ v1 scope. Section numbers match the milestones in `SPEC.md`.
 - Multiple Plex servers in the UI. The schema carries `server_id` from day one, so adding this later is UI work only.
 - Plex OAuth sign-in for users. Viewer logins exist (password set by the admin, own data only). Signing in with a Plex account, and viewers seeing anything beyond their own data, are still v2.
 - Exports (CSV is in v1 for history. Anything more is v2).
+- From Pinnarr: an MCP server, cast cross-referencing, TMDB "more like this" suggestions, episode ratings and an iCal feed of pins.

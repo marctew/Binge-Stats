@@ -194,6 +194,34 @@
     </form>
   </section>
 
+  <section id="tmdb" class="card p-5 lg:col-span-3">
+    <h2 class="font-semibold">TMDB</h2>
+    <p class="mt-1 text-sm text-muted">Optional. Binge Stats only reads from TMDB, to tell whether a show is filming, on a break,
+      cancelled or ended. Sonarr can't tell these apart. Create a free key at
+      <a class="underline" href="https://www.themoviedb.org/settings/api" target="_blank" rel="noopener noreferrer">themoviedb.org → Settings → API</a>;
+      the API key or the API read access token both work.</p>
+    <form method="post" action="{{ url_for('ui.settings_tmdb') }}" class="mt-5 space-y-4">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="grid gap-3 rounded-xl border border-border bg-surface-2/30 p-4 sm:grid-cols-[9rem_1fr_1fr] sm:items-start">
+        <div>
+          <div class="font-medium">TMDB</div>
+          <div class="mt-1 text-xs {{ 'text-play' if tmdb.ok else ('text-danger' if tmdb.error else 'text-muted') }}">
+            {% if tmdb.error %}{{ tmdb.error }}{% elif tmdb.last_sync_at %}Read {{ tmdb.last_sync_at | relative }}{% elif tmdb.has_key %}Not read yet{% else %}Not set up{% endif %}
+          </div>
+        </div>
+        <div class="sm:col-span-2"><label class="label" for="tmdb_key">API key or read access token</label>
+          <input id="tmdb_key" name="tmdb.api_key" type="password" class="input" autocomplete="off" placeholder="{{ 'Saved – leave blank to keep' if tmdb.has_key else 'Paste the key or token' }}">
+          {% if tmdb.has_key %}<label class="mt-1.5 flex items-center gap-2 text-xs text-muted"><input type="checkbox" name="clear_tmdb" class="rounded"> Disconnect TMDB</label>{% endif %}
+          {% if tmdb.has_key %}<p class="mt-2 text-xs text-faint">{{ '{:,}'.format(tmdb.shows) }} of {{ '{:,}'.format(tmdb.known) }} shows read. Pinned shows are read again daily, the rest weekly.</p>{% endif %}
+        </div>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <button class="btn-primary">Save</button>
+        {% if tmdb.has_key %}<button name="action" value="sync" class="btn-ghost">Read now</button>{% endif %}
+      </div>
+    </form>
+  </section>
+
   <section id="backups" class="card p-5 lg:col-span-3">
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div>

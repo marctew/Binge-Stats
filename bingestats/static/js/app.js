@@ -82,3 +82,49 @@ document.addEventListener("alpine:init", () => {
     };
   });
 });
+
+// Filter forms marked data-tidy-query leave out empty fields (and defaults named in the
+// attribute, e.g. "sort=recent"), so the address bar and bookmarks stay short.
+document.addEventListener("htmx:configRequest", (e) => {
+  const form = e.detail.elt;
+  if (!form.matches || !form.matches("form[data-tidy-query]")) return;
+  const defaults = new Set((form.dataset.tidyQuery || "").split(" ").filter(Boolean));
+  const p = e.detail.formData;
+  for (const k of [...new Set(p.keys())]) {
+    const keep = p.getAll(k).filter((v) => v !== "" && !defaults.has(`${k}=${v}`));
+    p.delete(k);
+    keep.forEach((v) => p.append(k, v));
+  }
+});
+
+// Collapsible sections (macros/media.html `collapsible`): details[data-section] keep their open or
+// closed state when htmx swaps the page around them (a pin reloads the calendar, a month step
+// swaps its section), and those with data-remember keep it across visits too.
+const sectionState = {};
+function sectionSaved(d) {
+  const k = d.dataset.section;
+  if (k in sectionState) return sectionState[k];
+  if (!d.hasAttribute("data-remember")) return undefined;
+  try {
+    const v = localStorage.getItem("section:" + k);
+    return v === null ? undefined : v === "1";
+  } catch (_) {
+    return undefined;
+  }
+}
+function restoreSections() {
+  document.querySelectorAll("details[data-section]").forEach((d) => {
+    const v = sectionSaved(d);
+    if (v !== undefined && d.open !== v) d.open = v;
+  });
+}
+document.addEventListener("toggle", (e) => {
+  const d = e.target;
+  if (!d.matches || !d.matches("details[data-section]")) return;
+  sectionState[d.dataset.section] = d.open;
+  if (d.hasAttribute("data-remember")) {
+    try { localStorage.setItem("section:" + d.dataset.section, d.open ? "1" : "0"); } catch (_) { /* private mode */ }
+  }
+}, true);
+document.addEventListener("DOMContentLoaded", restoreSections);
+document.addEventListener("htmx:afterSwap", restoreSections);

@@ -17,7 +17,7 @@ bp = Blueprint("auth", __name__)
 PUBLIC = {"auth.login", "auth.setup_admin", "static", "wrapped.public_page", "wrapped.public_image"}
 # What a signed-in viewer (not the admin) may reach. Everything else sends them
 # to their own home page: an allow-list, so new admin pages are closed by default.
-VIEWER_ENDPOINTS = {"auth.logout", "img.plex_image"}
+VIEWER_ENDPOINTS = {"auth.logout", "img.plex_image", "img.arr_poster"}  # arr: posters for pinned shows not yet in Plex
 VIEWER_PREFIXES = ("me.",)
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 

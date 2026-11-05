@@ -675,6 +675,8 @@ Every page is a Jinja template that extends `base.html`. Pages refresh their par
 | `/login` | |
 | `/` | **Dashboard.** Now-playing strip (compact session cards), today / 7d / 30d tiles (plays, watch time, users, peak concurrent), plays-per-day chart (stacked by media type), top 5 users / shows / movies for 30 days, unacknowledged alerts, recently added row |
 | `/activity` | **Activity.** Full session cards (poster, progress, user avatar, device, location, quality source → target, decision badge with reasons tooltip, bandwidth, stop button), totals bar, "nothing playing" empty state |
+| `/calendar` | **Calendar** (only while Sonarr is set up; `/me/calendar` for viewers, on their own pins). Pin-a-show search, aired-not-arrived (30 days), the next 14 days by day with each episode's state, later (pinned shows with nothing in two weeks), your pins. See `docs/specs/pins.md` |
+| `/shows` | **Shows** (`/me/shows` for viewers). Every show you could pin: filters for library, outlook, Sonarr status, genre, network and pinned, with counts; sort by recently watched, title, next airing or outlook; 60 a page; pin all shown (once filtered) and undo. See `docs/specs/pins.md` |
 | `/history` | **History.** Filter bar (user, library, type, decision, platform, IP, date range, search). Table with poster thumb, title, user, started, duration, % bar, decision. Grouped resumes collapse into one row. 50 per page, paging by keyset on `started_at, id`, CSV export of the current filter |
 | `/users` | User cards / table: last seen, plays, watch time, last watched, active flag |
 | `/users/<id>` | **User.** Header with avatar + friendly name (editable) + limits. Tiles, watch time over time, heatmap, top content, devices, IPs on a map (Leaflet + OSM tiles; vendored, tiles from OSM), binges, completion and abandoned shows, alerts, recent history, Wrapped link |
@@ -690,7 +692,7 @@ Every page is a Jinja template that extends `base.html`. Pages refresh their par
 | `/wrapped/<user_id>/<year>` | Admin view |
 | `/wrapped/s/<token>` | Public share (no auth) |
 | `/notifications` | Rules list, rule editor (trigger → conditions → template with live preview → channels), channels, delivery log |
-| `/settings` | Tabs: Plex, General (timezone, theme, thresholds), Home Assistant, Geo, Import, API tokens, Backups, About (version, DB size, worker heartbeat) |
+| `/settings` | Tabs: Plex, General (timezone, theme, thresholds), Home Assistant, Geo, Import, API tokens, Backups, About (version, DB size, worker heartbeat). Also Sonarr/Radarr/SABnzbd and TMDB cards |
 | `/jobs/<id>` | Job progress, HTMX-polled |
 
 **Worker heartbeat:** the worker writes `worker.heartbeat_at` to settings every poll. If it is older than 60 s, the UI shows a banner saying the worker isn't running.

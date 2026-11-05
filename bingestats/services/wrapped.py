@@ -23,7 +23,7 @@ from .binges import show_guids, show_key
 
 SERVER = 0
 FRESH_S = 86400
-VERSION = 1   # bump when the shape changes so old cache rows are ignored
+VERSION = 2   # 2: artwork and links follow re-added items (stats.current_items). Bump when the shape changes so old cache rows are ignored
 
 # Comparisons for total watch time, biggest that fits first.
 COMPARISONS = [

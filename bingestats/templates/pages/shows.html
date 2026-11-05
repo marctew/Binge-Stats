@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% from "macros/ui.html" import page_header, empty_state, poster, outlook_badge, confirm_button %}
+{% from "macros/icons.html" import icon %}
+{% block title %}Shows · Binge Stats{% endblock %}
+{% block content %}
+{% macro facet_box(name, v) -%}
+<label class="flex cursor-pointer items-center gap-2 rounded-md px-1 py-1 text-sm hover:bg-surface-2/50">
+  <input type="checkbox" form="shows-filter" name="{{ name }}" value="{{ v.value }}" class="rounded" {{ 'checked' if v.checked }}>
+  <span class="min-w-0 flex-1 truncate {{ 'text-faint' if not v.count and not v.checked }}">{{ v.label }}</span>
+  <span class="text-xs tabular-nums text-muted">{{ v.count }}</span>
+</label>
+{%- endmacro %}
+{% call page_header('Shows', '{:,}'.format(d.all) ~ ' shows · ' ~ '{:,}'.format(d.pinned) ~ ' pinned') %}
+  <a href="{{ url_for('me.calendar_page' if viewer else 'pins.calendar_page') }}" class="btn-ghost">{{ icon('calendar', 'h-4 w-4') }}Calendar</a>
+{% endcall %}
+{%- set swap = 'hx-target="#browser" hx-select="#browser" hx-swap="outerHTML" hx-push-url="true"' -%}
+<div x-data="{ sheet: false }" @keydown.escape.window="sheet = false">
+<div x-cloak x-show="sheet" x-transition.opacity @click="sheet = false" class="fixed inset-0 z-30 bg-black/60 lg:hidden"></div>
+<div id="browser">
+  {# reload after a pin changes (counts and the Pinned filter); not a wrapper, so the pin buttons don't inherit it #}
+  <div hidden hx-get="{{ request.full_path }}" hx-trigger="pins-changed from:body" hx-target="#browser" hx-select="#browser" hx-swap="outerHTML"></div>
+  {# the inputs live in the panel and point here with form=, so listen on #browser for their changes #}
+  <form id="shows-filter" method="get" action="{{ url_for(shows_ep) }}" hx-get="{{ url_for(shows_ep) }}" {{ swap | safe }} data-tidy-query="sort=recent"
+        hx-trigger="change from:#browser, input changed delay:300ms from:#shows-q"></form>
+
+  <div class="lg:grid lg:grid-cols-[15rem_1fr] lg:gap-6">
+    <aside x-cloak :class="sheet ? 'block' : 'hidden lg:block'"
+           class="fixed inset-x-0 bottom-0 z-40 max-h-[80vh] overflow-y-auto rounded-t-2xl border-t border-border bg-surface p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] shadow-2xl
+                  lg:static lg:z-auto lg:max-h-none lg:overflow-visible lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none">
+      <div class="mb-3 flex items-center justify-between lg:hidden">
+        <span class="font-semibold">Filters</span>
+        <button type="button" class="btn-primary" @click="sheet = false">Show {{ '{:,}'.format(d.total) }}</button>
+      </div>
+      <label for="shows-q" class="label">Search</label>
+      <input id="shows-q" name="q" type="search" form="shows-filter" value="{{ f.q }}" hx-preserve="true" class="input mt-1 w-full" placeholder="Title" autocomplete="off">
+      {% for fc in d.facets if fc.options %}
+      <fieldset class="mt-5">
+        <legend class="label mb-1.5">{{ fc.label }}</legend>
+        {% set shown = fc.options[:8] %}
+        {% set extra = fc.options[8:] %}
+        {% for v in shown %}{{ facet_box(fc.name, v) }}{% endfor %}
+        {% if extra %}
+        <details class="group"{% if extra | selectattr('checked') | list %} open{% endif %}>
+          <summary class="mt-1 cursor-pointer list-none text-xs text-muted hover:text-accent"><span class="group-open:hidden">{{ extra | length }} more</span><span class="hidden group-open:inline">Fewer</span></summary>
+          {% for v in extra %}{{ facet_box(fc.name, v) }}{% endfor %}
+        </details>
+        {% endif %}
+      </fieldset>
+      {% endfor %}
+      {% if f.active %}<a href="{{ url_for(shows_ep, sort=f.sort if f.sort != 'recent' else None) }}" hx-get="{{ url_for(shows_ep, sort=f.sort if f.sort != 'recent' else None) }}" {{ swap | safe }} class="btn-ghost mt-5 w-full justify-center">Clear all</a>{% endif %}
+    </aside>
+
+    <div class="min-w-0">
+      <div class="mb-4 flex flex-wrap items-center gap-2">
+        <span class="mr-auto text-sm text-muted">{{ '{:,}'.format(d.total) }} {{ 'show' if d.total == 1 else 'shows' }}{% if f.active %} match{% endif %}</span>
+        <button type="button" class="btn-ghost lg:hidden" @click="sheet = true">{{ icon('search', 'h-4 w-4') }}Filters{% set n = (f.picked.values() | map('length') | sum) + (1 if f.q else 0) %}{% if n %} <span class="badge-accent">{{ n }}</span>{% endif %}</button>
+        <label class="sr-only" for="shows-sort">Sort</label>
+        <select id="shows-sort" name="sort" form="shows-filter" class="input w-auto py-1.5 text-sm">
+          {% for k, label in sorts.items() %}<option value="{{ k }}" {{ 'selected' if f.sort == k }}>{{ label }}</option>{% endfor %}
+        </select>
+        {% if f.active and d.unpinned_shown %}
+        <form method="post" action="{{ url_for(pin_all_ep) }}" class="inline-flex">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          {% for k, v in f.query(page=None).items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
+          {{ confirm_button('Pin all ' ~ '{:,}'.format(d.unpinned_shown), 'Pin the ' ~ '{:,}'.format(d.unpinned_shown) ~ ' shows matching these filters? You can undo it straight after.', 'Pin ' ~ '{:,}'.format(d.unpinned_shown), cls='btn-primary', glyph='pin') }}
+        </form>
+        {% endif %}
+        {% if d.last_batch %}
+        <form method="post" action="{{ url_for(undo_ep) }}" class="inline-flex">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          {% for k, v in f.query(page=None).items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
+          <button class="btn-ghost" title="Unpin the {{ d.last_batch.count }} shows pinned in one go">Undo last bulk pin ({{ d.last_batch.count }})</button>
+        </form>
+        {% endif %}
+      </div>
+
+      {% if d['items'] %}
+      <div class="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-6">
+        {% for s in d['items'] %}
+        <div class="group relative min-w-0">
+          {% set src = None if s.thumb else (url_for('img.arr_poster', app='sonarr', item_id=s.series_id) if s.series_id else None) %}
+          {% if s.rating_key and not viewer %}<a href="{{ url_for('ui.item_page', rating_key=s.rating_key) }}" class="block">{{ poster(s.thumb, s.title, 'w-full transition group-hover:ring-accent/60', 'poster', 300, src=src) }}</a>
+          {% else %}{{ poster(s.thumb, s.title, 'w-full', 'poster', 300, src=src) }}{% endif %}
+          <div class="absolute right-1.5 top-1.5 rounded-full bg-surface/80 backdrop-blur">
+            {% with tvdb_id=s.tvdb_id, pinned=s.pinned, compact=True, overlay=True %}{% include "partials/pin_button.html" %}{% endwith %}
+          </div>
+          <div class="mt-2 truncate text-sm font-medium" title="{{ s.title }}">{{ s.title }}</div>
+          <div class="mt-1 flex min-w-0 items-center gap-1.5 text-xs">{{ outlook_badge(s.outlook, s.next_at) }}</div>
+        </div>
+        {% endfor %}
+      </div>
+      {% if d.pages > 1 %}
+      <nav class="mt-6 flex items-center justify-center gap-2 text-sm" aria-label="Pages">
+        {% if d.page > 1 %}<a class="btn-ghost" href="{{ url_for(shows_ep, **f.query(page=d.page - 1)) }}" hx-get="{{ url_for(shows_ep, **f.query(page=d.page - 1)) }}" {{ swap | safe }}>Previous</a>{% endif %}
+        <span class="px-2 text-muted">Page {{ d.page }} of {{ d.pages }}</span>
+        {% if d.page < d.pages %}<a class="btn-ghost" href="{{ url_for(shows_ep, **f.query(page=d.page + 1)) }}" hx-get="{{ url_for(shows_ep, **f.query(page=d.page + 1)) }}" {{ swap | safe }}>Next</a>{% endif %}
+      </nav>
+      {% endif %}
+      {% else %}
+      {{ empty_state('No shows match', 'Untick a filter or two to see more.' if f.active else "Shows appear here once Plex or Sonarr has been read.", 'search') }}
+      {% endif %}
+    </div>
+  </div>
+</div>
+</div>
+{% endblock %}

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "macros/ui.html" import poster, avatar, decision_badge, stat_tile, empty_state, progress %}
+{% from "macros/ui.html" import poster, avatar, decision_badge, stat_tile, empty_state, progress, outlook_badge %}
 {% from "macros/media.html" import section_title %}
 {% block title %}{{ item.title }} · Binge Stats{% endblock %}
 {% block content %}
@@ -20,6 +20,7 @@
       {% endif %}
       <div class="mt-3 flex flex-wrap gap-2 text-sm text-muted">
         {% if item.year %}<span class="badge-muted">{{ item.year }}</span>{% endif %}
+        {% if pin and pin.outlook and t == 'show' %}{{ outlook_badge(pin.outlook, pin.next_at) }}{% endif %}
         {% if item.duration_s %}<span class="badge-muted">{{ item.duration_s | duration(True) }}</span>{% endif %}
         {% if item.video_resolution %}<span class="badge-muted">{{ item.video_resolution | resolution }} {{ item.video_codec | codec }}</span>{% endif %}
         {% if item.audio_codec %}<span class="badge-muted">{{ item.audio_codec | codec }} {{ item.audio_channels | channels }}</span>{% endif %}
@@ -28,8 +29,9 @@
         {% if item.added_at %}<span class="badge-muted">Added {{ item.added_at | localtime('%d %b %Y') }}</span>{% endif %}
         {% if not item.is_present %}<span class="badge-warning">No longer in Plex</span>{% endif %}
       </div>
-      {% if links %}
+      {% if links or pin %}
       <div class="mt-4 flex flex-wrap gap-2">
+        {% if pin %}{% with tvdb_id=pin.tvdb_id, pinned=pin.pinned, compact=False, viewer=False %}{% include "partials/pin_button.html" %}{% endwith %}{% endif %}
         {% for l in links %}
         <a href="{{ l.url }}" target="_blank" rel="noopener noreferrer" class="btn-ghost">
           <span class="h-2.5 w-2.5 rounded-full {{ {'plex': 'bg-[#e5a00d]', 'sonarr': 'bg-[#35c5f4]', 'radarr': 'bg-[#ffc230]'}[l.app] }}"></span>{{ l.label }} ↗</a>

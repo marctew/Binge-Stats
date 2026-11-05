@@ -67,3 +67,38 @@
 <div class="card p-6 text-center text-sm text-faint">{{ empty }}</div>
 {% endif %}
 {%- endmacro %}
+
+{# One episode of a pinned show on the calendar. `when` is what goes in the time slot; viewers get no links.
+   pin: add an unpin button for the show (outside the link, so it can be a form). #}
+{% macro episode_row(e, when, viewer=False, pin=False) -%}
+{% from "macros/ui.html" import poster %}
+{%- set href = None if viewer else (url_for('ui.item_page', rating_key=e.rating_key) if e.rating_key else (url_for('ui.item_page', rating_key=e.show_rating_key) if e.show_rating_key else None)) -%}
+<div class="flex items-center{{ ' pr-2' if pin }}">
+{%- set cls = 'flex min-w-0 flex-1 items-center gap-3 py-3 pl-4 ' ~ ('pr-2' if pin else 'pr-4') ~ (' transition hover:bg-surface-2/40' if href else '') -%}
+{% if href %}<a href="{{ href }}" class="{{ cls }}">{% else %}<div class="{{ cls }}">{% endif %}
+  {{ poster(e.thumb, e.show, 'w-9', 'poster', 150, src=None if e.thumb else (url_for('img.arr_poster', app='sonarr', item_id=e.series_id) if e.series_id else None)) }}
+  <div class="min-w-0 flex-1">
+    <div class="truncate text-sm font-medium">{{ e.show }}</div>
+    <div class="truncate text-xs text-muted">S{{ '%02d' % e.season }}E{{ '%02d' % e.episode }}{% if e.title and e.title != 'TBA' %} · {{ e.title }}{% endif %}</div>
+    <div class="truncate text-xs text-faint sm:hidden">{{ when }}</div>
+  </div>
+  <span class="hidden shrink-0 text-right text-xs text-muted sm:block">{{ when }}</span>
+  <span class="{{ {'available': 'badge-success', 'on_disk': 'badge-info', 'downloading': 'badge-info', 'airing_today': 'badge-accent',
+                  'awaiting': 'badge-warning', 'missing': 'badge-danger'}.get(e.state, 'badge-muted') }} shrink-0">{{ e.label }}{% if e.state == 'downloading' and e.pct is not none %} {{ e.pct }}%{% endif %}</span>
+{% if href %}</a>{% else %}</div>{% endif %}
+{% if pin %}{% with tvdb_id=e.tvdb_id, pinned=True, compact=True %}{% include "partials/pin_button.html" %}{% endwith %}{% endif %}
+</div>
+{%- endmacro %}
+
+{# A page section whose heading folds it away. key names it, so it keeps its state when htmx swaps the
+   page around it (static/js/app.js); remember=True also keeps it across visits. #}
+{% macro collapsible(title, key, sub=None, open=True, remember=True) -%}
+{% from "macros/icons.html" import icon %}
+<details class="group/sec relative mt-8" data-section="{{ key }}"{% if remember %} data-remember{% endif %}{% if open %} open{% endif %}>
+  <summary class="mb-3 flex cursor-pointer list-none items-baseline justify-between gap-3 [&::-webkit-details-marker]:hidden">
+    <h2 class="flex items-center gap-1.5 text-lg font-semibold">{{ icon('chevron-down', 'h-4 w-4 self-center text-muted transition -rotate-90 group-open/sec:rotate-0') }}{{ title }}</h2>
+    {% if sub %}<span class="text-sm text-muted">{{ sub }}</span>{% endif %}
+  </summary>
+  {{ caller() }}
+</details>
+{%- endmacro %}

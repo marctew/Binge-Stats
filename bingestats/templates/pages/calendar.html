@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% from "macros/ui.html" import page_header, empty_state, poster %}
+{% from "macros/media.html" import section_title, episode_row %}
+{% from "macros/icons.html" import icon %}
+{% block title %}Calendar · Binge Stats{% endblock %}
+{% block content %}
+{% call page_header('Calendar', 'The shows you pin, and when their episodes land') %}{% endcall %}
+
+{% if no_owner %}
+<div class="banner banner-warning mb-6">Pins belong to your Plex account, and the server owner isn't in Users yet. Sync users from Settings, then come back.</div>
+{% elif not sonarr %}
+<div class="banner banner-warning mb-6">{% if viewer %}Air dates come from Sonarr, which isn't connected, so there's nothing to show yet.{% else %}Air dates come from Sonarr. Connect it in <a class="underline" href="{{ url_for('ui.settings_page') }}">Settings</a> to fill the calendar.{% endif %}</div>
+{% endif %}
+
+{% if cal %}
+<section class="card p-4 sm:p-5">
+  <div class="flex items-baseline justify-between gap-3">
+    <label for="pin-q" class="label">Pin a show</label>
+    <a href="{{ url_for('me.shows_page' if viewer else 'pins.shows_page') }}" class="text-xs text-muted hover:text-accent">Browse all shows →</a>
+  </div>
+  <input id="pin-q" name="q" type="search" class="input mt-1 w-full" placeholder="Search Plex and Sonarr by title" autocomplete="off"
+         hx-get="{{ find_url }}" hx-trigger="input changed delay:300ms, search, pins-changed from:body" hx-target="#pin-results">
+  <div id="pin-results"></div>
+</section>
+
+<div id="cal-body" hx-get="{{ body_url }}" hx-trigger="pins-changed from:body" hx-swap="innerHTML">
+{% include "partials/calendar_body.html" %}
+</div>
+{% endif %}
+{% endblock %}

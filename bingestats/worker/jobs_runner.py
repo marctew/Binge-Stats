@@ -80,6 +80,16 @@ def run_job(conn, cfg, job: dict) -> dict:
         result = arr_sync.run(conn, progress)
         settings.set(conn, "arr.last_sync_at", int(time.time()))
         return result
+    if kind == "tmdb_sync":
+        from . import tmdb_sync
+        return tmdb_sync.run(conn, progress)
+    if kind == "pin_guides":
+        from . import arr_sync
+        from ..services import arr as arr_svc
+        client = arr_svc.clients(conn).get("sonarr")
+        if client is None:
+            return {"skipped": "Sonarr isn't set up"}
+        return arr_sync.sync_guides(conn, client)
     if kind == "backup":
         result = backups.create(cfg.db_path, cfg.data_dir, int(settings.get(conn, "backup.keep")))
         settings.set(conn, "backup.last_run_at", int(time.time()))
@@ -126,6 +136,10 @@ def schedule_due(conn, now: float | None = None) -> list[int]:
     if any(arr_svc.configured(conn).values()) and \
             now - (settings.get(conn, "arr.last_sync_at") or 0) >= int(settings.get(conn, "arr.sync_h")) * 3600:
         queued.append(jobs.ensure(conn, "arr_sync"))
+    # TMDB: every 6 hours it reads whatever is due (pinned shows daily, the rest weekly).
+    from ..services import tmdb as tmdb_svc
+    if tmdb_svc.configured(conn) and now - (settings.get(conn, "tmdb.last_run_at") or 0) >= tmdb_svc.RUN_EVERY_S:
+        queued.append(jobs.ensure(conn, "tmdb_sync"))
     if not settings.plex_configured(conn):
         return queued
     if conn.execute("SELECT 1 FROM servers LIMIT 1").fetchone() is None:

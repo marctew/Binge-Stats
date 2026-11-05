@@ -28,7 +28,8 @@ def series(s: dict) -> dict:
             "episode_count": st.get("episodeCount") or 0, "episode_file_count": st.get("episodeFileCount") or 0,
             "total_episode_count": st.get("totalEpisodeCount") or 0, "seasons": json.dumps(seasons),
             "previous_airing": ts(s.get("previousAiring")), "next_airing": ts(s.get("nextAiring")),
-            "added_at": ts(s.get("added"))}
+            "added_at": ts(s.get("added")), "network": s.get("network") or None,
+            "genres": json.dumps(s.get("genres") or []), "tmdb_id": s.get("tmdbId") or None}
 
 
 def episode(e: dict) -> dict:

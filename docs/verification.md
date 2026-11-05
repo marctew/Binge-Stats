@@ -239,3 +239,23 @@ I moved a job deep in the "other" part of the queue and put it back.
 - **Dropping above the top group failed at first.** Marc's drops above the top "Other items" group came back 400: "The queue has changed under you". That group starts with the job being downloaded, which at about 100 MB/s often finishes between the page's read and the drop.
   - **Fix:** a drop with nothing above it now means "move to top", whatever's first now.
   - **Checked live:** I dropped a job (position 1,315) at the top with an already-finished neighbour. It landed at position 0, as High, the top job's priority. It was then restored between its old neighbours, at Normal.
+
+## Pins P1 deployed, 2026-11-05 (Sonarr v4, 2,152 series)
+
+- **Migration v10 ran** on the live database (schema 10). The Plex owner (`mltew`) is in Users, so the admin's pins have an account to belong to.
+- **Sonarr series fields:** 2,041 of 2,152 series have a `tmdbId` (95 %) and 2,099 have a `network`, so P2's outlook and network filter will cover nearly everything.
+- **The wider calendar read (−7 to +60 days, unmonitored included) is cheap:** the full `arr_sync` (Sonarr, Radarr and SABnzbd together) took 54 s, about what it took before. The calendar returned 478 episodes.
+- **Not checked yet:** whether a Sonarr upgrade gives an episode a new Plex rating key. It matters for P3's notifications.
+
+## External ids on library items, 2026-11-05 (1,882 shows)
+
+- **51 shows had no TVDB id** although Plex had one for most of them. The 10-minute check for new items read Plex without `includeGuids` and wrote the ids back as NULL for the newest 30 items of each type, every time. Fixed: it asks for them, and an upsert never replaces a stored id with NULL. After a full sync, 20 were left.
+- **Old-agent items carry the id in their guid.** Elementary (`com.plexapp.agents.thetvdb://255316?lang=en`) has no `Guid` list in a library listing, even with `includeGuids=1`, though `/library/metadata/<key>` shows one. The id is now read from the guid when there's no list. Episode guids under old agents (`…://255316/1/2`) are ignored, since that's the show's id.
+- **The other 19 have no TVDB id in Plex at all.** 10 are unmatched (`local://…`, or no ids), and 9 have only TMDB and/or IMDb. They can't be pinned until P2 adds a TMDB fallback, or they're matched in Plex.
+
+## TMDB and the season outlook, 2026-11-05 (2,136 shows read)
+
+- **The first full read** took about 6 minutes: 2,130 shows read, and 6 that TMDB answers 404 for. Statuses: Ended 1,060, Returning Series 798, Canceled 262, In Production 9, Planned 1.
+- **TMDB's `in_production` flag doesn't mean filming.** It was true on every Returning Series, so Pinnarr's rule put 607 shows (46 of Marc's 66 pins, including Ted Lasso and Slow Horses) under Filming. Filming now comes only from TMDB's status, In Production or Post Production, and the flag is ignored.
+- **TVDB marks shows ended between series.** Sonarr had 24 Hours in Police Custody, Court Martial and The Terminal List: Dark Wolf as ended while TMDB had them as Returning Series. When TMDB has a status, it decides; Sonarr's "ended" counts only when TMDB has nothing.
+- **Line of Duty reads as Announced:** TMDB lists series 7, and the last aired is series 6.

@@ -5,6 +5,7 @@ import sqlite3
 import time
 
 from . import history
+from .stats import current_items
 
 
 def backfill_play_guids(conn: sqlite3.Connection) -> int:
@@ -92,16 +93,16 @@ def get_user(conn: sqlite3.Connection, user_id: int) -> dict | None:
            FROM plays WHERE user_id = ? AND group_id IS NULL""",
         (now - 30 * 86400, now - 30 * 86400, user_id)).fetchone()
     u["stats"] = dict(stats)
-    u["top_shows"] = [dict(r) for r in conn.execute(
+    u["top_shows"] = current_items(conn, [dict(r) for r in conn.execute(
         """SELECT grandparent_title AS title, MAX(thumb) AS thumb, MAX(grandparent_rating_key) AS rating_key,
-                  COUNT(*) AS plays, SUM(play_s) AS play_s
+                  MAX(grandparent_guid) AS guid, COUNT(*) AS plays, SUM(play_s) AS play_s
            FROM plays WHERE user_id = ? AND media_type = 'episode' AND grandparent_title IS NOT NULL
-           GROUP BY COALESCE(grandparent_guid, grandparent_title) ORDER BY play_s DESC LIMIT 6""", (user_id,))]
-    u["top_movies"] = [dict(r) for r in conn.execute(
-        """SELECT title, MAX(thumb) AS thumb, MAX(rating_key) AS rating_key, year, COUNT(*) AS plays,
+           GROUP BY COALESCE(grandparent_guid, grandparent_title) ORDER BY play_s DESC LIMIT 6""", (user_id,))])
+    u["top_movies"] = current_items(conn, [dict(r) for r in conn.execute(
+        """SELECT title, MAX(thumb) AS thumb, MAX(rating_key) AS rating_key, MAX(guid) AS guid, year, COUNT(*) AS plays,
                   SUM(play_s) AS play_s
            FROM plays WHERE user_id = ? AND media_type = 'movie'
-           GROUP BY COALESCE(guid, title) ORDER BY play_s DESC LIMIT 6""", (user_id,))]
+           GROUP BY COALESCE(guid, title) ORDER BY play_s DESC LIMIT 6""", (user_id,))])
     u["devices"] = [dict(r) for r in conn.execute(
         """SELECT player_title, product, platform, COUNT(*) AS plays, MAX(started_at) AS last_used
            FROM plays WHERE user_id = ? GROUP BY player_title, product ORDER BY last_used DESC LIMIT 8""",
@@ -176,18 +177,18 @@ def get_library(conn: sqlite3.Connection, library_id: int) -> dict | None:
         "SELECT * FROM media_items WHERE library_id = ? AND is_present = 1 AND type = ? "
         "ORDER BY added_at DESC LIMIT 12", (library_id, top if top != "artist" else "album"))]
     if lib["type"] == "show":
-        lib["most_played"] = [dict(r) for r in conn.execute(
+        lib["most_played"] = current_items(conn, [dict(r) for r in conn.execute(
             """SELECT grandparent_title AS title, MAX(grandparent_rating_key) AS rating_key, MAX(thumb) AS thumb,
-                      COUNT(*) AS plays, COUNT(DISTINCT user_id) AS users, SUM(play_s) AS play_s
+                      MAX(grandparent_guid) AS guid, COUNT(*) AS plays, COUNT(DISTINCT user_id) AS users, SUM(play_s) AS play_s
                FROM plays WHERE library_id = ? AND grandparent_title IS NOT NULL
                GROUP BY COALESCE(grandparent_guid, grandparent_title) ORDER BY plays DESC LIMIT 10""",
-            (library_id,))]
+            (library_id,))])
     else:
-        lib["most_played"] = [dict(r) for r in conn.execute(
+        lib["most_played"] = current_items(conn, [dict(r) for r in conn.execute(
             """SELECT COALESCE(grandparent_title || ' · ', '') || title AS title, MAX(rating_key) AS rating_key,
-                      MAX(thumb) AS thumb, COUNT(*) AS plays, COUNT(DISTINCT user_id) AS users, SUM(play_s) AS play_s
+                      MAX(thumb) AS thumb, MAX(guid) AS guid, COUNT(*) AS plays, COUNT(DISTINCT user_id) AS users, SUM(play_s) AS play_s
                FROM plays WHERE library_id = ? GROUP BY COALESCE(guid, title) ORDER BY plays DESC LIMIT 10""",
-            (library_id,))]
+            (library_id,))])
     lib["stats"] = dict(conn.execute(
         "SELECT COUNT(*) AS plays, COALESCE(SUM(play_s), 0) AS play_s, COUNT(DISTINCT user_id) AS users "
         "FROM plays WHERE library_id = ?", (library_id,)).fetchone())
@@ -195,6 +196,26 @@ def get_library(conn: sqlite3.Connection, library_id: int) -> dict | None:
 
 
 # -- items --------------------------------------------------------------------------
+
+def moved_to(conn: sqlite3.Connection, rating_key: int) -> int | None:
+    """If this rating key is gone from Plex but the same thing (by guid) is there under a new key,
+    because Plex re-added it, the new key. Old links from history then still open the right page."""
+    if conn.execute("SELECT 1 FROM media_items WHERE rating_key = ? AND is_present = 1", (rating_key,)).fetchone():
+        return None
+    row = conn.execute("SELECT guid FROM media_items WHERE rating_key = ? AND guid IS NOT NULL", (rating_key,)).fetchone()
+    guid = row["guid"] if row else None
+    if guid is None:
+        p = conn.execute(
+            "SELECT CASE WHEN rating_key = ? THEN guid WHEN grandparent_rating_key = ? THEN grandparent_guid END AS g "
+            "FROM plays WHERE (rating_key = ? AND guid IS NOT NULL) OR (grandparent_rating_key = ? AND grandparent_guid IS NOT NULL) "
+            "ORDER BY started_at DESC LIMIT 1", (rating_key, rating_key, rating_key, rating_key)).fetchone()
+        guid = p["g"] if p else None
+    if guid is None:
+        return None
+    now = conn.execute("SELECT rating_key FROM media_items WHERE guid = ? AND is_present = 1 AND rating_key != ? "
+                       "ORDER BY rating_key DESC LIMIT 1", (guid, rating_key)).fetchone()
+    return now["rating_key"] if now else None
+
 
 def get_item(conn: sqlite3.Connection, rating_key: int) -> dict | None:
     """A movie, show, season, episode, album or track: from the library if it's

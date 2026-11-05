@@ -1,0 +1,85 @@
+{# The calendar below the search box. Reloaded in place whenever a pin changes (the pins-changed event). #}
+{% from "macros/ui.html" import empty_state, poster, outlook_badge %}
+{% from "macros/icons.html" import icon %}
+{% from "macros/media.html" import collapsible, episode_row %}
+{% if not cal.count %}
+<div class="mt-6">{{ empty_state('Pin some shows', 'Search above for the shows you follow. You get their episodes here, and whether each one has made it into Plex.', 'calendar') }}</div>
+{% else %}
+
+{% if cal.overdue %}
+{% call collapsible('Aired, not arrived', 'cal-overdue', 'last ' ~ cal.overdue_days ~ ' days') %}
+<div class="card divide-y divide-border">
+  {% for e in cal.overdue %}{{ episode_row(e, (e.air_at | localtime('%a %-d %b')) ~ ' · ' ~ (e.air_at | relative), viewer, pin=True) }}{% endfor %}
+</div>
+{% endcall %}
+{% endif %}
+
+{% call collapsible('Coming up', 'cal-agenda', 'next ' ~ cal.agenda_days ~ ' days') %}
+{% if cal.agenda %}
+<div class="space-y-4">
+  {% for day in cal.agenda %}
+  <section>
+    <h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">{{ day.label }}</h3>
+    <div class="card divide-y divide-border">
+      {% for e in day.episodes %}{{ episode_row(e, e.air_at | localtime('%H:%M'), viewer, pin=True) }}{% endfor %}
+    </div>
+  </section>
+  {% endfor %}
+</div>
+{% else %}<div class="card p-6 text-center text-sm text-faint">Nothing you've pinned airs in the next {{ cal.agenda_days }} days.</div>{% endif %}
+{% endcall %}
+
+{% include "partials/calendar_month.html" %}
+
+{% if cal.later %}
+{% call collapsible('Later', 'cal-later', 'after the next ' ~ cal.agenda_days ~ ' days') %}
+<div class="card divide-y divide-border">
+  {% for s in cal.later %}
+  <div class="flex items-center gap-3 py-3 pl-4 pr-2">
+    {{ poster(s.thumb, s.title, 'w-9', 'poster', 150, src=None if s.thumb else (url_for('img.arr_poster', app='sonarr', item_id=s.series_id) if s.series_id else None)) }}
+    <div class="min-w-0 flex-1">
+      {% if s.rating_key and not viewer %}<a href="{{ url_for('ui.item_page', rating_key=s.rating_key) }}" class="block truncate text-sm font-medium hover:text-accent">{{ s.title }}</a>
+      {% else %}<div class="truncate text-sm font-medium">{{ s.title }}</div>{% endif %}
+      <div class="truncate text-xs text-muted">
+        Next episode {{ s.next_airing | localtime('%a %-d %b %Y') }}
+      </div>
+    </div>
+    {% with tvdb_id=s.tvdb_id, pinned=True, compact=True %}{% include "partials/pin_button.html" %}{% endwith %}
+  </div>
+  {% endfor %}
+</div>
+{% endcall %}
+{% endif %}
+
+{% if cal.undated %}
+{# always starts folded: it's for pruning, not for looking forward to #}
+{% call collapsible('No future dates planned', 'cal-undated', cal.undated | length | plural('show'), open=False, remember=False) %}
+<div class="space-y-4">
+  {% for g in cal.undated_groups %}
+  {% set cards %}
+  <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+    {% for s in g.shows %}
+    <div class="card flex items-center gap-3 py-1.5 pl-4 pr-2"{% if not s.series_id %} title="Not in Sonarr, so no air dates"{% endif %}>
+      <div class="min-w-0 flex-1 truncate text-sm">{{ s.title }}{% if s.year %} <span class="text-muted">({{ s.year }})</span>{% endif %}</div>
+      {% with tvdb_id=s.tvdb_id, pinned=True, compact=True %}{% include "partials/pin_button.html" %}{% endwith %}
+    </div>
+    {% endfor %}
+  </div>
+  {% endset %}
+  {% if g.outlook == 'dormant' %}
+  <details class="group">
+    <summary class="mb-2 flex cursor-pointer list-none items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted">
+      {{ outlook_badge(g.outlook) }}<span>{{ g.shows | length }} · nothing for 2 years, worth a prune</span>{{ icon('chevron-down', 'h-4 w-4 transition group-open:rotate-180') }}</summary>
+    {{ cards }}
+  </details>
+  {% else %}
+  <section>
+    <h3 class="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted">{{ outlook_badge(g.outlook) }}<span>{{ g.shows | length }}</span></h3>
+    {{ cards }}
+  </section>
+  {% endif %}
+  {% endfor %}
+</div>
+{% endcall %}
+{% endif %}
+{% endif %}

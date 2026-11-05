@@ -6,6 +6,7 @@ from flask import (Blueprint, Response, current_app, flash, jsonify, redirect, r
 
 from ..arr.client import ArrError
 from ..plex.client import PlexError
+from ..services import tmdb
 from ..services import (accounts, activity, alerts, api_tokens, arr, backups, binges, completion, geo, history, homeassistant, jobs,
                         libraries, plex_setup, settings, stats, wrapped)
 
@@ -36,11 +37,13 @@ def _layout_context():
     except Exception:  # noqa: BLE001 - no db yet (e.g. error pages)
         status = {"alive": True, "error": "", "plex_configured": True}
     try:
-        sab = arr.configured(_db())["sabnzbd"]
+        conf = arr.configured(_db())
+        sab, sonarr = conf["sabnzbd"], conf["sonarr"]
     except Exception:  # noqa: BLE001
-        sab = False
+        sab = sonarr = False
     return {"worker": status, "app_version": current_app.config["BS_VERSION"],
-            "app_sha": current_app.config["BS_SHA"], "sab_configured": sab}
+            "app_sha": current_app.config["BS_SHA"], "sab_configured": sab,
+            "sonarr_configured": sonarr}
 
 
 OSM_TILES = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -344,6 +347,7 @@ def _render_settings(conn, **extra):
                            backup_list=backups.list_backups(current_app.config["BS_CONFIG"].data_dir),
                            backup_keep=settings.get(conn, "backup.keep"),
                            backup_last=settings.get(conn, "backup.last_run_at"), arr_apps=arr.view(conn),
+                           tmdb=tmdb.view(conn),
                            sab_categories=settings.get(conn, "sabnzbd.categories"),
                            sab_allow_moves=settings.get(conn, "sabnzbd.allow_moves"))
 
@@ -445,6 +449,20 @@ def downloads_move():
 @bp.route("/downloads/front", methods=["POST"])
 def downloads_front():
     return _move_result(lambda: arr.shown_first(_db()))
+
+
+@bp.route("/settings/tmdb", methods=["POST"])
+def settings_tmdb():
+    conn = _db()
+    try:
+        changed = tmdb.save(conn, request.form)
+    except ValueError as e:
+        flash(str(e), "error")
+        return redirect(url_for("ui.settings_page") + "#tmdb")
+    if tmdb.configured(conn) and (changed or request.form.get("action") == "sync"):
+        return redirect(url_for("ui.job_page", job_id=jobs.ensure(conn, "tmdb_sync")))
+    flash("Saved" if not changed else "TMDB disconnected", "ok")
+    return redirect(url_for("ui.settings_page") + "#tmdb")
 
 
 @bp.route("/settings/arr", methods=["POST"])
@@ -625,7 +643,12 @@ def library_page(library_id: int):
 
 @bp.route("/item/<int:rating_key>")
 def item_page(rating_key: int):
+    moved = libraries.moved_to(_db(), rating_key)
+    if moved is not None:                 # Plex re-added it under a new key: go to that page
+        return redirect(url_for("ui.item_page", rating_key=moved))
     item = libraries.get_item(_db(), rating_key)
     if item is None:
         return render_template("pages/not_found.html", what="item"), 404
-    return render_template("pages/item.html", item=item, links=arr.item_links(_db(), item))
+    from ..services import pins
+    return render_template("pages/item.html", item=item, links=arr.item_links(_db(), item),
+                           pin=pins.for_item(_db(), item, pins.owner_id(_db())))
