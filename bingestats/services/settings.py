@@ -58,6 +58,7 @@ DEFAULTS: dict[str, Any] = {
     "arr.last_sync_at": 0,
     "tmdb.api_key": "",              # TMDB API key or read access token, for the season outlook
     "tmdb.last_run_at": 0,
+    "pins.last_week_at": 0,          # when the Monday "week ahead" messages last went out
     "pins.show_specials": False,     # season 0 on the calendar
     "pins.show_unmonitored": False,  # episodes Sonarr isn't fetching
     "backup.keep": 7,

@@ -430,6 +430,7 @@ Overlap with live data: if a Tautulli play overlaps a live play for the same use
 | `recently_added` | `items` (grouped), `library`. Batched: wait 10 min after the last addition, then one message per show/season or per movie list |
 | `stream_limit` `transcode_limit` `concurrent_ips` `new_country` | `user`, `sessions`, `detail` |
 | `server_down` `server_up` | `server`, `down_for_s` |
+| `pin_arrived` `pin_schedule_changed` `pins_week` | `pinner` (who pinned it), `show`, `count`, plus `items`/`headline`, `code`/`old_text`/`new_text`, or `days`. One event per pinner. See `docs/specs/pins.md` |
 
 **Conditions:** a JSON list, all of which must match (AND). Each one is `{"field": "user.id", "op": "in", "value": [123, 456]}`.
 - Ops: `eq`, `ne`, `in`, `not_in`, `contains`, `gt`, `lt`, `is_true`, `is_false`.
@@ -633,6 +634,7 @@ Off until configured in **Settings → Home Assistant**. As built in `worker/mqt
 | Plays today / Watch time today | sensor, `total_increasing` | finished plays since local midnight / hours |
 | Unacknowledged alerts | sensor | count |
 | `{name}` watching | sensor, per tracked user | `{base}/user/{id}`: the title (`Show S01E02`, `Film (2024)`) or `idle`; attributes: streams, progress, player, decision, playback, sessions |
+| `{name}` next pinned / `{name}` pinned ready | sensor, per tracked user | `{base}/user/{id}/pins`: the next pinned episode (or `none`), and how many pinned episodes from the last 30 days they haven't watched |
 | Stop `{name}`'s streams | button, per tracked user | presses `PRESS` on `{base}/cmd/stop_user/{id}`; stops all of that user's streams with the default message |
 
 - **Tracked users** are ticked in Settings. The default is none, so we don't create entities for every user. Button presses for users who aren't tracked are ignored.

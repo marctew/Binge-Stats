@@ -82,7 +82,7 @@ def digest(conn: sqlite3.Connection, now: float | None = None) -> list[dict]:
             else:
                 headline = f"{show} · Season {season} · {len(items)} new episodes" if season is not None \
                     else f"{show} · {len(items)} new episodes"
-            event = {"kind": "episode", "show": show, "season": season,
+            event = {"kind": "episode", "show": show, "season": season, "show_rating_key": first["grandparent_rating_key"],
                      "poster": (show_row["thumb"] if show_row and show_row["thumb"] else first["thumb"]),
                      "items": [{"title": r["title"], "season": r["season_index"], "episode": r["episode_index"],
                                 "year": r["year"], "display_title": f"{show} · {_ep_label(r)}"} for r in items]}

@@ -89,11 +89,14 @@ def sync_guides(conn: sqlite3.Connection, client: ArrClient, now: float | None =
     """Whole episode lists for pinned shows, between the 3-hourly syncs (queued when someone pins)."""
     series = [{"id": r["id"], "tvdb_id": r["tvdb_id"]} for r in conn.execute("SELECT id, tvdb_id FROM sonarr_series")]
     rows, done = _guides(client, _pinned_series(conn, series))
+    from ..services import pin_notify
+    before = pin_notify.air_dates(conn)
     with db.transaction(conn):
         for sid in done:
             conn.execute("DELETE FROM sonarr_episodes WHERE series_id = ?", (sid,))
         _insert(conn, "sonarr_episodes", rows)
-    return {"series": len(done), "episodes": len(rows)}
+        moves = pin_notify.queue_moves(conn, before, now)
+    return {"series": len(done), "episodes": len(rows), **({"moves": moves} if moves else {})}
 
 
 def sync_sonarr(conn: sqlite3.Connection, client: ArrClient, now: float) -> dict:
@@ -109,6 +112,8 @@ def sync_sonarr(conn: sqlite3.Connection, client: ArrClient, now: float) -> dict
         end=(day + timedelta(days=CAL_AHEAD_D)).strftime("%Y-%m-%d"), unmonitored="true")]
     guides, _ = _guides(client, _pinned_series(conn, series))
     episodes = _episode_rows(calendar, guides)
+    from ..services import pin_notify
+    before = pin_notify.air_dates(conn)
     with db.transaction(conn):
         for t in ("sonarr_series", "sonarr_missing", "sonarr_upcoming", "sonarr_episodes"):
             conn.execute(f"DELETE FROM {t}")
@@ -120,7 +125,7 @@ def sync_sonarr(conn: sqlite3.Connection, client: ArrClient, now: float) -> dict
         _insert(conn, "arr_cutoff", cutoff)
         _insert(conn, "sonarr_episodes", episodes)
         info = {"series": len(series), "missing": len(missing), "cutoff": len(cutoff), "upcoming": len(upcoming),
-                "episodes": len(episodes),
+                "episodes": len(episodes), "moves": pin_notify.queue_moves(conn, before, now),
                 "categories": _categories(client, "tvCategory")}
         _status(conn, "sonarr", True, int(now), version=version, info=info)
     return info
