@@ -110,8 +110,8 @@ def ready(conn: sqlite3.Connection, user_id: int, now: float | None = None) -> l
 
 def retire(conn: sqlite3.Connection, user_id: int, now: float | None = None) -> list[dict]:
     """Pins that can't give you anything new, in groups: finished (ended or cancelled, and you're up to
-    date), probably over (nothing for 2 years, up to date), and gone cold (still going, but not played,
-    or never played and pinned, for COLD_DAYS)."""
+    date), probably over (nothing for 2 years, up to date), and gone cold (still going, episodes waiting
+    in Plex, but not played, or never played and pinned, for COLD_DAYS)."""
     now = now or time.time()
     tvdb_ids = sorted(pins.pinned(conn, user_id))
     if not tvdb_ids:
@@ -134,11 +134,15 @@ def retire(conn: sqlite3.Connection, user_id: int, now: float | None = None) -> 
             groups["finished"].append(row)
         elif look == outlook_svc.DORMANT and up_to_date:
             groups["over"].append(row)
-        elif look not in ENDED and (row["last"] or pinned_at.get(tvdb) or now) < now - COLD_DAYS * 86400:
+        elif look not in ENDED and p is not None and p["waiting"] and \
+                (row["last"] or pinned_at.get(tvdb) or now) < now - COLD_DAYS * 86400:
+            # stopped part-way: episodes are waiting and you haven't touched it in COLD_DAYS. Being up to
+            # date and waiting for the next season is what a pin is for, so that never counts.
+            row["waiting"] = len(p["waiting"])
             groups["cold"].append(row)
     labels = {"finished": ("Finished", "Ended or cancelled, and you've watched everything in Plex"),
               "over": ("Probably over", "Nothing for 2 years, and you're up to date"),
-              "cold": ("Gone cold", f"Not played in {COLD_DAYS // 30} months")}
+              "cold": ("Gone cold", f"Episodes waiting, but not played in {COLD_DAYS // 30} months")}
     return [{"key": k, "label": labels[k][0], "why": labels[k][1],
              "shows": sorted(v, key=lambda r: (r["title"] or "").lower())} for k, v in groups.items() if v]
 

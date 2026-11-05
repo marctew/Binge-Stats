@@ -237,7 +237,7 @@ Both are published with the rest of state.
 - **Retire**, in groups:
   - **Finished:** ended or cancelled, and you're up to date.
   - **Probably over:** no episode for 24 months, and you're up to date.
-  - **Gone cold:** still running, but no play (or, never played, pinned) for 180 days.
+  - **Gone cold:** still running, episodes waiting in Plex, and no play (or, never played, pinned) for 180 days, meaning you stopped part-way. Up to date and waiting for a new season never counts. The first version left that condition out and flagged 30 of Marc's 66 pins, Silo and Line of Duty among them.
   - "Unpin" works out the group again on the server and keeps the pins in `pin_retired`, so the last batch can be put back exactly (pinned_at, notify, batch).
 - **Discover:**
   - Unpinned shows you've played, that are dated within 60 days, or announced or filming.

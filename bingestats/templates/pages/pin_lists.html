@@ -59,7 +59,7 @@
       <div class="min-w-0 flex-1">
         {{ show_link(s, s.rating_key, s.title) }}
         <div class="truncate text-xs text-muted">
-          {% if g.key == 'cold' %}{{ ('Last played ' ~ (s.last | relative)) if s.last else 'Never played' }}{% if s.total %} · {{ s.finished }} of {{ s.total }} watched{% endif %}
+          {% if g.key == 'cold' %}{{ ('Last played ' ~ (s.last | relative)) if s.last else 'Never played' }} · {{ s.waiting }} waiting
           {% else %}Watched all {{ s.total }} in Plex{% endif %}
         </div>
       </div>
