@@ -130,7 +130,16 @@ Port Pinnarr's engine (SPEC.md section 10 there) and its tests as they are, incl
 7. `dormant`: last aired more than 18 months ago and not in production.
 8. `unknown`.
 
-Without TMDB, rungs 3, 4 and 7 never match: a show that would be dormant reads `unknown`, never `between_seasons`. The outlook is worked out on query in `services/pins.py`, with the same 10-minute per-process cache that completion uses.
+**As built (2026-11-05, P2 step 2)**, in `services/outlook.py`, following Pinnarr's code where it differed from the list above:
+- **Hiatus vs dormant uses only the last air date:** dormant is more than 18 months, hiatus anything less (a 9–18 month gap is still hiatus). It works without TMDB. Without TMDB, only filming and cancelled can't be told.
+- **Planned:** a show that has never aired, with TMDB status Planned/Pilot or Sonarr status upcoming, is announced.
+- **Inputs:**
+  - the next airing is Sonarr's, else TMDB's next episode date;
+  - the last airing is the later of Sonarr's and TMDB's;
+  - the latest season is the highest that Sonarr or TMDB lists.
+- **The latest aired season** comes from TMDB's last episode. Without TMDB it comes only from episode lists we hold in full (pinned shows), so an unmonitored later season in Sonarr can't pass for an announced one.
+- **Worked out on query**, no cache: it's one pass over about 2,000 rows.
+- **Where it shows:** a badge on show pages. On the calendar, "No future dates planned" is grouped by outlook, with "Probably over" folded away. A date only TMDB knows moves a show into "Later".
 
 ## Pages
 

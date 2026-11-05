@@ -118,3 +118,13 @@
   </span>
 </span>
 {%- endmacro %}
+
+{# A show's season outlook (services/outlook.py): whether a new season is coming. #}
+{% macro outlook_badge(outlook, next_at=None) -%}
+{%- set o = outlook or 'unknown' -%}
+<span class="{{ {'dated': 'badge-accent', 'announced': 'badge-info', 'in_production': 'badge-info', 'between_seasons': 'badge-muted',
+                 'dormant': 'badge-warning', 'cancelled': 'badge-danger', 'ended': 'badge-muted'}.get(o, 'badge-muted') }} normal-case tracking-normal"
+      title="Season outlook, from Sonarr and TMDB">
+  {%- if o == 'dated' and next_at %}Next {{ next_at | localtime('%-d %b') }}{% else %}{{ {'dated': 'Dated', 'announced': 'Announced', 'in_production': 'Filming', 'between_seasons': 'Hiatus', 'dormant': 'Probably over', 'cancelled': 'Cancelled', 'ended': 'Ended'}.get(o, 'Unknown') }}{% endif -%}
+</span>
+{%- endmacro %}

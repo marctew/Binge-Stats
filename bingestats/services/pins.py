@@ -182,6 +182,7 @@ def calendar(conn: sqlite3.Connection, user_id: int, now: float | None = None) -
     - later: pinned shows with a date past the agenda, soonest first;
     - undated: pinned shows with no date to come that aren't listed above (ended, no date yet,
       not in Sonarr), so every pin can be found and unpinned somewhere on the page;
+    - undated_groups: those, by season outlook (announced, filming, hiatus, probably over, ...);
     - pins: every pin.
     """
     now = now or time.time()
@@ -229,16 +230,23 @@ def calendar(conn: sqlite3.Connection, user_id: int, now: float | None = None) -
             in_overdue.add(s["tvdb_id"])
     overdue.sort(key=lambda e: -e["air_at"])
 
+    from . import outlook as outlook_svc
+    looks = outlook_svc.for_shows(conn, tvdb_ids, now)
     by_title = sorted(shows.values(), key=lambda s: (s["title"] or "").lower())
     for s in by_title:
+        o = looks.get(s["tvdb_id"]) or {"outlook": outlook_svc.UNKNOWN, "label": "Unknown", "next_at": None}
+        s.update(outlook=o["outlook"], outlook_label=o["label"], next_airing=o["next_at"] or s["next_airing"])
         s["dated"] = bool(s["next_airing"] and s["next_airing"] >= now)
     later = sorted((s for s in by_title if s["dated"] and s["tvdb_id"] not in in_agenda),
                    key=lambda s: s["next_airing"])
     undated = [s for s in by_title if not s["dated"] and s["tvdb_id"] not in in_agenda | in_overdue]
+    groups = [{"outlook": k, "label": label, "shows": [s for s in undated if s["outlook"] == k]}
+              for k, label in outlook_svc.LABELS.items() if k != outlook_svc.DATED]
 
     return {"agenda": [{"day": d.isoformat(), "label": _day_label(d, today), "episodes": eps}
                        for d, eps in sorted(agenda.items())],
             "overdue": overdue, "later": later, "undated": undated, "pins": by_title,
+            "undated_groups": [g for g in groups if g["shows"]],
             "count": len(tvdb_ids), "agenda_days": AGENDA_DAYS, "overdue_days": OVERDUE_DAYS}
 
 
@@ -254,4 +262,7 @@ def for_item(conn: sqlite3.Connection, item: dict, user_id: int | None) -> dict 
         tvdb = row["tvdb_id"] if row else None
     if not tvdb:
         return None
-    return {"tvdb_id": tvdb, "pinned": tvdb in pinned(conn, user_id)}
+    from . import outlook as outlook_svc
+    o = outlook_svc.for_shows(conn, [tvdb]).get(tvdb) or {}
+    return {"tvdb_id": tvdb, "pinned": tvdb in pinned(conn, user_id), "outlook": o.get("outlook"),
+            "next_at": o.get("next_at")}

@@ -168,9 +168,11 @@ def test_calendar_is_per_person(lib):
 def test_for_item(lib):
     show = {"type": "show", "rating_key": 10, "tvdb_id": 111}
     episode = {"type": "episode", "rating_key": 101, "grandparent_rating_key": 10}
-    assert pins.for_item(lib, show, OWNER) == {"tvdb_id": 111, "pinned": False}
+    got = pins.for_item(lib, show, OWNER)
+    assert (got["tvdb_id"], got["pinned"]) == (111, False) and "outlook" in got
     pins.pin(lib, OWNER, 111)
-    assert pins.for_item(lib, episode, OWNER) == {"tvdb_id": 111, "pinned": True}
+    got = pins.for_item(lib, episode, OWNER)
+    assert (got["tvdb_id"], got["pinned"]) == (111, True)
     assert pins.for_item(lib, {"type": "movie", "rating_key": 20}, OWNER) is None
     assert pins.for_item(lib, show, None) is None
 

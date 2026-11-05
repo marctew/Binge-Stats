@@ -1,5 +1,6 @@
 {# The calendar below the search box. Reloaded in place whenever a pin changes (the pins-changed event). #}
-{% from "macros/ui.html" import empty_state, poster %}
+{% from "macros/ui.html" import empty_state, poster, outlook_badge %}
+{% from "macros/icons.html" import icon %}
 {% from "macros/media.html" import section_title, episode_row %}
 {% if not cal.count %}
 <div class="mt-6">{{ empty_state('Pin some shows', 'Search above for the shows you follow. You get their episodes here, and whether each one has made it into Plex.', 'calendar') }}</div>
@@ -47,12 +48,30 @@
 
 {% if cal.undated %}
 {{ section_title('No future dates planned', cal.undated | length | plural('show')) }}
-<div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-  {% for s in cal.undated %}
-  <div class="card flex items-center gap-3 py-1.5 pl-4 pr-2" title="{{ 'Not in Sonarr, so no air dates' if not s.series_id else ('Ended' if s.status == 'ended' else 'No date yet') }}">
-    <div class="min-w-0 flex-1 truncate text-sm">{{ s.title }}{% if s.year %} <span class="text-muted">({{ s.year }})</span>{% endif %}</div>
-    {% with tvdb_id=s.tvdb_id, pinned=True, compact=True %}{% include "partials/pin_button.html" %}{% endwith %}
+<div class="space-y-4">
+  {% for g in cal.undated_groups %}
+  {% set cards %}
+  <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+    {% for s in g.shows %}
+    <div class="card flex items-center gap-3 py-1.5 pl-4 pr-2"{% if not s.series_id %} title="Not in Sonarr, so no air dates"{% endif %}>
+      <div class="min-w-0 flex-1 truncate text-sm">{{ s.title }}{% if s.year %} <span class="text-muted">({{ s.year }})</span>{% endif %}</div>
+      {% with tvdb_id=s.tvdb_id, pinned=True, compact=True %}{% include "partials/pin_button.html" %}{% endwith %}
+    </div>
+    {% endfor %}
   </div>
+  {% endset %}
+  {% if g.outlook == 'dormant' %}
+  <details class="group">
+    <summary class="mb-2 flex cursor-pointer list-none items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted">
+      {{ outlook_badge(g.outlook) }}<span>{{ g.shows | length }} · nothing for 18 months, worth a prune</span>{{ icon('chevron-down', 'h-4 w-4 transition group-open:rotate-180') }}</summary>
+    {{ cards }}
+  </details>
+  {% else %}
+  <section>
+    <h3 class="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted">{{ outlook_badge(g.outlook) }}<span>{{ g.shows | length }}</span></h3>
+    {{ cards }}
+  </section>
+  {% endif %}
   {% endfor %}
 </div>
 {% endif %}
