@@ -30,3 +30,13 @@ def test_the_recent_check_asks_plex_for_ids(monkeypatch):
     monkeypatch.setattr(client, "_request", lambda path, params=None, **kw: sent.update(params or {}) or {})
     client.section_recent(5, 2)
     assert sent.get("includeGuids") == 1
+
+
+def test_old_agents_carry_the_id_in_the_guid():
+    from bingestats.plex.parse import external_ids
+    assert external_ids(None, "com.plexapp.agents.thetvdb://255316?lang=en")["tvdb_id"] == 255316
+    assert external_ids([], "com.plexapp.agents.themoviedb://603?lang=en")["tmdb_id"] == 603
+    assert external_ids(None, "com.plexapp.agents.imdb://tt0133093?lang=en")["imdb_id"] == "tt0133093"
+    assert external_ids(None, "com.plexapp.agents.thetvdb://255316/1/2?lang=en")["tvdb_id"] is None   # an episode
+    assert external_ids(None, "local://85710") == {"tvdb_id": None, "tmdb_id": None, "imdb_id": None}
+    assert external_ids([{"id": "tvdb://1"}], "com.plexapp.agents.thetvdb://2")["tvdb_id"] == 1      # the list wins

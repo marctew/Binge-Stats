@@ -246,3 +246,9 @@ I moved a job deep in the "other" part of the queue and put it back.
 - **Sonarr series fields:** 2,041 of 2,152 series have a `tmdbId` (95 %) and 2,099 have a `network`, so P2's outlook and network filter will cover nearly everything.
 - **The wider calendar read (−7 to +60 days, unmonitored included) is cheap:** the full `arr_sync` (Sonarr, Radarr and SABnzbd together) took 54 s, about what it took before. The calendar returned 478 episodes.
 - **Not checked yet:** whether a Sonarr upgrade gives an episode a new Plex rating key. It matters for P3's notifications.
+
+## External ids on library items, 2026-11-05 (1,882 shows)
+
+- **51 shows had no TVDB id** although Plex had one for most of them. The 10-minute check for new items read Plex without `includeGuids` and wrote the ids back as NULL for the newest 30 items of each type, every time. Fixed: it asks for them, and an upsert never replaces a stored id with NULL. After a full sync, 20 were left.
+- **Old-agent items carry the id in their guid.** Elementary (`com.plexapp.agents.thetvdb://255316?lang=en`) has no `Guid` list in a library listing, even with `includeGuids=1`, though `/library/metadata/<key>` shows one. The id is now read from the guid when there's no list. Episode guids under old agents (`…://255316/1/2`) are ignored, since that's the show's id.
+- **The other 19 have no TVDB id in Plex at all.** 10 are unmatched (`local://…`, or no ids), and 9 have only TMDB and/or IMDb. They can't be pinned until P2 adds a TMDB fallback, or they're matched in Plex.

@@ -350,13 +350,22 @@ def parse_library_item(m: dict) -> dict:
         "audio_channels": _int(media.get("audioChannels")),
         "container": _s(media.get("container")),
         "bitrate_kbps": _int(media.get("bitrate")),
-        **external_ids(m.get("Guid")),
+        **external_ids(m.get("Guid"), m.get("guid")),
     }
     return item
 
 
-def external_ids(guids) -> dict:
-    """[{'id': 'tvdb://248741'}, {'id': 'tmdb://39340'}, {'id': 'imdb://tt1845307'}] -> ids."""
+# Old Plex agents put the id in the item's own guid and send no Guid list in library listings:
+# com.plexapp.agents.thetvdb://255316?lang=en, com.plexapp.agents.themoviedb://603?lang=en,
+# com.plexapp.agents.imdb://tt0133093?lang=en. Episodes and seasons carry /season/episode after
+# the id, which is the show's id, not theirs, so only a bare id counts.
+LEGACY_AGENTS = {"com.plexapp.agents.thetvdb": "tvdb", "com.plexapp.agents.themoviedb": "tmdb",
+                 "com.plexapp.agents.imdb": "imdb"}
+
+
+def external_ids(guids, guid: str | None = None) -> dict:
+    """[{'id': 'tvdb://248741'}, {'id': 'tmdb://39340'}, {'id': 'imdb://tt1845307'}] -> ids, falling back to
+    an old agent's guid when there's no Guid list."""
     out = {"tvdb_id": None, "tmdb_id": None, "imdb_id": None}
     for g in guids or []:
         scheme, _, value = str(g.get("id") or "").partition("://")
@@ -364,6 +373,13 @@ def external_ids(guids) -> dict:
             out[f"{scheme}_id"] = int(value)
         elif scheme == "imdb" and value:
             out["imdb_id"] = value
+    if not guids and guid:
+        agent, _, rest = str(guid).partition("://")
+        scheme, value = LEGACY_AGENTS.get(agent), rest.split("?")[0]
+        if scheme == "imdb" and value.startswith("tt") and "/" not in value:
+            out["imdb_id"] = value
+        elif scheme and value.isdigit():
+            out[f"{scheme}_id"] = int(value)
     return out
 
 
