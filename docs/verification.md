@@ -239,3 +239,10 @@ I moved a job deep in the "other" part of the queue and put it back.
 - **Dropping above the top group failed at first.** Marc's drops above the top "Other items" group came back 400: "The queue has changed under you". That group starts with the job being downloaded, which at about 100 MB/s often finishes between the page's read and the drop.
   - **Fix:** a drop with nothing above it now means "move to top", whatever's first now.
   - **Checked live:** I dropped a job (position 1,315) at the top with an already-finished neighbour. It landed at position 0, as High, the top job's priority. It was then restored between its old neighbours, at Normal.
+
+## Pins P1 deployed, 2026-11-05 (Sonarr v4, 2,152 series)
+
+- **Migration v10 ran** on the live database (schema 10). The Plex owner (`mltew`) is in Users, so the admin's pins have an account to belong to.
+- **Sonarr series fields:** 2,041 of 2,152 series have a `tmdbId` (95 %) and 2,099 have a `network`, so P2's outlook and network filter will cover nearly everything.
+- **The wider calendar read (−7 to +60 days, unmonitored included) is cheap:** the full `arr_sync` (Sonarr, Radarr and SABnzbd together) took 54 s, about what it took before. The calendar returned 478 episodes.
+- **Not checked yet:** whether a Sonarr upgrade gives an episode a new Plex rating key. It matters for P3's notifications.
