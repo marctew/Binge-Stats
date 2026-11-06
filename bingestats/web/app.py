@@ -131,6 +131,12 @@ def build_app(data_dir: str | None = None, *, testing: bool = False) -> Flask:
         busy = [r[0] for r in conn.execute("SELECT DISTINCT kind FROM jobs WHERE status = 'running'")]
         return {"ok": True, "busy": busy}
 
+    @app.get("/favicon.ico")
+    def favicon():
+        """Browsers that ask for /favicon.ico without reading the page (PWA-ICONS.md 1). No login."""
+        from flask import redirect, url_for
+        return redirect(url_for("static", filename="favicon.ico"), 301)
+
     try:  # the Design system card in Settings; du_flask.py is copied in by the design updater
         from ..du_flask import init_design
         init_design(app, Path(cfg.data_dir) / "design", version=__version__)

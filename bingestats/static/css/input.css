@@ -29,3 +29,6 @@
 .bar-1 { background-color: #d95926; }
 [data-theme="light"] .bar-0 { background-color: #2a78d6; }
 [data-theme="light"] .bar-1 { background-color: #eb6834; }
+
+/* The mobile top bar clears the notch when installed full screen (PWA-ICONS.md 3; uniform.css does this for the other apps). */
+.topbar-safe { padding-top: calc(12px + env(safe-area-inset-top)); }

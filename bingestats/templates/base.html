@@ -7,6 +7,13 @@
   {% include "partials/theme_head.html" %}
   <title>{% block title %}Binge Stats{% endblock %}</title>
   <link rel="icon" href="{{ url_for('static', filename='img/icon.svg') }}" type="image/svg+xml">
+  <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" sizes="32x32">
+  {#- Home screen (Design Uniformity PWA-ICONS.md 2). theme-color comes from partials/theme_head.html. -#}
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='apple-touch-icon.png', v=app_version) }}">
+  <meta name="apple-mobile-web-app-title" content="Binge Stats">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="{{ url_for('static', filename='manifest.json', v=app_version) }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v={{ app_sha or app_version }}">
   <script src="{{ url_for('static', filename='vendor/htmx.min.js') }}" defer></script>
   <script src="{{ url_for('static', filename='js/app.js') }}?v={{ app_sha or app_version }}" defer></script>
@@ -55,7 +62,7 @@
   </aside>
 
   {# Top bar (mobile) #}
-  <header class="sticky top-0 z-30 flex items-center justify-between border-b border-border bg-bg/80 px-4 py-3 backdrop-blur lg:hidden">
+  <header class="topbar-safe sticky top-0 z-30 flex items-center justify-between border-b border-border bg-bg/80 px-4 pb-3 backdrop-blur lg:hidden">
     <a href="{{ url_for(home_ep) }}" class="flex items-center gap-2">
       <img src="{{ url_for('static', filename='img/icon.svg') }}" class="h-7 w-7" alt="">
       <span class="font-semibold">Binge <span class="brand-gradient">Stats</span></span>

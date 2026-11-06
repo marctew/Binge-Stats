@@ -14,7 +14,7 @@ from ..services import auth as auth_svc
 bp = Blueprint("auth", __name__)
 
 # Endpoints reachable without logging in.
-PUBLIC = {"auth.login", "auth.setup_admin", "static", "wrapped.public_page", "wrapped.public_image"}
+PUBLIC = {"auth.login", "auth.setup_admin", "static", "favicon", "wrapped.public_page", "wrapped.public_image"}
 # What a signed-in viewer (not the admin) may reach. Everything else sends them
 # to their own home page: an allow-list, so new admin pages are closed by default.
 VIEWER_ENDPOINTS = {"auth.logout", "img.plex_image", "img.arr_poster"}  # arr: posters for pinned shows not yet in Plex
@@ -46,7 +46,7 @@ def install(app) -> None:
             return None  # the API and display pages check tokens / the admin session themselves; health is public
         conn = app.get_db()
         if not auth_svc.admin_exists(conn):
-            if ep in ("auth.setup_admin", "static"):
+            if ep in ("auth.setup_admin", "static", "favicon"):
                 return None
             return redirect(url_for("auth.setup_admin"))
         if ep in PUBLIC:

@@ -109,6 +109,8 @@ DATA_DIR=./data .venv/bin/python -m bingestats worker  # second shell
 .venv/bin/python -m pytest
 ```
 
+The home screen icons (`bingestats/static/apple-touch-icon.png`, `icon-192.png`, `icon-512.png`, `favicon.ico`) are made from `bingestats/static/brand/logo.svg` by `python tools/make_icons.py bingestats/static` (needs `cairosvg` and Pillow; Design Uniformity `PWA-ICONS.md`). Commit the results.
+
 **Stack:**
 - Python 3.12, Flask and plain SQLite.
 - Jinja, HTMX, Alpine.js, Tailwind (standalone CLI, no Node) and ECharts.
