@@ -365,11 +365,36 @@ def settings_page():
     return _render_settings(conn)
 
 
-def _render_settings(conn, **extra):
+def _api_cards(conn, new_token=None, new_token_name=None, new_webhook_secret=None, new_webhook_name=None) -> dict:
+    """What Design Uniformity's API tokens and Webhooks cards need (each documents it at its top)."""
+    from .filters import relative
+    hooks = []
+    for w in webhooks.list_webhooks(conn):
+        failed = bool(w["last_error_at"] and (not w["last_ok_at"] or w["last_error_at"] > w["last_ok_at"]))
+        status = (f"failed {relative(w['last_error_at'])}: {w['last_error']}" if failed
+                  else f"sent {relative(w['last_ok_at'])}" if w["last_ok_at"] else "nothing sent yet")
+        hooks.append({**w, "status": status, "failed": failed})
+    return {
+        "api_tokens": [{**t, "last_used": relative(t["last_used_at"]) if t["last_used_at"] else None}
+                       for t in api_tokens.list_tokens(conn)],
+        "api_token_new": {"token": new_token, "name": new_token_name} if new_token else None,
+        "api_urls": {"create": url_for("ui.settings_token_create"), "revoke": "/settings/tokens/{id}/delete"},
+        "api_displays": [{"title": "Now playing", "url": url_for("display.now_playing")}],
+        "api_actions": [{**a, "when": relative(a["at"]), "ok": a["status"] < 300} for a in api_audit.recent(conn, 20)],
+        "webhooks": hooks,
+        "webhook_new": {"secret": new_webhook_secret, "name": new_webhook_name} if new_webhook_secret else None,
+        "webhook_event_types": events.TYPES,
+        "webhook_urls": {"create": url_for("ui.settings_webhook_create"), "secret": "/settings/webhooks/{id}/secret",
+                         "delete": "/settings/webhooks/{id}/delete"},
+        "webhook_people_url": url_for("notify.index"),
+    }
+
+
+def _render_settings(conn, *, new_token=None, new_token_name=None, new_webhook_secret=None, new_webhook_name=None,
+                     **extra):
     values = {k: settings.get(conn, k) for k, _l, _t in EDITABLE}
-    return render_template("pages/settings.html", fields=EDITABLE, values=values, tokens=api_tokens.list_tokens(conn),
-                           api_actions=api_audit.recent(conn, 20), webhooks=webhooks.list_webhooks(conn),
-                           event_types=events.TYPES,
+    return render_template("pages/settings.html", fields=EDITABLE, values=values,
+                           **_api_cards(conn, new_token, new_token_name, new_webhook_secret, new_webhook_name),
                            **extra,
                            plex_url=settings.get(conn, "plex.url"),
                            server=conn.execute("SELECT * FROM servers ORDER BY id LIMIT 1").fetchone(),

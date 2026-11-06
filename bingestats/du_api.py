@@ -1,20 +1,25 @@
-"""The generic part of the outside API (Design Uniformity API-STANDARD.md, draft 2).
+"""Design Uniformity: the shared part of the outside API (API-STANDARD.md, section 12).
 
-Binge is the pilot: this module is lifted into Design Uniformity as `du_api.py` once it's proven,
-so it imports nothing from Binge. It talks to the app only through `init_api(...)` and the
-callables passed in.
+Carried into each app by the design updater (like du_flask.py): don't edit it in an app; change it
+here and release. It imports nothing from any app and talks to one only through `init_api(...)`
+and the callables passed in. Lifted from Binge Stats, the standard's pilot (Nov 2026).
 
 What it does, for every request under /api/v1/ and /display/:
 - finds who's asking: `Authorization: Bearer`, else `?token=` (read tokens only), else an admin
   session (`is_admin_session`);
-- refuses write tokens in the URL, bad tokens (with a lockout after 10 in a minute from one
-  address), wrong scopes, too many requests per token, and tunnel requests when API_PUBLIC=0;
+- refuses write tokens in the URL, bad tokens (a lockout after 10 in a minute from one address,
+  keyed by CF-Connecting-IP through a tunnel), wrong scopes, too many requests per token, and
+  tunnel requests when API_PUBLIC=0;
 - adds a weak ETag to every successful GET and answers 304 to a matching If-None-Match;
 - keeps the registry behind /api/v1/meta (feeds, actions, displays, event types).
 
-Routes written to the standard are marked with `@standard(scope)` and get the standard's error
-shape, `{"error": "...", "code": "..."}`. Older routes the app already had keep theirs: refusals
-on them go through the `legacy_error` callable, and they check scope with `identity()`.
+And the pieces an app's routes use: `@standard(scope)` for the standard's routes, `@display` for
+display pages, `image_response` (resize, cache, WebP or JPEG), `event_stream` and `StreamSlots`
+for /api/v1/events, `sign` and `RETRY_AFTER_S` for webhooks, `iso` / `parse_iso` for times.
+
+The standard's routes get the standard's error shape, `{"error": "...", "code": "..."}`. An app
+that already had /api/v1 routes keeps their error shape by passing `legacy_error`; they check
+scope with `identity()`.
 
 The rate limit and the lockout are in memory, per process. With several gunicorn workers they are
 that many times looser; the standard accepts that (section 10).
@@ -142,7 +147,7 @@ class ApiCore:
     check_token: Callable[[str], dict | None]
     is_admin_session: Callable[[], bool]
     csrf_ok: Callable[[], bool]
-    legacy_error: Callable[[str, str, int], Any]
+    legacy_error: Callable[[str, str, int], Any] | None = None
     public: bool = True
     limits: Limits = field(default_factory=Limits)
     clock: Callable[[], float] = time.time
@@ -201,7 +206,7 @@ class ApiCore:
             if retry_after is not None:
                 resp.headers["Retry-After"] = str(retry_after)
             return resp
-        if _is_standard():
+        if _is_standard() or self.legacy_error is None:
             return self.error(code, message, status, retry_after)
         resp = current_app.make_response(self.legacy_error(code, message, status))
         if retry_after is not None:
@@ -546,6 +551,25 @@ def display(fn):
     return wrapper
 
 
+# -- webhooks (API standard section 8) ---------------------------------------------------------------
+
+RETRY_AFTER_S = (60, 180, 360)     # after the first try: 3 retries over 10 minutes, then give up
+WEBHOOK_TIMEOUT_S = 10
+
+
+def sign(body: bytes, secret: str) -> str:
+    """The X-Signature header for a webhook body: sha256=<hex HMAC-SHA256 of the raw body>."""
+    import hashlib
+    import hmac
+    return "sha256=" + hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+
+
+def verify(body: bytes, secret: str, header: str) -> bool:
+    """For a receiver: does X-Signature match this body and secret?"""
+    import hmac
+    return hmac.compare_digest(sign(body, secret), header or "")
+
+
 def cached(resp, refresh_s: int):
     """Cache-Control for status and feeds: private, half the refresh interval."""
     resp.headers["Cache-Control"] = f"private, max-age={max(0, refresh_s // 2)}"
@@ -555,7 +579,7 @@ def cached(resp, refresh_s: int):
 def init_api(app, *, name: str, title: str, version: str, sha: Callable[[], str], accent: str, icon: str,
              time_zone: Callable[[], str], check_token: Callable[[str], dict | None],
              is_admin_session: Callable[[], bool], csrf_ok: Callable[[], bool],
-             legacy_error: Callable[[str, str, int], Any], limits: Limits | None = None,
+             legacy_error: Callable[[str, str, int], Any] | None = None, limits: Limits | None = None,
              clock: Callable[[], float] | None = None, public: bool | None = None,
              max_streams: int = 8) -> ApiCore:
     """Install the gate on `app` and return the core (also at app.extensions["du_api"]).

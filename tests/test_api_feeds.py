@@ -11,7 +11,7 @@ import pytest
 from PIL import Image
 
 from bingestats.services import api_feeds, api_tokens, settings
-from bingestats.web import api_core
+from bingestats import du_api
 from tests.test_api_standard import bearer, healthy, play
 from tests.test_pin_lists import build
 from tests.test_pins import NOW
@@ -125,13 +125,13 @@ def test_arrivals_groups_a_season_drop(client, tok, library, frozen):
     assert drop["id"] == "plex:501" and drop["image"] == "/api/v1/images/poster/500"
     assert drop["meta"] == {"kind": "show", "rating_key": 501, "show_id": 500, "show_title": "Slow Horses",
                             "season": 5, "episode": 1, "episodes": 3}
-    assert drop["url"] == "http://localhost/item/500" and drop["at"] == api_core.iso(NOW - 7200 + 2400)
+    assert drop["url"] == "http://localhost/item/500" and drop["at"] == du_api.iso(NOW - 7200 + 2400)
 
 
 def test_arrivals_kind_since_and_limit(client, tok, library, frozen):
     shows = feed(client, tok, "/api/v1/feeds/arrivals?kind=show")["items"]
     assert {i["meta"]["kind"] for i in shows} == {"show"}
-    since = api_core.iso(NOW - 5000)
+    since = du_api.iso(NOW - 5000)
     recent = feed(client, tok, f"/api/v1/feeds/arrivals?since={since}")["items"]
     assert [i["title"] for i in recent] == ["Tusk", "Rumours", "Slow Horses"]
     assert len(feed(client, tok, "/api/v1/feeds/arrivals?limit=500")["items"]) == 4      # capped at 100, there are 4
@@ -372,5 +372,5 @@ def test_prune_image_cache(tmp_path):
         t = time.time() - 1000 + i
         import os
         os.utime(p, (t, t))
-    assert api_core.prune_image_cache(tmp_path, max_bytes=250) == 3
+    assert du_api.prune_image_cache(tmp_path, max_bytes=250) == 3
     assert sorted(p.name for p in tmp_path.iterdir()) == ["3.webp", "4.webp"]

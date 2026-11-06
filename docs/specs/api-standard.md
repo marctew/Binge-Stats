@@ -1,6 +1,6 @@
 # Spec: bringing the REST API to the API standard
 
-Status: agreed 5 Nov 2026. All six stages built 5–6 Nov 2026 and running on LXC 406; what was checked live is in `docs/verification.md`. Matches API standard draft 2.
+Status: agreed 5 Nov 2026. All six stages built 5–6 Nov 2026 and running on LXC 406; what was checked live is in `docs/verification.md`. The shared part was then lifted into Design Uniformity (v1.10, `API-STANDARD.md` draft 3): `bingestats/web/api_core.py` became `bingestats/du_api.py`, carried by the design updater with the display shell, the two Settings cards and `scripts/check_api.py`, which replaced `scripts/check-api.sh`. The plan below keeps the names it was written with. Matches API standard draft 2.
 
 ## Why
 

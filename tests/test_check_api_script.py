@@ -1,4 +1,4 @@
-"""scripts/check-api.sh against a running Binge (stage 6 of docs/specs/api-standard.md)."""
+"""scripts/check_api.py (Design Uniformity's checker, carried by the design updater) against a running Binge."""
 import subprocess
 import threading
 from pathlib import Path
@@ -11,7 +11,7 @@ from tests.test_api_feeds import FakePhoto, add_item
 from tests.test_api_standard import healthy
 from tests.test_pins import NOW
 
-SCRIPT = Path(__file__).parent.parent / "scripts" / "check-api.sh"
+SCRIPT = Path(__file__).parent.parent / "scripts" / "check_api.py"
 
 
 @pytest.fixture
@@ -30,7 +30,7 @@ def served(app, app_conn, monkeypatch):
 
 
 def run(*args):
-    return subprocess.run(["bash", str(SCRIPT), *args], capture_output=True, text=True, timeout=60)
+    return subprocess.run(["python3", str(SCRIPT), *args], capture_output=True, text=True, timeout=60)
 
 
 def test_passes_against_binge(served, app_conn):

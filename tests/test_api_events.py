@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from bingestats.services import api_tokens, events, notify, webhooks
-from bingestats.web import api_core
+from bingestats import du_api
 from tests.test_api_standard import bearer
 
 T0 = 1_800_000_000
@@ -105,7 +105,7 @@ def row(i, type_="arrival"):
 def test_stream_replays_then_follows_then_pings():
     f = Fake()
     f.rows = [row(1), row(2), row(3)]
-    g = api_core.event_stream(f.after, 1, stopping=f.stopping, clock=f.clock, sleep=f.sleep, max_s=60)
+    g = du_api.event_stream(f.after, 1, stopping=f.stopping, clock=f.clock, sleep=f.sleep, max_s=60)
     assert next(g) == "retry: 5000\n\n"
     assert next(g).startswith("event: arrival\nid: 2\ndata: {")
     assert next(g).startswith("event: arrival\nid: 3\n")
@@ -122,14 +122,14 @@ def test_stream_replays_then_follows_then_pings():
 
 def test_stream_ends_when_stopping():
     f = Fake()
-    g = api_core.event_stream(f.after, 0, stopping=f.stopping, clock=f.clock, sleep=f.sleep)
+    g = du_api.event_stream(f.after, 0, stopping=f.stopping, clock=f.clock, sleep=f.sleep)
     next(g)
     f.stopping.set()
     assert list(g) == []
 
 
 def test_stream_slots():
-    slots = api_core.StreamSlots(2)
+    slots = du_api.StreamSlots(2)
     a, b = slots.take(), slots.take()
     assert a and b and slots.take() is None
     a()
@@ -142,7 +142,7 @@ def test_sigterm_ends_streams_and_chains(app):
     called = []
     old = signal.signal(signal.SIGTERM, lambda s, f: called.append(s))
     try:
-        api_core.stop_streams_on_sigterm(core)
+        du_api.stop_streams_on_sigterm(core)
         signal.getsignal(signal.SIGTERM)(signal.SIGTERM, None)
         assert core.stopping.is_set() and called == [signal.SIGTERM]
     finally:
@@ -192,7 +192,7 @@ def test_events_route_without_last_id_replays_nothing(app, app_conn, tok):
 
 def test_events_route_cap_and_release(app, tok):
     core = app.extensions["du_api"]
-    core.streams = api_core.StreamSlots(1)
+    core.streams = du_api.StreamSlots(1)
     hold = core.streams.take()
     r = app.test_client().get("/api/v1/events", headers=bearer(tok))
     assert r.status_code == 503 and r.headers["Retry-After"] == "30" and r.get_json()["code"] == "busy"

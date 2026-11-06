@@ -145,7 +145,7 @@ class Worker:
             return
         self._pruned_at = now
         from ..services import api_actions, api_audit, events, webhooks
-        from ..web.api_core import prune_image_cache
+        from ..du_api import prune_image_cache
         n = prune_image_cache(self.cfg.data_dir / "image-cache")
         if n:
             log.info("image cache: removed %d old file(s)", n)

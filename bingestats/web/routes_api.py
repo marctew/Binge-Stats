@@ -12,7 +12,7 @@ from functools import wraps
 from flask import Blueprint, current_app, jsonify, request, session
 
 from ..plex.client import PlexError
-from . import api_core
+from .. import du_api
 from ..services import (activity, alerts, arr, binges, collection, completion, history, insights, libraries,
                         playback, settings, stats)
 
@@ -29,11 +29,11 @@ def _db():
 
 def require(scope: str):
     """Scope check for Binge's own /api/v1 routes, which keep their {"error": {"code", "message"}} shape.
-    Who's asking (header token, ?token= read token, or the admin session) is worked out by api_core."""
+    Who's asking (header token, ?token= read token, or the admin session) is worked out by du_api."""
     def deco(fn):
         @wraps(fn)
         def wrapper(*a, **kw):
-            who = api_core.identity()
+            who = du_api.identity()
             if who is None:
                 return _err("unauthorised", "Send Authorization: Bearer <token>", 401)
             if scope == "write":

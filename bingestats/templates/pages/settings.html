@@ -49,123 +49,6 @@
     {% else %}<p class="mt-3 text-sm text-muted">Nothing yet.</p>{% endif %}
   </section>
 
-  <section id="api" class="card p-5 lg:col-span-3">
-    <h2 class="font-semibold">API tokens</h2>
-    <p class="mt-1 text-sm text-muted">For Home Assistant, scripts and anything else that reads <code class="text-text">/api/v1</code>. Send <code class="text-text">Authorization: Bearer &lt;token&gt;</code>; a display that can't set a header can put a read-only token in the URL as <code class="text-text">?token=</code>. Write tokens only work in the header.</p>
-    {% if new_token %}
-    <div class="mt-4 rounded-2xl border border-play/30 bg-play/10 p-4" x-data="{ copied: false }">
-      <div class="text-sm font-medium">Token for {{ new_token_name }}. Copy it now: it won't be shown again.</div>
-      <div class="mt-2 flex gap-2">
-        <input class="input font-mono text-xs" readonly value="{{ new_token }}" x-ref="tok" @focus="$el.select()">
-        <button type="button" class="btn-ghost shrink-0" @click="navigator.clipboard.writeText($refs.tok.value); copied = true" x-text="copied ? 'Copied' : 'Copy'">Copy</button>
-      </div>
-    </div>
-    {% endif %}
-    <div class="mt-4 grid gap-4 lg:grid-cols-2">
-      <form method="post" action="{{ url_for('ui.settings_token_create') }}" class="flex flex-wrap items-end gap-2">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <div class="min-w-0 flex-1"><label class="label" for="tname">Name</label><input id="tname" name="name" class="input" placeholder="Home Assistant" required maxlength="60"></div>
-        <div><label class="label" for="tscope">Access</label>
-          <select id="tscope" name="scope" class="input"><option value="read">Read only</option><option value="write">Read and write</option></select></div>
-        <button class="btn-primary">Create</button>
-      </form>
-      <div>
-        {% if tokens %}
-        <ul class="divide-y divide-border rounded-xl border border-border">
-          {% for t in tokens %}
-          <li class="flex items-center gap-3 px-3 py-2 text-sm">
-            <span class="min-w-0 flex-1 truncate font-medium">{{ t.name }}</span>
-            <span class="badge-muted">{{ 'read + write' if t.scope == 'write' else 'read' }}</span>
-            <span class="hidden text-xs text-muted sm:inline">{{ ('used ' ~ (t.last_used_at | relative)) if t.last_used_at else 'never used' }}</span>
-            <form method="post" action="{{ url_for('ui.settings_token_delete', token_id=t.id) }}">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <button class="btn-icon" aria-label="Revoke" title="Revoke">{{ icon('x', 'h-4 w-4') }}</button>
-            </form>
-          </li>
-          {% endfor %}
-        </ul>
-        {% else %}<p class="text-sm text-muted">No tokens yet.</p>{% endif %}
-      </div>
-    </div>
-    <h3 class="mt-6 text-sm font-semibold">Display pages</h3>
-    <p class="mt-1 text-sm text-muted">Full-screen pages for a kiosk, a Vital Signs screen or the widget display. Give each screen its own read-only token:
-      <code class="text-text">/display/now-playing?token=…</code>, plus <code class="text-text">theme=light</code>, <code class="text-text">size=800x480</code>,
-      <code class="text-text">scale=1.5</code>, <code class="text-text">accent=teal</code> or <code class="text-text">static=1</code> for e-ink.</p>
-    <p class="mt-2 text-sm" data-display-pages><a class="underline hover:text-text" href="{{ url_for('display.now_playing') }}" target="_blank" rel="noopener">Preview Now playing</a></p>
-    <h3 class="mt-6 text-sm font-semibold">Recent API actions</h3>
-    <p class="mt-1 text-xs text-muted">Every <code class="text-text">POST /api/v1/actions/…</code>, refused ones included, with the token that sent it.</p>
-    {% if api_actions %}
-    <ul class="mt-2 divide-y divide-border rounded-xl border border-border" data-api-actions>
-      {% for a in api_actions %}
-      <li class="flex items-center gap-3 px-3 py-2 text-sm">
-        <span class="{{ 'badge-muted' if a.status < 300 else 'badge-danger' }} shrink-0 font-mono">{{ a.action }}</span>
-        <span class="min-w-0 flex-1 truncate">{{ a.message or '' }}</span>
-        <span class="hidden shrink-0 text-xs text-muted sm:inline">{{ a.token_name }}</span>
-        <span class="shrink-0 text-xs text-muted">{{ a.at | relative }}</span>
-      </li>
-      {% endfor %}
-    </ul>
-    {% else %}<p class="mt-2 text-sm text-muted">No actions yet.</p>{% endif %}
-  </section>
-
-  <section id="webhooks" class="card p-5 lg:col-span-3">
-    <h2 class="font-semibold">Webhooks</h2>
-    <p class="mt-1 text-sm text-muted">Binge POSTs each event as JSON to these URLs, for Home Assistant and n8n. Each body is signed:
-      <code class="text-text">X-Signature: sha256=&lt;HMAC-SHA256 of the body with the secret&gt;</code>. A failed send is tried again after 1, 3 and 6 minutes.
-      Notifications to people are under <a class="underline hover:text-text" href="{{ url_for('notify.index') }}">Notifications</a>.</p>
-    {% if new_webhook_secret %}
-    <div class="mt-4 rounded-2xl border border-play/30 bg-play/10 p-4" x-data="{ copied: false }">
-      <div class="text-sm font-medium">Signing secret for {{ new_webhook_name }}. Copy it now: it won't be shown again.</div>
-      <div class="mt-2 flex gap-2">
-        <input class="input font-mono text-xs" readonly value="{{ new_webhook_secret }}" x-ref="sec" @focus="$el.select()">
-        <button type="button" class="btn-ghost shrink-0" @click="navigator.clipboard.writeText($refs.sec.value); copied = true" x-text="copied ? 'Copied' : 'Copy'">Copy</button>
-      </div>
-    </div>
-    {% endif %}
-    <div class="mt-4 grid gap-4 lg:grid-cols-2">
-      <form method="post" action="{{ url_for('ui.settings_webhook_create') }}" class="space-y-3" x-data="{ pick: false }">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <div><label class="label" for="whname">Name</label><input id="whname" name="name" class="input" placeholder="Home Assistant" required maxlength="60"></div>
-        <div><label class="label" for="whurl">URL</label><input id="whurl" name="url" type="url" class="input" placeholder="http://homeassistant.lan:8123/api/webhook/binge" required></div>
-        <label class="flex items-center gap-2 text-sm"><input type="checkbox" class="rounded" x-model="pick"> Only some events</label>
-        <div x-show="pick" x-cloak class="grid grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-3">
-          {% for t in event_types %}
-          <label class="flex items-center gap-2 text-xs"><input type="checkbox" class="rounded" name="event_types" value="{{ t }}"> <code>{{ t }}</code></label>
-          {% endfor %}
-        </div>
-        <button class="btn-primary">Add webhook</button>
-      </form>
-      <div>
-        {% if webhooks %}
-        <ul class="divide-y divide-border rounded-xl border border-border" data-webhooks>
-          {% for w in webhooks %}
-          <li class="flex items-start gap-3 px-3 py-2 text-sm">
-            <div class="min-w-0 flex-1">
-              <div class="truncate font-medium">{{ w.name }}</div>
-              <div class="truncate font-mono text-xs text-muted">{{ w.masked_url }}</div>
-              <div class="mt-0.5 text-xs text-muted">
-                {{ 'All events' if not w.event_types else (w.event_types | join(', ')) }} ·
-                {% if w.last_error_at and (not w.last_ok_at or w.last_error_at > w.last_ok_at) %}<span class="text-danger">failed {{ w.last_error_at | relative }}: {{ w.last_error }}</span>
-                {% elif w.last_ok_at %}sent {{ w.last_ok_at | relative }}{% else %}nothing sent yet{% endif %}
-                {% if w.pending %} · {{ w.pending }} waiting{% endif %}
-              </div>
-            </div>
-            <form method="post" action="{{ url_for('ui.settings_webhook_secret', webhook_id=w.id) }}">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <button class="btn-icon" aria-label="New secret" title="New secret (the old one stops working)">{{ icon('refresh', 'h-4 w-4') }}</button>
-            </form>
-            <form method="post" action="{{ url_for('ui.settings_webhook_delete', webhook_id=w.id) }}">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <button class="btn-icon" aria-label="Delete" title="Delete">{{ icon('x', 'h-4 w-4') }}</button>
-            </form>
-          </li>
-          {% endfor %}
-        </ul>
-        {% else %}<p class="text-sm text-muted">No webhooks yet.</p>{% endif %}
-      </div>
-    </div>
-  </section>
-
   <section id="homeassistant" class="card p-5 lg:col-span-3" x-data="{ on: {{ 'true' if ha['mqtt.enabled'] else 'false' }} }">
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div>
@@ -347,6 +230,8 @@
   </section>
 
   {% if design_status is defined %}
+  <div class="lg:col-span-3">{% include "partials/api_tokens_card.html" %}</div>
+  <div class="lg:col-span-3">{% include "partials/webhooks_card.html" %}</div>
   <div class="lg:col-span-3">{% include "partials/design_card.html" %}</div>
   {% endif %}
 </div>

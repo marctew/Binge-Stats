@@ -11,8 +11,8 @@ import time
 from flask import current_app, jsonify, request
 
 from ..services import activity, api_feeds, arr
-from . import api_core
-from .api_core import standard
+from .. import du_api
+from ..du_api import standard
 from .routes_api import bp
 from .routes_img import PLEX_PATH
 
@@ -24,7 +24,7 @@ def _db():
 @bp.route("/meta")
 @standard("read")
 def std_meta():
-    return jsonify(api_core.core().meta())
+    return jsonify(du_api.core().meta())
 
 
 @bp.route("/status")
@@ -32,7 +32,7 @@ def std_meta():
 def std_status():
     conn = _db()
     body = api_feeds.status(conn, api_feeds.public_url(conn, request.host_url))
-    return api_core.cached(jsonify(body), body["refresh_s"])
+    return du_api.cached(jsonify(body), body["refresh_s"])
 
 
 # -- feeds -------------------------------------------------------------------------------------
@@ -47,22 +47,22 @@ def register_feeds(core) -> None:
 def std_feed(name: str):
     if name not in api_feeds.FEEDS:
         names = ", ".join(sorted(api_feeds.FEEDS))
-        return api_core.ApiCore.error("not_found", f"There's no feed called '{name}'. Feeds: {names}.", 404)
+        return du_api.ApiCore.error("not_found", f"There's no feed called '{name}'. Feeds: {names}.", 404)
     try:
         limit = int(request.args.get("limit") or api_feeds.DEFAULT_LIMIT)
     except ValueError:
-        return api_core.ApiCore.error("bad_request", "limit must be a whole number.", 400)
+        return du_api.ApiCore.error("bad_request", "limit must be a whole number.", 400)
     since = None
     if request.args.get("since"):
-        since = api_core.parse_iso(request.args["since"])
+        since = du_api.parse_iso(request.args["since"])
         if since is None:
-            return api_core.ApiCore.error("bad_request", "since must be a time like 2026-11-05T19:00:00Z.", 400)
+            return du_api.ApiCore.error("bad_request", "since must be a time like 2026-11-05T19:00:00Z.", 400)
     conn = _db()
     args = {k: v for k, v in request.args.items() if k not in ("token", "limit", "since", "cursor")}
     fa = api_feeds.feed_args(conn, api_feeds.public_url(conn, request.host_url), limit=limit, since=since,
                              cursor=request.args.get("cursor") or None, args=args, now=time.time())
     body = api_feeds.feed(conn, name, fa)
-    return api_core.cached(jsonify(body), body["refresh_s"])
+    return du_api.cached(jsonify(body), body["refresh_s"])
 
 
 # -- images ------------------------------------------------------------------------------------
@@ -115,15 +115,15 @@ def std_image(kind: str, ident: int):
     if kind in ("poster", "art"):
         path = _artwork(ident, "thumb" if kind == "poster" else "art")
         fetch = _plex_fetch(path, 1.5 if kind == "poster" else 9 / 16)
-        return api_core.image_response(cache, kind, f"{ident}:{path}", fetch)
+        return du_api.image_response(cache, kind, f"{ident}:{path}", fetch)
     if kind == "show":
         from ..services import pin_api
         src = pin_api.poster_source(_db(), ident)
         if src is None:
-            return api_core.ApiCore.error("not_found", "There's no image for that.", 404)
+            return du_api.ApiCore.error("not_found", "There's no image for that.", 404)
         fetch = _plex_fetch(src[1], 1.5) if src[0] == "plex" else _sonarr_fetch(int(src[1]))
-        return api_core.image_response(cache, kind, f"{ident}:{src[0]}:{src[1]}", fetch)
-    return api_core.ApiCore.error("not_found", "Image kinds: poster, art, show.", 404)
+        return du_api.image_response(cache, kind, f"{ident}:{src[0]}:{src[1]}", fetch)
+    return du_api.ApiCore.error("not_found", "Image kinds: poster, art, show.", 404)
 
 
 # -- actions -----------------------------------------------------------------------------------
@@ -139,7 +139,7 @@ def register_actions(core, get_db) -> None:
 @standard("write")
 def std_action(name: str):
     from ..services import api_actions
-    who = api_core.identity()
+    who = du_api.identity()
     body = request.get_json(silent=True) if request.get_data() else {}
     status, out = api_actions.run(_db(), name, body, token_id=who.token_id, token_name=who.name or "A token",
                                   key=request.headers.get("Idempotency-Key"))
@@ -157,22 +157,22 @@ def std_events():
 
     from .. import db
     from ..services import events
-    core = api_core.core()
+    core = du_api.core()
     release = core.streams.take()
     if release is None:
-        return api_core.ApiCore.error("busy", "Too many open event streams. Try again shortly.", 503, retry_after=30)
+        return du_api.ApiCore.error("busy", "Too many open event streams. Try again shortly.", 503, retry_after=30)
     raw = request.headers.get("Last-Event-ID") or request.args.get("last_event_id")
     try:
         last = int(raw) if raw not in (None, "") else events.last_id(_db())
     except ValueError:
         release()
-        return api_core.ApiCore.error("bad_request", "Last-Event-ID must be a number.", 400)
+        return du_api.ApiCore.error("bad_request", "Last-Event-ID must be a number.", 400)
     path = current_app.config["BS_CONFIG"].db_path
 
     def generate():
         conn = db.connect(path)          # its own, read-only use: the request's connection closes first
         try:
-            yield from api_core.event_stream(lambda after: events.after(conn, after), last, stopping=core.stopping)
+            yield from du_api.event_stream(lambda after: events.after(conn, after), last, stopping=core.stopping)
         finally:
             conn.close()
     resp = Response(generate(), mimetype="text/event-stream")
