@@ -63,7 +63,7 @@
 {% if airing is not none %}
 {{ section_title('Airing this week', 'from Sonarr') }}
 {% if airing %}
-<div class="-mx-1 flex gap-3 overflow-x-auto px-1 pb-1">
+<div class="scroll-fade -mx-1 flex gap-3 overflow-x-auto px-1 pb-1">
   {% for day in airing %}
   <section class="card w-64 shrink-0 p-3">
     <h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">{{ day.label }}</h3>

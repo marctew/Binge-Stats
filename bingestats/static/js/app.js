@@ -128,3 +128,19 @@ document.addEventListener("toggle", (e) => {
 }, true);
 document.addEventListener("DOMContentLoaded", restoreSections);
 document.addEventListener("htmx:afterSwap", restoreSections);
+
+// Scroll rows with class "scroll-fade": fade an edge only while there's more to scroll that way.
+function updateScrollFade(el) {
+  const max = el.scrollWidth - el.clientWidth;
+  el.toggleAttribute("data-fade-l", el.scrollLeft > 2);
+  el.toggleAttribute("data-fade-r", max > 2 && el.scrollLeft < max - 2);
+}
+function initScrollFades() {
+  document.querySelectorAll(".scroll-fade").forEach(updateScrollFade);
+}
+document.addEventListener("scroll", (e) => {
+  if (e.target instanceof Element && e.target.classList.contains("scroll-fade")) updateScrollFade(e.target);
+}, { capture: true, passive: true });
+window.addEventListener("resize", initScrollFades, { passive: true });
+document.addEventListener("DOMContentLoaded", initScrollFades);
+document.addEventListener("htmx:afterSwap", initScrollFades);
