@@ -147,3 +147,37 @@ def std_action(name: str):
     resp = jsonify(out)
     resp.status_code = status
     return resp
+
+
+# -- events --------------------------------------------------------------------------------------
+
+@bp.route("/events")
+@standard("read")
+def std_events():
+    from flask import Response
+
+    from .. import db
+    from ..services import events
+    core = api_core.core()
+    release = core.streams.take()
+    if release is None:
+        return api_core.ApiCore.error("busy", "Too many open event streams. Try again shortly.", 503, retry_after=30)
+    raw = request.headers.get("Last-Event-ID") or request.args.get("last_event_id")
+    try:
+        last = int(raw) if raw not in (None, "") else events.last_id(_db())
+    except ValueError:
+        release()
+        return api_core.ApiCore.error("bad_request", "Last-Event-ID must be a number.", 400)
+    path = current_app.config["BS_CONFIG"].db_path
+
+    def generate():
+        conn = db.connect(path)          # its own, read-only use: the request's connection closes first
+        try:
+            yield from api_core.event_stream(lambda after: events.after(conn, after), last, stopping=core.stopping)
+        finally:
+            conn.close()
+    resp = Response(generate(), mimetype="text/event-stream")
+    resp.headers["Cache-Control"] = "no-cache"
+    resp.headers["X-Accel-Buffering"] = "no"
+    resp.call_on_close(release)
+    return resp

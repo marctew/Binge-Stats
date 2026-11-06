@@ -229,7 +229,7 @@ def test_meta(client, read_token, app_conn):
     assert m["accent"] == "violet" and m["time_zone"] == "America/New_York"
     assert re.match(r"^\d+\.\d+\.\d+", m["version"]) and "sha" in m
     assert [a["name"] for a in m["actions"]] == ["pin_show", "unpin_show", "ack_alert", "ack_all_alerts"]
-    assert m["displays"] == [] and m["events"] == []
+    assert m["displays"] == [] and "playback.start" in m["events"] and "download.finished" in m["events"]
 
 
 def test_meta_lists_only_what_is_registered_and_allowed(client, core, read_token):
@@ -239,7 +239,7 @@ def test_meta_lists_only_what_is_registered_and_allowed(client, core, read_token
     core.add_events(["arrival", "arrival", "playback.start"])
     m = client.get("/api/v1/meta", headers=bearer(read_token)).get_json()
     assert m["feeds"][-1]["name"] == "test_feed"
-    assert "test_action" not in [a["name"] for a in m["actions"]] and m["events"] == ["arrival", "playback.start"]
+    assert "test_action" not in [a["name"] for a in m["actions"]] and m["events"].count("arrival") == 1
     allowed["on"] = True
     m = client.get("/api/v1/meta", headers=bearer(read_token)).get_json()
     assert m["actions"][-1] == {"name": "test_action", "title": "A test action", "body": {"nzo_id": "str"}}

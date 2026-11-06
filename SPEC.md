@@ -422,6 +422,8 @@ Overlap with live data: if a Tautulli play overlaps a live play for the same use
 
 ## 9. Notifications (`services/notify.py`, `services/rules.py`)
 
+Notifications (Apprise) are for people. Machines get the same triggers as events: the `/api/v1/events` stream and signed webhooks (`services/events.py`, `services/webhooks.py`, `docs/API.md`), which are separate and configured in Settings → Webhooks.
+
 **Triggers**, each with a context dict:
 
 | Trigger | Context |

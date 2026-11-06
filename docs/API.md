@@ -24,6 +24,7 @@ Binge has two kinds of route under `/api/v1/`:
 | GET | `/feeds/{name}` | A list in the common item shape, below |
 | GET | `/images/{kind}/{id}` | Artwork, resized here: `poster/{rating_key}`, `art/{rating_key}`, `show/{tvdb_id}` |
 | POST | `/actions/{name}` | One named thing to do, below. Write token, in the header only |
+| GET | `/events` | Server-sent events: live changes, below |
 
 **`/status`**, from the database only (it never waits on Plex or the *arrs):
 
@@ -88,6 +89,49 @@ Nothing destructive is offered: there's no action to stop a stream (the older `P
 
 - **`Idempotency-Key`** (any string up to 100 characters): send the same key again within 24 hours, from the same token, and you get the first answer back with nothing done twice. Refusals are remembered too; an upstream failure (502) isn't, so it can be retried with the same key. The same key for a different action is a `400`.
 - **The action log:** every call, refused ones included, is logged with the token's name and shown under **Recent API actions** in Settings → API tokens. Kept 90 days.
+
+### Events
+
+`GET /api/v1/events` is `text/event-stream`, with a read token (header or `?token=`). Each event is
+
+```
+event: playback.start
+id: 4182
+data: {"id": 4182, "type": "playback.start", "at": "2026-11-05T22:06:00Z", "title": "Marc started Slow Horses", "item": {...}}
+```
+
+where `item` is in the feeds' item shape.
+
+- Send `Last-Event-ID` (the header, or `?last_event_id=`) when reconnecting to get up to 200 events you missed from the last hour. Without one, nothing is replayed; you get what happens from now.
+- `: ping` every 25 seconds, so Cloudflare and other proxies keep it open. The stream also ends after an hour (and at once when Binge restarts); reconnect with `Last-Event-ID` and nothing is lost. `retry: 5000` tells browsers to wait 5 s.
+- At most 8 streams are open at once (4 per gunicorn worker); beyond that, `503` with `Retry-After: 30`. Streams don't count towards the rate limit.
+
+| Type | When |
+|---|---|
+| `playback.start`, `.stop`, `.pause`, `.resume`, `.buffering`, `.watched`, `.transcode` | A stream changed. `item` as in `now_playing`; `.stop` adds `play_id`, `play_s`, `watched` to `meta` |
+| `arrival` | Something landed in Plex (after the same quiet period as the Recently added notification); a season drop is one event |
+| `server.down`, `server.up` | Plex stopped or started answering |
+| `alert.raised` | A stream or transcode limit, two places at once, or a new country; `meta.kind` says which |
+| `pin.arrived`, `pin.schedule_changed`, `pin.week`, `pin.discover` | The pin notifications, for the person in `meta.user_id` |
+| `download.finished` | A TV or film job Sonarr or Radarr knows about completed in SABnzbd |
+
+### Webhooks
+
+Settings → **Webhooks**: a name, a URL and, optionally, which event types to send (none ticked: all). Binge POSTs each event as JSON, the same object as the stream's `data`, with:
+
+- `X-Signature: sha256=<hex HMAC-SHA256 of the raw body, keyed with the webhook's secret>`. The secret is shown once when the webhook is made (or given a new one).
+- `X-Event-Type` and `X-Event-Id`.
+- A 10-second timeout; anything but a 2xx is a failure. A failure is retried after 1, 3 and 6 minutes, then dropped; Settings shows each webhook's last success and last error.
+
+Sending happens in the worker, never in a request. The URL is treated as a secret (a Home Assistant webhook id is the whole credential), so Settings only ever shows it masked. Home Assistant's own webhook trigger works as is: `http://homeassistant.lan:8123/api/webhook/<id>`. Binge is on the LAN, so the trigger's default `local_only: true` is fine.
+
+Checking the signature in Python:
+
+```python
+import hashlib, hmac
+ok = hmac.compare_digest(request.headers["X-Signature"],
+                         "sha256=" + hmac.new(SECRET.encode(), request.get_data(), hashlib.sha256).hexdigest())
+```
 
 Home Assistant:
 
