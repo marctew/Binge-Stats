@@ -16,6 +16,7 @@ This document records decisions that are already made. Build to it. `SPEC.md` ho
 | Deployment | Docker Compose on an Ubuntu LXC. One image, two services (`web`, `worker`), one `/data` volume. |
 | Sonarr / Radarr / SABnzbd | **Optional and strictly read-only** (Marc, 2026-10-31). The worker snapshots them every 3 h for real gaps in shows, film collections, below-cutoff lists, what's airing this week and download history. The clients have no write methods, so nothing in them can be deleted, unmonitored or changed. **One exception** (Marc, 2026-11-04): SABnzbd's `mode=switch`, to move jobs in the queue from Downloads, behind a Settings switch that's off by default, admin only. No delete, pause or priority call. Shows and films are matched to Plex by TVDB / TMDB id, not by title. |
 | Pins (from Pinnarr) | **Pins live only in Binge, and Binge stays read-only** (Marc, 2026-11-05). Pinnarr's pins, calendar, episode states and season outlook move into Binge (`docs/specs/pins.md`). Its writes to other services are not ported: no Sonarr tag sync, no Plex Watchlist sync, no marking watched in Plex, no Overseerr requests. TMDB is added as an optional, GET-only source for the season outlook. |
+| Outside API | **Built to Design Uniformity's API standard, as its pilot** (Marc, 2026-11-05). Displays, Docket, Home Assistant and TRMNL read `meta`, `status`, `feeds`, `images` and `events`, call a few named `actions`, and get signed webhooks and `/display/` pages; the shared code is lifted out of Binge into Design Uniformity afterwards. Binge's older `/api/v1` routes stay exactly as they are for the widget, the PC panel and the charts. Nothing destructive is offered as an action. Plan: `docs/specs/api-standard.md`; reference: `docs/API.md`. |
 | Repo | `github.com/marctew/Binge-Stats` |
 
 ## 2. Environment
@@ -44,13 +45,13 @@ This document records decisions that are already made. Build to it. `SPEC.md` ho
 ```
 
 - **The worker owns ingest.** It is the only process that writes sessions, history, library and user data. Exactly one worker runs. Running the poller inside gunicorn would duplicate it per worker process, which is why it's separate.
-- **The web process reads, plus writes config.** Settings, rules, tokens, jobs it creates, alert acknowledgements, pins and rotating a user's Wrapped share salt are its only writes. Anything long-running (Tautulli import, library sync on demand, rebuilding derived tables) is queued as a row in `jobs` and the worker picks it up.
-- **Two direct Plex calls from the web process are allowed:** terminating a stream (one request, the user is waiting on it) and the image proxy. Nothing else from web talks to Plex. The image proxy also fetches Sonarr/Radarr posters (`/img/arr/...`, for downloads not yet in Plex), with their API keys kept server-side like the Plex token.
+- **The web process reads, plus writes config.** Settings, rules, tokens, webhooks, jobs it creates, alert acknowledgements, pins, rotating a user's Wrapped share salt, and the API's idempotency keys and action log are its only writes. The API's events and webhook deliveries are written by the worker. Anything long-running (Tautulli import, library sync on demand, rebuilding derived tables) is queued as a row in `jobs` and the worker picks it up.
+- **Two direct Plex calls from the web process are allowed:** terminating a stream (one request, the user is waiting on it) and the image proxy (`/img/` for the UI, and `/api/v1/images/` for API readers, which also resizes to WebP or JPEG). Nothing else from web talks to Plex. The image proxy also fetches Sonarr/Radarr posters (`/img/arr/...`, for downloads not yet in Plex), with their API keys kept server-side like the Plex token.
 - **One other outside call from the web process:** the "Test" button on a notification channel sends a single message and shows the result straight away. All real notifications are sent by the worker.
 - **Ingest is polling.** `GET /status/sessions` every 5 s (configurable 2–30 s). The Plex websocket (`/:/websockets/notifications`) is used only as a trigger to poll right away when playback state changes, so pause and stop are picked up in under a second. If the websocket drops, polling carries on alone. Plex webhooks are not used (they need Plex Pass and an inbound route).
 - **Live activity in the browser is HTMX polling** of a partial every 3 s, with progress bars interpolated client-side by Alpine between refreshes. The UI uses no SSE and no WebSocket: one admin, a handful of tabs, and it survives Cloudflare and proxies without special handling.
 - **Outside screens get server-sent events** (Marc, 5 Nov 2026, with the Design Uniformity API standard): `/api/v1/events` streams what the worker publishes to the `events` table, for Vital Signs, the panels and Home Assistant, with a 25 s ping so Cloudflare keeps it open. At most 4 streams per gunicorn worker (8 in all). The UI itself stays on HTMX polling.
-- **The Plex token never reaches the browser.** Posters and art go through `/img/...` on the web process, which fetches from Plex, resizes and caches on disk.
+- **The Plex token never reaches the browser.** Posters and art go through `/img/...` (and `/api/v1/images/...` for API readers) on the web process, which fetches from Plex, resizes and caches on disk.
 
 ## 4. What it does
 
@@ -89,7 +90,9 @@ v1 scope. Section numbers match the milestones in `SPEC.md`.
 
 - Single admin, password hashed with `werkzeug.security` (scrypt). First run lands on a setup wizard that creates the admin and connects Plex.
 - Session cookie auth for the UI, CSRF tokens on every form and HTMX POST.
-- REST API uses bearer tokens created in Settings, each stored hashed and given a name. Read-only or read-write.
+- REST API uses bearer tokens created in Settings, each stored hashed and given a name. Read-only or read-write. A **read** token may also go in the URL (`?token=`) for displays that can't set a header; a write token in the URL is refused. gunicorn's access log has paths without query strings and no referrer, so URL tokens never reach a log, and display pages send `Referrer-Policy: no-referrer`.
+- 10 bad tokens in a minute from one address lock it out for 15 minutes (keyed by `CF-Connecting-IP` through the tunnel, since every tunnel request otherwise comes from cloudflared). 120 requests a minute per token. `API_PUBLIC=0` refuses the API through the tunnel altogether.
+- Webhooks are signed (`X-Signature: sha256=` HMAC of the body), and their URLs are treated as secrets: only ever shown masked after saving.
 - Optional "trusted proxy header" login (e.g. Cloudflare Access `Cf-Access-Authenticated-User-Email`) is off by default and only honoured from configured proxy IPs.
 - The Plex token, the secret key and the MQTT password live in the database or in `/data`, never in the repo or in logs.
 - Wrapped share links are signed with `itsdangerous`, and the signature includes a per-user salt, so the admin can revoke all of a user's links by rotating it.

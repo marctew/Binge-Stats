@@ -95,6 +95,8 @@ trusted_proxies = []         # IPs/CIDRs allowed to set X-Forwarded-* and the au
 
 `bingestats/services/settings.py` exposes typed `get(key)` / `set(key, value)` with the defaults above in one dict. Nothing else reads the table directly.
 
+**Environment** (compose file): `TZ`, `PUID`, `PGID`, `FORWARDED_ALLOW_IPS`, and `API_PUBLIC` (default `1`; `0` refuses `/api/v1/` and `/display/` requests that came through a Cloudflare tunnel).
+
 ---
 
 ## 3. Schema
@@ -696,7 +698,8 @@ Every page is a Jinja template that extends `base.html`. Pages refresh their par
 | `/wrapped/<user_id>/<year>` | Admin view |
 | `/wrapped/s/<token>` | Public share (no auth) |
 | `/notifications` | Rules list, rule editor (trigger → conditions → template with live preview → channels), channels, delivery log |
-| `/settings` | Tabs: Plex, General (timezone, theme, thresholds), Home Assistant, Geo, Import, API tokens, Backups, About (version, DB size, worker heartbeat). Also Sonarr/Radarr/SABnzbd and TMDB cards |
+| `/settings` | Tabs: Plex, General (timezone, theme, thresholds), Home Assistant, Geo, Import, API tokens (with a link to preview the display page and the last 20 API actions), Webhooks, Backups, About (version, DB size, worker heartbeat). Also Sonarr/Radarr/SABnzbd and TMDB cards |
+| `/display/now-playing` | **Display page** for kiosks and Vital Signs: full screen, read token in the URL, no sidebar or login. See `docs/API.md` |
 | `/jobs/<id>` | Job progress, HTMX-polled |
 
 **Worker heartbeat:** the worker writes `worker.heartbeat_at` to settings every poll. If it is older than 60 s, the UI shows a banner saying the worker isn't running.
@@ -705,12 +708,15 @@ Every page is a Jinja template that extends `base.html`. Pages refresh their par
 - `/img/plex?path=<plex artwork path>&w=&shape=poster|art|square` takes a Plex artwork path. Only `/library/metadata/<n>/(thumb|art|…)/<n>` is accepted, and anything else is a 404.
 - `/img/user/<id>` serves a user avatar, fetched from plex.tv (other hosts are refused).
 - The image is fetched through the Plex photo transcoder at a width snapped to 150, 300, 600 or 1200 px, cached as JPEG in `/data/cache/img/` and served with a week-long private cache.
+- API readers use `/api/v1/images/` instead (token, not session): resized here to 80–1280 px, WebP or JPEG, cached in `/data/image-cache/`. See `docs/API.md`.
 
 ---
 
 ## 16. REST API
 
 The whole API is documented in `docs/API.md`: the Design Uniformity API standard's routes (`meta`, `status`, `feeds`, `images`, `actions`, `events`, and `/display/` pages; plan and decisions in `docs/specs/api-standard.md`), then Binge's own older routes, which keep their shape for the widget, the PC panel and the dashboard. `scripts/check-api.sh` checks a running Binge against the standard.
+
+Migration v14 adds the API's tables: `events` and `webhook_deliveries` (written by the worker), `webhooks`, `api_idempotency` and `api_audit` (written by the web process). The worker prunes them hourly.
 
 ---
 
@@ -730,7 +736,7 @@ services:
     command: web
     ports: ["8181:8181"]
     volumes: ["./data:/data"]
-    environment: { TZ: Europe/London, PUID: 1000, PGID: 1000 }
+    environment: { TZ: Europe/London, PUID: 1000, PGID: 1000, API_PUBLIC: 1 }
     restart: unless-stopped
     healthcheck: { test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8181/api/v1/health')"], interval: 30s }
   worker:
@@ -742,7 +748,7 @@ services:
     depends_on: [web]
 ```
 
-- `web` runs `gunicorn -k gthread -w 2 --threads 8 -b 0.0.0.0:8181 'bingestats:create_app()'`.
+- `web` runs `gunicorn -k gthread -w 2 --threads 12 -b 0.0.0.0:8181 'bingestats:create_app()'`, with an access-log format that has the path without the query string and no referrer (`docker/entrypoint.sh`). 12 threads leave room for up to 4 open events streams per worker.
 - `worker` runs `python -m bingestats worker`.
 - Both run migrations at startup, guarded by a file lock in `/data` so only one migrates.
 - **GeoIP:** the DB-IP Lite City MMDB (CC BY 4.0, no account needed) is downloaded by the worker to `/data/geo/` on the first run and monthly after that. Show an attribution line on pages that show locations. Lookups are cached in `ip_geo` for 30 days. Private ranges are stored as `is_private = 1`, labelled "LAN", and get no lookup.
@@ -793,3 +799,5 @@ Each one ends with tests passing, the image building, and something Marc can run
 | M6 | **Insights.** Binges (incremental + rebuild), completion, abandoned, Transcodes page, Library health page + CSV | The re-encode and stale lists make sense against the real library |
 | M7 | **Wrapped.** Wrapped service + cache, admin and public pages, share links + revoke, print style | A shared link opens on a phone and looks good, and revoke kills it |
 | M8 | **Polish.** Light theme pass, empty/loading states everywhere, backups UI, About page, README with screenshots, GHCR publish | Fresh install → setup → import → useful within 10 minutes |
+
+After M8, built to their own specs: pins from Pinnarr (`docs/specs/pins.md`), reordering the SABnzbd queue (`docs/specs/queue-reorder.md`) and the outside API standard (`docs/specs/api-standard.md`, six stages, 5–6 Nov 2026).

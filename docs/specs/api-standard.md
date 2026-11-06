@@ -109,7 +109,7 @@ CREATE TABLE api_audit (
 **Token handling (`api_core`), for the whole `/api/v1/` and `/display/`:**
 - `Authorization: Bearer` as now. Also `?token=`, for read tokens only. A write token in the URL gets `400 {"error": "Write tokens go in the Authorization header, never the URL.", "code": "bad_request"}`, even on a GET.
 - Bad token: `401 {"error": "That token isn't valid. Make a new one in Settings → API tokens.", "code": "unauthorised"}`. A right token with the wrong scope gets `403`, code `forbidden`.
-- **Lockout:** 10 bad tokens from one client IP (after ProxyFix) in 60 s gets `429` with `Retry-After` for 15 minutes. While locked out, even good tokens from that IP are refused.
+- **Lockout:** 10 bad tokens from one client address in 60 s gets `429` with `Retry-After` for 15 minutes. While locked out, even good tokens from that IP are refused.
 - **Rate limit:** 120 requests a minute per token, then `429` with `Retry-After`. Images and events don't count.
 - Both limits are in memory, per gunicorn worker. Two workers make them about 2× looser, which is fine against 256-bit tokens. Note it in `docs/API.md`.
 - **`API_PUBLIC`:** env var, default `1`. When it's `0`, any `/api/v1/` or `/display/` request carrying `CF-Connecting-IP` gets `403`, code `forbidden`. Add it to the compose file and README.
@@ -345,6 +345,15 @@ A second display (pins "Up next", built from `pins_schedule`) waits until Marc p
 ## Order and size
 
 Stages 1–3 are one PR each and don't depend on stage 4. Stage 4 is the biggest: migration, worker, web and Settings. Stage 5 needs stages 2 and 4. Stage 6 goes with stage 5. Keep `_m14` in stage 1 with all its tables, so there's one migration and not three.
+
+## As built: where it differs from the plan above
+
+- **The lockout is keyed by `CF-Connecting-IP`** when the header is there, else the client IP. The LXC has no trusted proxies, so every tunnel request arrives from cloudflared's address; keyed by that, one stranger's bad tokens would lock out every tunnel reader. Cloudflare overwrites the header, so it can't be faked from outside.
+- **A repeat answered from an `Idempotency-Key` isn't logged again,** since nothing ran. Every call that runs, refused or not, is.
+- **Display pages refuse as a plain HTML page**, not JSON, since whatever shows them has nobody to read JSON.
+- **The display page reloads its own body** (`?fragment=1`) every `refresh_s` and on events, rather than re-fetching the feed and rendering in JavaScript: one renderer.
+- **The display shell repeats the accent families' values** until the design updater carries Design Uniformity's `accents.css`.
+- **`downloads` items have `at` = SABnzbd's finish estimate**, and the feed isn't paged.
 
 ## Checked against
 
