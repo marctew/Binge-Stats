@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v={{ app_sha or app_version }}">
   <script src="{{ url_for('static', filename='vendor/htmx.min.js') }}" defer></script>
   <script src="{{ url_for('static', filename='js/app.js') }}?v={{ app_sha or app_version }}" defer></script>
+  <script src="{{ url_for('static', filename='design/scroll-fade.js') }}?v={{ app_sha or app_version }}" defer></script>
   {% block head %}{% endblock %}
   <script src="{{ url_for('static', filename='vendor/alpine.min.js') }}" defer></script>
 </head>
