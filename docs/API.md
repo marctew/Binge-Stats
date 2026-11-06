@@ -5,7 +5,7 @@ Binge has two kinds of route under `/api/v1/`:
 - **The API standard's routes** (Design Uniformity `API-STANDARD.md`, draft 2; plan in `docs/specs/api-standard.md`): the same shape in every one of Marc's apps, for displays, Docket, Home Assistant and TRMNL. Errors are `{"error": "<sentence>", "code": "<code>"}`.
 - **Binge's own routes** (the second half of this file), kept exactly as they were for the widget, the PC panel and the dashboard's charts. Errors are `{"error": {"code", "message"}}`.
 
-This file is the whole API. Check a running Binge against the standard with `scripts/check-api.sh`.
+This file is the whole API. Check a running Binge against the standard with `python3 scripts/check_api.py <base_url> <read_token> [write_token]` (Design Uniformity's checker).
 
 ## Tokens, for every route
 

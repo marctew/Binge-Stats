@@ -26,20 +26,20 @@ def _git_sha() -> str:
 
 
 def _install_api(app: Flask) -> None:
-    """The outside API standard's gate (api_core): tokens, limits, ETags and the meta registry."""
+    """The outside API standard's gate (du_api, from Design Uniformity): tokens, limits, ETags and the meta registry."""
     import hmac
 
     from flask import request, session
 
     from ..services import api_tokens, settings
-    from . import api_core
+    from .. import du_api
     from .routes_api import _err
 
     def csrf_ok() -> bool:
         sent = request.headers.get("X-CSRF-Token", "")
         return bool(sent) and hmac.compare_digest(sent, session.get("csrf", ""))
 
-    core = api_core.init_api(
+    core = du_api.init_api(
         app, name="binge-stats", title="Binge Stats", version=__version__, sha=lambda: app.config["BS_SHA"],
         accent="violet", icon="/static/img/icon.svg",
         time_zone=lambda: settings.get(app.get_db(), "ui.timezone"),
@@ -51,7 +51,7 @@ def _install_api(app: Flask) -> None:
     )
     core.open_endpoints.add("api.health")
     if not app.testing:
-        api_core.stop_streams_on_sigterm(core)
+        du_api.stop_streams_on_sigterm(core)
 
 
 def build_app(data_dir: str | None = None, *, testing: bool = False) -> Flask:

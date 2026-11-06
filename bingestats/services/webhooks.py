@@ -11,8 +11,6 @@ Notifications (services/notify.py, Apprise) are for people; these are for machin
 """
 from __future__ import annotations
 
-import hashlib
-import hmac
 import json
 import secrets
 import sqlite3
@@ -20,8 +18,8 @@ import time
 from typing import Callable
 from urllib.parse import urlsplit
 
-RETRY_AFTER_S = (60, 180, 360)     # after the first try: 3 retries over 10 minutes
-TIMEOUT_S = 10
+from ..du_api import RETRY_AFTER_S, WEBHOOK_TIMEOUT_S as TIMEOUT_S   # the standard's: 3 retries over 10 minutes, 10 s each
+from ..du_api import sign as _du_sign
 KEEP_DONE_S = 7 * 86400
 BATCH = 20
 
@@ -46,7 +44,8 @@ def mask(url: str) -> str:
 
 
 def sign(body: bytes, secret: str) -> str:
-    return "sha256=" + hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+    """X-Signature for a body: the standard's, from Design Uniformity's du_api."""
+    return _du_sign(body, secret)
 
 
 def create(conn: sqlite3.Connection, name: str, url: str, event_types: list[str] | None = None,

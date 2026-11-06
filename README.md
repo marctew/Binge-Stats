@@ -117,7 +117,7 @@ DATA_DIR=./data .venv/bin/python -m bingestats worker  # second shell
 **Docs:**
 - [DESIGN.md](DESIGN.md) records the decisions.
 - [SPEC.md](SPEC.md) is the build spec.
-- [docs/API.md](docs/API.md) is the whole API; `scripts/check-api.sh <url> <token>` checks a running copy against the standard.
+- [docs/API.md](docs/API.md) is the whole API; `python3 scripts/check_api.py <url> <token>` checks a running copy against the standard.
 - [docs/verification.md](docs/verification.md) is what's been checked against a real server.
 
 **CI** runs the tests on every push and publishes `ghcr.io/marctew/binge-stats` from the default branch and from `v*` tags.

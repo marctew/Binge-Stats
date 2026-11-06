@@ -1,4 +1,4 @@
-"""The outside API standard, stage 1 (docs/specs/api-standard.md): the shared gate in api_core
+"""The outside API standard, stage 1 (docs/specs/api-standard.md): the shared gate in du_api
 (tokens, URL tokens, lockout, rate limit, API_PUBLIC, ETags), /api/v1/meta and /api/v1/status."""
 import json
 import re
@@ -10,7 +10,7 @@ import pytest
 from bingestats import db
 from bingestats.plex import parse
 from bingestats.services import api_feeds, api_tokens, settings
-from bingestats.web import api_core
+from bingestats import du_api
 
 from tests.conftest import Clock, load_fixture
 
@@ -355,10 +355,10 @@ def test_status_answers_from_the_database_only(app_conn, monkeypatch):
 # -- iso helpers ---------------------------------------------------------------------------------
 
 def test_iso_round_trip():
-    assert api_core.iso(1_800_000_000) == "2027-01-15T08:00:00Z"
-    assert api_core.parse_iso("2027-01-15T08:00:00Z") == 1_800_000_000
-    assert api_core.parse_iso("2027-01-15T09:00:00+01:00") == 1_800_000_000
-    assert api_core.parse_iso("yesterday") is None
+    assert du_api.iso(1_800_000_000) == "2027-01-15T08:00:00Z"
+    assert du_api.parse_iso("2027-01-15T08:00:00Z") == 1_800_000_000
+    assert du_api.parse_iso("2027-01-15T09:00:00+01:00") == 1_800_000_000
+    assert du_api.parse_iso("yesterday") is None
 
 
 # -- the migration and the log format -------------------------------------------------------------
@@ -388,6 +388,6 @@ def test_access_log_never_has_query_strings_or_referrers():
     assert "%(U)s" in fmt.group(1)
 
 
-def test_api_core_imports_nothing_from_binge():
-    src = (Path(api_core.__file__)).read_text()
+def test_du_api_imports_nothing_from_binge():
+    src = (Path(du_api.__file__)).read_text()
     assert not re.search(r"^\s*(from|import)\s+(\.\.|bingestats|\.)", src, re.M)

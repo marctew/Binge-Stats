@@ -714,7 +714,7 @@ Every page is a Jinja template that extends `base.html`. Pages refresh their par
 
 ## 16. REST API
 
-The whole API is documented in `docs/API.md`: the Design Uniformity API standard's routes (`meta`, `status`, `feeds`, `images`, `actions`, `events`, and `/display/` pages; plan and decisions in `docs/specs/api-standard.md`), then Binge's own older routes, which keep their shape for the widget, the PC panel and the dashboard. `scripts/check-api.sh` checks a running Binge against the standard.
+The whole API is documented in `docs/API.md`: the Design Uniformity API standard's routes (`meta`, `status`, `feeds`, `images`, `actions`, `events`, and `/display/` pages; plan and decisions in `docs/specs/api-standard.md`), then Binge's own older routes, which keep their shape for the widget, the PC panel and the dashboard. `scripts/check_api.py` (from Design Uniformity) checks a running Binge against the standard.
 
 Migration v14 adds the API's tables: `events` and `webhook_deliveries` (written by the worker), `webhooks`, `api_idempotency` and `api_audit` (written by the web process). The worker prunes them hourly.
 

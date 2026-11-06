@@ -1,18 +1,22 @@
-#!/usr/bin/env bash
-# Check a running Binge Stats against the outside API standard (docs/API.md, docs/specs/api-standard.md):
-#   scripts/check-api.sh <base_url> <read_token> [write_token]
-#   scripts/check-api.sh http://127.0.0.1:8181 bs_xxx
-# Read-only: it changes nothing (a write token is only sent in the URL, to check it's refused).
-# Python standard library only, so it runs on the host. Prints one line per check; exits 1 if any fail.
-# A stand-in until Design Uniformity ships tools/check_api.py; then delete this.
-set -euo pipefail
-if [ $# -lt 2 ]; then
-  echo "Usage: $0 <base_url> <read_token> [write_token]" >&2
-  exit 2
-fi
-exec python3 - "$@" <<'EOF'
-import json, re, sys, urllib.error, urllib.request
+#!/usr/bin/env python3
+"""Check a running app against the outside API standard (API-STANDARD.md).
 
+  python3 tools/check_api.py <base_url> <read_token> [write_token]
+  python3 tools/check_api.py http://127.0.0.1:8181 bs_xxx
+
+Read-only: it changes nothing (a write token is only sent in the URL, to check it's refused).
+Standard library only, so it runs on any host. Prints one line per check and exits 1 if any fail.
+Run it after each app's change, like check_du_sync.py. Lifted from Binge Stats' pilot.
+"""
+import json
+import re
+import sys
+import urllib.error
+import urllib.request
+
+if len(sys.argv) < 3:
+    print("Usage: check_api.py <base_url> <read_token> [write_token]", file=sys.stderr)
+    sys.exit(2)
 base, tok = sys.argv[1].rstrip("/"), sys.argv[2]
 wtok = sys.argv[3] if len(sys.argv) > 3 else None
 ISO = re.compile(r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$")
@@ -127,4 +131,3 @@ for d in meta.get("displays") or []:
 
 print("All good." if not failed else f"{failed} check(s) failed.")
 sys.exit(1 if failed else 0)
-EOF
