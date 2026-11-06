@@ -17,6 +17,11 @@ And the pieces an app's routes use: `@standard(scope)` for the standard's routes
 display pages, `image_response` (resize, cache, WebP or JPEG), `event_stream` and `StreamSlots`
 for /api/v1/events, `sign` and `RETRY_AFTER_S` for webhooks, `iso` / `parse_iso` for times.
 
+Draft 4 (v1.11), all optional: app tokens (`check_token` may return `app`) and `@standard("app")`
+for /api/v1/inbound/, `add_inbound` and the inbound key and reopen rules, per-action limits
+(`add_action(..., limit="10/hour")` and `core.over_limit(name)`), wall-clock times sent in
+(`local_time`, `local_out`), and `webhook_matches` for the event-type and source filters.
+
 The standard's routes get the standard's error shape, `{"error": "...", "code": "..."}`. An app
 that already had /api/v1 routes keeps their error shape by passing `legacy_error`; they check
 scope with `identity()`.
@@ -49,6 +54,8 @@ READ_ONLY = "This token is read-only. Make a write token in Settings → API tok
 LOCKED_OUT = "Too many bad tokens from this address. Try again later."
 TOO_MANY = "Too many requests with this token. Slow down and try again shortly."
 NOT_PUBLIC = "The API isn't available through the tunnel. Use the LAN address."
+APP_ONLY = ("Only an app's own token can keep items here. Make one in Settings → API tokens and say which app "
+            "it's for.")
 
 
 def iso(ts: float | None) -> str | None:
@@ -78,6 +85,7 @@ class Identity:
     token_id: int | None = None
     name: str = ""
     from_url: bool = False
+    app: str | None = None    # set for an app token (API standard section 3, draft 4)
 
 
 @dataclass
@@ -134,6 +142,30 @@ class _Limiter:
             q.append(now)
             return 0
 
+    def action_hit(self, token_id, action: str, n: int, per_s: int) -> int:
+        """Count one use of a limited action by a token; seconds to wait if over `n` per `per_s`, else 0."""
+        now = self.clock()
+        with self._lock:
+            q = self._hits.setdefault(("action", token_id, action), deque())  # type: ignore[arg-type]
+            while q and q[0] <= now - per_s:
+                q.popleft()
+            if len(q) >= n:
+                return int(q[0] + per_s - now) + 1
+            q.append(now)
+            return 0
+
+
+_PER = {"minute": 60, "hour": 3600, "day": 86400}
+
+
+def parse_limit(limit: str) -> tuple[int, int]:
+    """'10/hour' -> (10, 3600). Raises ValueError for anything else."""
+    try:
+        n, per = limit.split("/")
+        return int(n), _PER[per.strip()]
+    except (ValueError, KeyError):
+        raise ValueError(f"A limit looks like '10/hour' (minute, hour or day), not {limit!r}.") from None
+
 
 @dataclass
 class ApiCore:
@@ -158,6 +190,7 @@ class ApiCore:
     actions: list[dict] = field(default_factory=list)
     displays: list[dict] = field(default_factory=list)
     events: list[str] = field(default_factory=list)
+    inbound: dict | None = None        # meta "inbound": {kind, fields}, for apps that keep other apps' items
     max_streams: int = 8               # per process; the standard's 8 per app, split across workers
 
     def __post_init__(self):
@@ -170,8 +203,33 @@ class ApiCore:
     def add_feed(self, name: str, title: str, refresh_s: int, params: dict | None = None) -> None:
         self.feeds.append({"name": name, "title": title, "refresh_s": refresh_s, "params": params or {}})
 
-    def add_action(self, name: str, title: str, body: dict, when: Callable[[], bool] | None = None) -> None:
-        self.actions.append({"name": name, "title": title, "body": body, "_when": when})
+    def add_action(self, name: str, title: str, body: dict, when: Callable[[], bool] | None = None,
+                   limit: str | None = None) -> None:
+        """`limit` ("10/hour") is on top of the token's own rate; enforce it with `over_limit(name)`."""
+        a = {"name": name, "title": title, "body": body, "_when": when}
+        if limit:
+            parse_limit(limit)
+            a["limit"] = limit
+        self.actions.append(a)
+
+    def over_limit(self, name: str):
+        """For an action route: the 429 answer if this token is over the action's own limit, else None."""
+        a = next((x for x in self.actions if x["name"] == name), None)
+        who = identity()
+        if not a or not a.get("limit") or who is None:
+            return None
+        n, per = parse_limit(a["limit"])
+        wait = self.limiter.action_hit(who.token_id if who.kind == "token" else "session", name, n, per)
+        if not wait:
+            return None
+        when = datetime.now(timezone.utc).timestamp() + wait
+        local = _local_clock(when, self.time_zone())
+        return self.error("rate_limited", f"That's {n} this {a['limit'].split('/')[1]} for {name}. "
+                          f"The next one can go at {local}.", 429, wait)
+
+    def add_inbound(self, kind: str, fields: dict) -> None:
+        """This app keeps other apps' items (API standard section 7, draft 4): shown in meta as "inbound"."""
+        self.inbound = {"kind": kind, "fields": fields}
 
     def add_display(self, name: str, title: str, sizes: list[str]) -> None:
         self.displays.append({"name": name, "title": title, "sizes": sizes})
@@ -188,6 +246,7 @@ class ApiCore:
                         if a["_when"] is None or a["_when"]()],
             "displays": list(self.displays),
             "events": list(self.events),
+            **({"inbound": self.inbound} if self.inbound else {}),
         }
 
     # -- answers -----------------------------------------------------------------------------------
@@ -250,7 +309,8 @@ class ApiCore:
                 wait = self.limiter.hit(row["id"])
                 if wait:
                     return self._refuse("rate_limited", TOO_MANY, 429, wait)
-            g.api_identity = Identity("token", row["scope"], row["id"], row.get("name", ""), from_url)
+            g.api_identity = Identity("token", row["scope"], row["id"], row.get("name", ""), from_url,
+                                      row.get("app") or None)
         elif self.is_admin_session():
             g.api_identity = Identity("session", "write", None, "Admin session")
         return None
@@ -290,8 +350,9 @@ def _is_standard() -> bool:
 
 
 def standard(scope: str = "read"):
-    """Mark a route as one of the standard's and check scope; refusals use the standard's shape."""
-    if scope not in ("read", "write"):
+    """Mark a route as one of the standard's and check scope; refusals use the standard's shape.
+    "app" is for /api/v1/inbound/: an app token only (a write token that belongs to an app)."""
+    if scope not in ("read", "write", "app"):
         raise ValueError(scope)
 
     def deco(fn):
@@ -300,6 +361,8 @@ def standard(scope: str = "read"):
             who = identity()
             if who is None:
                 return ApiCore.error("unauthorised", NO_TOKEN, 401)
+            if scope == "app" and (who.kind != "token" or who.scope != "write" or not who.app):
+                return ApiCore.error("forbidden", APP_ONLY, 403)
             if scope == "write":
                 if who.scope != "write":
                     return ApiCore.error("forbidden", READ_ONLY, 403)
@@ -309,6 +372,70 @@ def standard(scope: str = "read"):
         wrapper._du_standard = True  # type: ignore[attr-defined]
         return wrapper
     return deco
+
+
+# -- times sent in, inbound items, webhook filters (API standard draft 4) ---------------------------
+
+import re as _re
+
+INBOUND_KEY = _re.compile(r"^[A-Za-z0-9._:-]{1,100}$")
+LOCAL_FORMS = "local time as 'YYYY-MM-DD HH:MM', or 'YYYY-MM-DD' for all day"
+
+
+def _local_clock(ts: float, tz: str) -> str:
+    from zoneinfo import ZoneInfo
+    return datetime.fromtimestamp(ts, ZoneInfo(tz)).strftime("%H:%M")
+
+
+def valid_key(key: str) -> bool:
+    """An inbound item's key: the sender's own stable id, [A-Za-z0-9._:-], 1 to 100 characters."""
+    return bool(INBOUND_KEY.match(key or ""))
+
+
+def local_time(s: str, field_name: str = "due") -> tuple[str, str | None]:
+    """A wall-clock time sent in ('2026-12-24 09:00' or '2026-12-24') -> ('2026-12-24', '09:00' | None).
+    Raises ValueError with a sentence for anything else, including a UTC 'Z' time."""
+    from datetime import date as _date, time as _time
+    text = (s or "").strip()
+    m = _re.fullmatch(r"(\d{4}-\d{2}-\d{2})(?:[ T](\d{2}:\d{2}))?", text)
+    if not m:
+        raise ValueError(f"{field_name} is a {LOCAL_FORMS}, not {s!r}.")
+    try:
+        _date.fromisoformat(m.group(1))
+        if m.group(2):
+            _time.fromisoformat(m.group(2))
+    except ValueError:
+        raise ValueError(f"{field_name} isn't a real date and time: {s!r}.") from None
+    return m.group(1), m.group(2)
+
+
+def local_out(day: str | None, at: str | None, tz: str, all_day_time: str = "09:00") -> dict:
+    """A wall-clock date and time -> {"due": "2026-12-24 09:00", "due_at": "...Z"} for an answer. An all-day
+    date's due_at is the moment the app treats as its time (its all-day reminder time)."""
+    if not day:
+        return {"due": None, "due_at": None}
+    from zoneinfo import ZoneInfo
+    local = datetime.fromisoformat(f"{day} {at or all_day_time}").replace(tzinfo=ZoneInfo(tz))
+    return {"due": f"{day} {at}" if at else day, "due_at": iso(local.timestamp())}
+
+
+def reopens(status: str, old_due: tuple[str | None, str | None], new_due: tuple[str | None, str | None]) -> bool:
+    """A PUT on a done inbound item reopens it only for a later due date: that's the next cycle."""
+    if status != "done" or not new_due[0]:
+        return False
+    if not old_due[0]:
+        return True
+    return (new_due[0], new_due[1] or "00:00") > (old_due[0], old_due[1] or "00:00")
+
+
+def webhook_matches(event_types: list[str] | None, source_app: str | None, event: dict) -> bool:
+    """Should this event go to a webhook? Its event types ([] or None means all) and, if it's set to
+    "Only items from" one app, only events about that app's inbound items."""
+    if event_types and event.get("type") not in event_types:
+        return False
+    if source_app:
+        return ((event.get("source") or {}).get("app") or "") == source_app
+    return True
 
 
 # -- images (API standard section 6) ---------------------------------------------------------------

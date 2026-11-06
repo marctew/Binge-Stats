@@ -9,6 +9,9 @@
       webhook_event_types  every event type the app publishes (its meta "events")
       webhook_urls         {"create": URL, "secret": URL with {id}, "delete": URL with {id}}: POST forms
       webhook_people_url   optional: where the app's notifications to people are configured
+      webhook_sources      optional, for an app with inbound items (API standard draft 4): the apps that keep items
+                           here ([{app, name}]). The form gets "Only items from" (posted as `source_app`, "" for any)
+                           and each webhook shows it (w.source_app). Leave it unset and nothing changes.
     New secret and Delete ask first with js/confirm.js (spec 7.10) if the page loads it. -#}
 <section id="webhooks" class="card card-pad stack" data-webhooks-card>
   <h2 class="h2">Webhooks</h2>
@@ -34,6 +37,15 @@
       <div style="flex:2;min-width:14rem"><label class="label" for="du-wh-url">URL</label>
         <input id="du-wh-url" name="url" type="url" class="input" placeholder="http://homeassistant.lan:8123/api/webhook/…" required></div>
     </div>
+    {% if webhook_sources %}
+    <div><label class="label" for="du-wh-source">Only items from</label>
+      <select id="du-wh-source" name="source_app" class="input">
+        <option value="">Any app, and Docket's own</option>
+        {% for s in webhook_sources %}<option value="{{ s.app }}">{{ s.name }}</option>{% endfor %}
+      </select>
+      <p class="small muted">Pick an app to send it only events about the items that app keeps here, such as Muddy Paws
+        hearing that you ticked one of its reminders off.</p></div>
+    {% endif %}
     <details>
       <summary class="small muted">Only some events (none ticked sends them all)</summary>
       <div class="row" style="margin-top:.5rem">
@@ -50,7 +62,7 @@
     <li class="row-between">
       <div style="min-width:0">
         <div><strong>{{ w.name }}</strong> <span class="small muted"><code>{{ w.masked_url }}</code></span></div>
-        <div class="small muted">{{ 'All events' if not w.event_types else (w.event_types | join(', ')) }} ·
+        <div class="small muted">{{ 'All events' if not w.event_types else (w.event_types | join(', ')) }}{% if w.source_app %} · only {{ w.source_app }}'s items{% endif %} ·
           <span{% if w.failed %} class="badge badge-danger"{% endif %}>{{ w.status }}</span>{% if w.pending %} · {{ w.pending }} waiting{% endif %}</div>
       </div>
       <div class="row">

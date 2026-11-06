@@ -2,7 +2,7 @@
 
 How Marc's apps let other things read and drive them: Docket's briefs, Vital Signs screens, the ESP32 panels, the widget display, Home Assistant, n8n and TRMNL. `APP-STANDARD.md` says how an app is built; this says what its outside API looks like, so a reader written once works against every app.
 
-**Status:** draft 3, 6 Nov 2026, released with the shared code (section 12) in v1.10. Decisions taken with Marc on 5 Nov 2026 are marked **(decided)**. Binge Stats built all of it first, as the pilot (decided), and is running it; draft 3 takes in what the build found (section 17). The shared code was lifted out of Binge (sections 12 and 14).
+**Status:** draft 4, 6 Nov 2026. Draft 3 was released with the shared code (section 12) in v1.10. Draft 4 adds **inbound items** (things another app keeps in this one, first for Muddy Paws' reminders in Docket), times sent *to* an app, per-action limits, and events that say which app an item came from (section 18). Its shared-code additions are in v1.11 (section 12). What it means for Binge Stats, already running draft 3, is in section 19. Decisions taken with Marc on 5 Nov 2026 are marked **(decided)**. Binge Stats built all of it first, as the pilot (decided), and is running it; draft 3 takes in what the build found (section 17). The shared code was lifted out of Binge (sections 12 and 14).
 
 ## 1. What it's for
 
@@ -31,6 +31,8 @@ Every app that adopts the standard has these. Anything an app doesn't have is si
 | `/api/v1/feeds/<name>` | GET | read | A list of items in the common item shape (section 5). |
 | `/api/v1/images/<kind>/<id>` | GET | read | Artwork or a thumbnail, resized by the app. |
 | `/api/v1/actions/<name>` | POST | write | One named thing to do, with a JSON body. |
+| `/api/v1/inbound/items/<key>` | PUT, GET, DELETE | app | An item another app keeps here under its own key: create or update, read, archive (section 7). |
+| `/api/v1/inbound/items/<key>/done` | POST | app | Mark that item done. |
 | `/api/v1/events` | GET | read | Server-sent events: live changes for screens. |
 | `/display/<name>` | GET | read | A ready-made HTML card in the app's look, for kiosks and the widget display. |
 
@@ -46,6 +48,7 @@ Readers send `Accept: application/json` (except for images, events and display p
 - **A signed-in admin** (the app's own session cookie) can read every `/api/v1/` GET too, so the app's own pages and its `/display/` previews work without a token. In an app with viewer or other non-admin logins (Binge Stats), only an admin session counts; any other session is treated as no session. Writes from a session still need CSRF.
 - **Bad tokens:** `401 {"error": "That token isn't valid. Make a new one in Settings → API tokens."}`. Ten bad tokens from one address in a minute lock that address out for 15 minutes with `429` and `Retry-After`, the same rule as Docket's MCP. The address is `CF-Connecting-IP` when it's there, else the client IP: an app with no trusted proxies sees every tunnel request coming from cloudflared, so keyed by that, one stranger's bad tokens would lock out every tunnel reader. Cloudflare overwrites the header, so it can't be faked from outside, and faking it on the LAN only dodges the lockout. A good token with the wrong scope gets `403`.
 - **Secrets an app holds for others** (Plex tokens, indexer keys, a mail password) never appear in any `/api/v1/` answer, image URL or display page.
+- **App tokens.** A write token can also **belong to an app** ("Muddy Paws"), set when it's made. Only an app token can use `/api/v1/inbound/`, and the items it creates belong to that app: no other token can read or change them, and another app using the same key gets a separate item. Any other token gets `403` there, code `forbidden`: "Only an app's own token can keep items here. Make one in Settings → API tokens and say which app it's for." An app token is still a write token everywhere else. Its hint, last use and app name show on the tokens card like any other.
 
 ## 4. Exposure
 
@@ -119,6 +122,14 @@ Readers send `Accept: application/json` (except for images, events and display p
 
 This shape is for the standard's routes. An app's older `/api/v1/` routes keep the error shape they already had (section 1). `error` is a sentence for a person (`APP-STANDARD.md` 4). `code` is for machines: `bad_request`, `unauthorised`, `forbidden`, `not_found`, `rate_limited`, `busy`, `upstream` (the app couldn't reach Plex, SABnzbd...), `error`. `429` and `503` always carry `Retry-After`.
 
+### Times you send
+
+Times in answers are UTC (`...Z`) with an `at_label`, as above. Times **sent to** an app (an action's body, an inbound item) follow what the thing is:
+
+- **A wall-clock time** (a due date, a reminder, a schedule: something that should stay at 09:00 when the clocks change) is local to the app's `time_zone` (in `meta`): `"2026-12-24 09:00"`, or `"2026-12-24"` for all day. The app answers with the same local string and the UTC moment beside it (`due` and `due_at`).
+- **A moment that happened** (a dose was logged, a play finished) is ISO 8601 UTC with `Z`.
+- Anything else is `400 bad_request` with a sentence giving the right form. An action's body in `meta` marks each time field `"local"` or `"utc"`.
+
 ### Meta
 
 ```json
@@ -132,7 +143,9 @@ This shape is for the standard's routes. An app's older `/api/v1/` routes keep t
   "icon": "/static/icons/icon-192.png",
   "time_zone": "Europe/London",
   "feeds": [{"name": "arrivals", "title": "Just arrived", "refresh_s": 300, "params": {"kind": "movie | show"}}],
-  "actions": [{"name": "mark_watched", "title": "Mark watched", "body": {"item_id": "int"}}],
+  "actions": [{"name": "mark_watched", "title": "Mark watched", "body": {"item_id": "int"}},
+              {"name": "notify", "title": "Send a push", "body": {"title": "str", "body": "str", "url": "str?"}, "limit": "10/hour"}],
+  "inbound": {"kind": "task", "fields": {"title": "str", "notes": "str?", "due": "local?", "remind": "bool?", "url": "str?", "project": "str?"}},
   "displays": [{"name": "now-playing", "title": "Now playing", "sizes": ["320x240", "800x480", "1920x1080"]}],
   "events": ["arrival", "playback.start", "playback.stop"]
 }
@@ -154,6 +167,26 @@ This shape is for the standard's routes. An app's older `/api/v1/` routes keep t
 - Anything destructive in the app's own UI (delete, restore) isn't offered as an action unless Marc asks for that one specifically.
 - Every action that runs, refused or not, is logged in the app's action log with the token's name, so "who did that" always has an answer. A repeat answered from an `Idempotency-Key` isn't logged again, since nothing ran. An upstream failure (`502`) isn't remembered against its key, so it can be retried with the same one.
 - An admin signed in to the app can call actions from its own pages with the session cookie and `X-CSRF-Token`; the log names them as "Admin session".
+- **Per-action limits.** An action can have its own limit on top of the token's 120 a minute, for things that reach Marc (a push) or cost something: `"limit": "10/hour"` in `meta`. Over it, `429 rate_limited` with `Retry-After` and a sentence ("That's 10 pushes this hour. The next one can go at 14:20."). Counted per token, in memory, per worker, like the others (section 10).
+
+### Inbound items: things another app keeps here
+
+Some apps need to keep their own things *inside* another app and keep them in step: Muddy Paws puts each dog's next worming or flea dose into Docket as a reminder, moves it when a dose is logged early, and closes it when the dose is logged in Paws first. Actions don't fit that, because the sender has to name the same thing every time without making duplicates. So an app that accepts these offers **inbound items**, keyed by the sender's own id.
+
+- **Who:** an app token only (section 3). Everything is scoped to that token's app.
+- **The key** is the sender's own stable id for the thing: `[A-Za-z0-9._:-]`, 1 to 100 characters (`treatment-dog1-worming`). The same app and key always mean the same item, from one cycle to the next.
+- **`PUT /api/v1/inbound/items/<key>`** creates or updates, and is safe to call every time anything changes:
+  - a new key creates the item (`201`); a known key updates it (`200`); the body is the app's documented fields (`meta.inbound.fields`), and `title` is needed to create;
+  - fields left out are left as they are;
+  - a **wall-clock** field that moves (a due date) moves whatever hangs off it (a reminder), and drops a snooze already applied;
+  - if Marc already marked it **done**, a PUT with a **later** due date reopens it for that date (that's the next cycle); the same or an earlier date leaves it done and answers `200` with `status: "done"`;
+  - an **archived** item is brought back by a PUT, since the thing applies again.
+- **`GET .../<key>`** reads it. **`POST .../<key>/done`** marks it done and cancels anything pending on it (idempotent, `200`). **`DELETE .../<key>`** archives it (apps never hard-delete; `200`). All three give `404` for a key this app hasn't used, including one only another app has.
+- **The answer** is the item: `{"key", "id", "status": "open | done | archived", "title", "due", "due_at", "at_label", "url", "updated_at", "meta": {...}}`, where `id` is the receiving app's own id and `meta` holds its extra fields (Docket: `snoozed_until`, `project`).
+- **`url`** is a link back into the sending app. The receiving app shows it on the item and uses it where Marc would tap (a push's click), so the reminder opens the dog's page in Paws.
+- **Shown as from that app:** the receiving app marks these items with the app's name ("from Muddy Paws") so Marc can tell them apart.
+- **Logged** in the action log like actions, with the token's name and the key.
+- **Telling the sender about changes** is done with events and webhooks, not a separate callback: the receiving app publishes an event when Marc changes an inbound item (`task.done`, `task.reopened`, `task.archived`), with the item's `source` (section 8), and the sender subscribes with a webhook filtered to its own items. Changes the sender made itself through `/api/v1/inbound/` publish no event to it, so it never hears its own writes back.
 
 ## 8. Live updates (decided: push from the start)
 
@@ -161,6 +194,7 @@ This shape is for the standard's routes. An app's older `/api/v1/` routes keep t
 
 - `GET /api/v1/events` is **server-sent events** (`text/event-stream`). Read token (URL or header).
 - Each event: `event: <type>`, `id: <row id>`, `data: {"type": "...", "at": "...Z", "title": "...", "item": {...item shape...}}`. Types are dotted and listed in `meta` (`arrival`, `download.finished`, `task.due`, `watch.fired`).
+- An event about an **inbound item** also has `"source": {"app": "muddy-paws", "key": "treatment-dog1-worming"}`, so the app that owns it can tell it's one of its own. An app with inbound items adds a nullable `source_app` column to its `events` table, for the webhook filter below.
 - **Events go through SQLite, not memory.** Apps can have more than one gunicorn worker, and a separate worker process where events actually start (Binge Stats has both). So `publish()` writes a row to a small table, from whichever process sees the event, and each open stream reads new rows from it:
 
   ```sql
@@ -184,7 +218,7 @@ This shape is for the standard's routes. An app's older `/api/v1/` routes keep t
 
 For Home Assistant and n8n, which handle incoming webhooks better than streams:
 
-- Settings → **Webhooks**: a URL, the event types to send, and a secret.
+- Settings → **Webhooks**: a URL, the event types to send, and a secret. An app with inbound items also offers **Only items from** (one connected app, or any), so a sending app's webhook gets back only the events about its own items. This is how Muddy Paws hears that Marc ticked a reminder off in Docket.
 - Docket-style delivery, always from a background job, never inside a request: each event makes one delivery per matching webhook, POSTed as JSON (the same `data` as the stream) with `X-Signature: sha256=<hex HMAC-SHA256 of the raw body with the secret>` and a 10-second timeout. A failure is retried after 1, 3 and 6 minutes, then given up, with the last success and last error shown on the webhook's row in Settings.
 - Home Assistant's own webhook trigger (`/api/webhook/<id>`) is the expected target. Its id is the secret there, so the URL is stored like a password and never shown again in full.
 
@@ -235,11 +269,19 @@ Lifted from Binge Stats' pilot (decided) and released in v1.10. An app takes the
 
 Pillow is the one new dependency (images only).
 
+**Added in v1.11, for draft 4.** None of it changes what an app already passes in, and `tools/check_du_api.py` checks it all, including that an app passing nothing new is unchanged:
+- `check_token(token)` may also return `app` (a short name, or `None`). Missing means `None`, so an app that returns `{id, name, scope}` is unchanged. `identity().app` says which app is asking.
+- `@standard("app")`: an app token only (a write token with an `app`), for `/api/v1/inbound/` routes. Anything else gets `403` with the sentence from section 3.
+- `core.add_inbound(kind, fields)` puts `inbound` in `meta`. `valid_key(key)` checks a key, and `reopens(status, old_due, new_due)` applies the "a later due date reopens it" rule.
+- `add_action(..., limit="10/hour")` shows the limit in `meta`. The action's route calls `core.over_limit(name)`, which returns the `429` (with `Retry-After` and the time it can go) or `None`.
+- `local_time(s, field_name)` reads a wall-clock time sent in, giving `("2026-12-24", "09:00" | None)` or a `ValueError` with the sentence. `local_out(day, at, tz)` gives `{"due", "due_at"}` for an answer.
+- `webhook_matches(event_types, source_app, event)` applies a webhook's event-type and "Only items from" filters.
+
 **Templates:**
 - `templates/display/base.html`: the display page shell (section 9).
-- `templates/partials/api_tokens_card.html`: tokens (made, listed, revoked), previews of the app's display pages, and the latest API actions. `templates/partials/webhooks_card.html`: webhooks with their last success or error, the signing secret shown once, and the event-type filter. Both go in Settings after the app's own settings, before the Design system card; each documents the variables it needs at its top. Revoke, New secret and Delete use `js/confirm.js` (DESIGN-SPEC 7.10) when the page loads it.
+- `templates/partials/api_tokens_card.html`: tokens (made, listed, revoked), previews of the app's display pages, and the latest API actions. Set `api_tokens_apps = True` to add a **Belongs to an app** field, and pass `webhook_sources` to the webhooks card to add **Only items from** (draft 4). `templates/partials/webhooks_card.html`: webhooks with their last success or error, the signing secret shown once, and the event-type filter. Both go in Settings after the app's own settings, before the Design system card; each documents the variables it needs at its top. Revoke, New secret and Delete use `js/confirm.js` (DESIGN-SPEC 7.10) when the page loads it.
 
-**`tools/check_api.py <base_url> <read_token> [write_token]`** checks a running app against this standard: `meta` and `status` shapes, every feed's item shape, ETag and `304`, a read token in the URL, a bad token, a write token in the URL refused, images in WebP and JPEG, the events stream, and each display page with and without a token. Read-only and standard library only, so it runs on the app's host. Run it after each app's change, like `check_du_sync.py`.
+**`tools/check_api.py <base_url> <read_token> [write_token] [app_token]`** checks a running app against this standard: `meta` and `status` shapes, every feed's item shape, ETag and `304`, a read token in the URL, a bad token, a write token in the URL refused, images in WebP and JPEG, the events stream, and each display page with and without a token. Standard library only, so it runs on the app's host. Read-only, unless it's given an app token: then it also runs one inbound item through PUT, PUT again, GET, done, a reopening PUT and DELETE, on a throwaway `check-api-…` key, which it leaves archived. Run it after each app's change, like `check_du_sync.py`.
 
 **In an app's updater config** (DESIGN-SPEC 18.1), the lines for these, with the app's own paths:
 
@@ -268,7 +310,7 @@ One app at a time, like the design system. **Binge Stats goes first, as the pilo
 
 1. **Done, 5–6 Nov 2026: Binge Stats built the standard in-app,** to its own plan (`docs/specs/api-standard.md` in its repo), in six stages: the shared core with `meta` and `status`, then feeds and images, actions, events and webhooks, the `now-playing` display page, and docs with checking. Its current endpoints stayed exactly as they were (section 1). What was checked against the live server, including a 5½-minute events stream through the Cloudflare tunnel, is in its `docs/verification.md`.
 2. **Done in v1.10: the shared code lifted** into this repo (`du_api.py`, the API tokens and webhooks cards, the display shell, `check_api.py`), with what the pilot found written in (section 17). Binge takes the shared copies through the design updater.
-3. **Docket:** `status` (due today, overdue, the night shift), feeds (`today`, `upcoming`, `reports`), actions (`add_task`, `complete_task`), events (`task.due`, `brief.published`, `watch.fired`, `approval.requested`). Then its reader side (section 13), which is step 8.
+3. **Docket:** `status` (due today, overdue, the night shift), feeds (`today`, `upcoming`, `reports`), actions (`add_task`, `complete_task`, and `notify` limited to 10 an hour), **inbound items** (tasks with a reminder, for Muddy Paws first), events (`task.due`, `task.done`, `task.reopened`, `brief.published`, `watch.fired`, `approval.requested`). Then its reader side (section 13), which is step 8. Muddy Paws' own brief for this (`docket-inbound-api.md`) maps onto draft 4 as: its `/api/inbound/items/<key>` routes become `/api/v1/inbound/items/<key>`, its `notify` becomes the `notify` action, its Connected apps card becomes app tokens on the API tokens card, and its Done callback becomes a webhook filtered to Muddy Paws' items.
 4. **Encore** (downloads), **PodBridge** (new episodes, sync state), **Vital Signs** (its own status), **The Back Room** (status only, LAN only, unless Marc wants more).
 5. claude-ops is deployed only by Marc and keeps its own API; it isn't part of this unless he says so.
 
@@ -301,3 +343,29 @@ From building and running the pilot in Binge Stats (6 Nov 2026):
 4. **Section 12 now describes the shared code as built**: `init_api` with callables and an optional `legacy_error`, `@standard` and `@display` rather than per-feed decorators, `image_response`, `event_stream` with `StreamSlots`, and `sign`. Each app keeps its own events and webhook tables. The updater config lines are listed.
 5. **Docs:** the tokens and webhooks cards say what they need; `tools/check_api.py` also checks images, the events stream and display pages.
 6. **`since` and `cursor` are only for feeds ordered by time**, newest first. A live queue or a schedule ignores them and answers whole up to `limit`, as Binge's `now_playing`, `downloads` and pins feeds do. (Section 5, v1.10.1.)
+
+## 18. Changes in draft 4
+
+For Muddy Paws keeping reminders in Docket (6 Nov 2026), and any app that needs to keep things in another:
+
+1. **Inbound items** at `/api/v1/inbound/items/<key>`: create-or-update by the sender's own key, read, done and archive, with a later due date reopening a done item. (Section 7.) Not `/api/v1/items/`, because Binge Stats already has an older route there (`/api/v1/items/<rating_key>`).
+2. **App tokens:** a write token can belong to an app, and only that app's token can see or change its inbound items. (Section 3.)
+3. **Times sent to an app:** wall-clock fields are local (`YYYY-MM-DD HH:MM` or a date), moments are UTC. (Section 5.)
+4. **Per-action limits** in `meta`, such as `notify` at 10 an hour. (Section 7.)
+5. **Events about inbound items carry their `source`**, and webhooks can be filtered to one app's items, which replaces a bespoke "callback URL". (Section 8.)
+6. **Shared code to add in v1.11.** Every addition is optional for an app that doesn't use it. (Section 12.)
+
+## 19. What draft 4 means for Binge Stats
+
+Binge runs draft 3 on the v1.10 shared code. **It doesn't have to change anything for draft 4.** Every addition is optional, and an app that doesn't take part in one is left exactly as it is. In detail:
+
+| Draft 4 change | Does Binge need to change? |
+|---|---|
+| Inbound items | **No.** Binge doesn't take inbound items, and it doesn't list `inbound` in `meta`. The new routes live under `/api/v1/inbound/`, which Binge has never used. **One rule for Binge from now on:** never add an older-style route under `/api/v1/inbound/`. |
+| App tokens | **No.** `check_token` can keep returning `{id, name, scope}`, because a missing `app` means none. Binge's `api_tokens` table needs no new column. The tokens card hides the **Belongs to an app** field unless `api_tokens_apps` is set. |
+| Times sent to an app | **No.** None of Binge's actions (`pin_show`, `unpin_show`, `ack_alert`, `ack_all_alerts`, `move_download`) take a time. If one ever does, it follows section 5. |
+| Per-action limits | **No.** They're optional. Binge's actions are fine on the token's 120 a minute. |
+| Events with `source` | **No.** Only events about inbound items carry it, so Binge's `events` table needs no `source_app` column. The webhooks card hides **Only items from** unless `webhook_sources` is passed. |
+| v1.11 shared code | **Check, don't change.** When the updater brings v1.11 in, `du_api.py`, both cards and `check_api.py` are replaced. Run Binge's test suite and `scripts/check_api.py` against it once it's live, the same as after v1.10. Nothing in Binge's `init_api(...)` call needs to change. |
+| Docs | **A one-line fix.** `docs/API.md` still says "draft 2" at the top. Make it "draft 4". |
+

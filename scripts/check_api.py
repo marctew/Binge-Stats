@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 """Check a running app against the outside API standard (API-STANDARD.md).
 
-  python3 tools/check_api.py <base_url> <read_token> [write_token]
+  python3 tools/check_api.py <base_url> <read_token> [write_token] [app_token]
   python3 tools/check_api.py http://127.0.0.1:8181 bs_xxx
 
-Read-only: it changes nothing (a write token is only sent in the URL, to check it's refused).
+Read-only unless an app token is given: a write token is only sent in the URL, to check it's
+refused. With an app token (an app that offers inbound items, API standard draft 4), it also runs
+one item through PUT, PUT again, GET, done, a reopening PUT and DELETE, on a throwaway key
+(check-api-<random>), so it leaves one archived item behind.
 Standard library only, so it runs on any host. Prints one line per check and exits 1 if any fail.
 Run it after each app's change, like check_du_sync.py. Lifted from Binge Stats' pilot.
 """
@@ -15,10 +18,11 @@ import urllib.error
 import urllib.request
 
 if len(sys.argv) < 3:
-    print("Usage: check_api.py <base_url> <read_token> [write_token]", file=sys.stderr)
+    print("Usage: check_api.py <base_url> <read_token> [write_token] [app_token]", file=sys.stderr)
     sys.exit(2)
 base, tok = sys.argv[1].rstrip("/"), sys.argv[2]
-wtok = sys.argv[3] if len(sys.argv) > 3 else None
+wtok = sys.argv[3] if len(sys.argv) > 3 and sys.argv[3] != "-" else None
+atok = sys.argv[4] if len(sys.argv) > 4 else None
 ISO = re.compile(r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$")
 STATES = {"ok", "busy", "warning", "error", "off"}
 failed = 0
@@ -128,6 +132,57 @@ for d in meta.get("displays") or []:
     code, h, _b = get(f"/display/{d['name']}", token=None)
     check(f"display {d['name']}: no token gets a 401 page", code == 401 and (h.get("Content-Type") or "").startswith("text/html"),
           f"HTTP {code}")
+
+def call(method, path, token, body=None):
+    data = json.dumps(body).encode() if body is not None else None
+    h = {"Authorization": "Bearer " + token, "Accept": "application/json"}
+    if data is not None:
+        h["Content-Type"] = "application/json"
+    req = urllib.request.Request(base + path, data=data, headers=h, method=method)
+    try:
+        r = urllib.request.urlopen(req, timeout=15)
+        return r.status, js(r.read()) or {}
+    except urllib.error.HTTPError as e:
+        return e.code, js(e.read()) or {}
+
+
+if meta.get("inbound"):
+    if not atok:
+        print("  --    inbound: give an app token as the 4th argument to check it")
+    else:
+        import secrets
+        from datetime import date, timedelta
+        key = "check-api-" + secrets.token_hex(4)
+        path = f"/api/v1/inbound/items/{key}"
+        d1, d2 = (date.today() + timedelta(days=30)).isoformat(), (date.today() + timedelta(days=60)).isoformat()
+        code, a = call("PUT", path, atok, {"title": "check_api test item (safe to ignore)", "due": f"{d1} 09:00"})
+        check("inbound: a new key creates it (201)", code == 201 and a.get("key") == key and a.get("status") == "open",
+              f"HTTP {code} {a}")
+        first_id = a.get("id")
+        check("inbound: due comes back local, with due_at in UTC", a.get("due") == f"{d1} 09:00"
+              and bool(ISO.match(str(a.get("due_at")))), repr((a.get("due"), a.get("due_at"))))
+        code, a = call("PUT", path, atok, {"title": "check_api test item (safe to ignore)", "due": f"{d1} 09:00"})
+        check("inbound: the same key again updates, no duplicate (200)", code == 200 and a.get("id") == first_id,
+              f"HTTP {code} id {a.get('id')} vs {first_id}")
+        code, a = call("GET", path, atok)
+        check("inbound: GET reads it", code == 200 and a.get("status") == "open", f"HTTP {code}")
+        code, a = call("POST", path + "/done", atok, {})
+        check("inbound: done marks it done", code == 200 and a.get("status") == "done", f"HTTP {code} {a.get('status')}")
+        code, a = call("PUT", path, atok, {"due": f"{d1} 09:00"})
+        check("inbound: the same due date leaves it done", code == 200 and a.get("status") == "done", f"HTTP {code} {a.get('status')}")
+        code, a = call("PUT", path, atok, {"due": f"{d2} 09:00"})
+        check("inbound: a later due date reopens it", code == 200 and a.get("status") == "open", f"HTTP {code} {a.get('status')}")
+        code, a = call("DELETE", path, atok)
+        check("inbound: DELETE archives it", code == 200 and a.get("status") == "archived", f"HTTP {code} {a.get('status')}")
+        code, _a = call("GET", "/api/v1/inbound/items/check-api-never-made", atok)
+        check("inbound: an unknown key gets 404", code == 404, f"HTTP {code}")
+        code, a = call("PUT", "/api/v1/inbound/items/has%20space", atok, {"title": "x"})
+        check("inbound: a bad key gets 400", code == 400, f"HTTP {code}")
+        if wtok:
+            code, a = call("PUT", path, wtok, {"title": "x"})
+            check("inbound: a plain write token gets 403", code == 403 and a.get("code") == "forbidden", f"HTTP {code}")
+        code, a = call("PUT", path, tok, {"title": "x"})
+        check("inbound: a read token gets 403", code == 403, f"HTTP {code}")
 
 print("All good." if not failed else f"{failed} check(s) failed.")
 sys.exit(1 if failed else 0)
