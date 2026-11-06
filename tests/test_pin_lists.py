@@ -135,8 +135,14 @@ def test_stalled_on_the_calendar(lib):
 # -- pages ---------------------------------------------------------------------------------------
 
 @pytest.fixture
-def site(logged_in, app_conn):
+def site(logged_in, app_conn, monkeypatch):
+    """The pages ask for the real time, and build() dates everything from NOW: hold the services' clock there."""
+    from types import SimpleNamespace
+
+    from bingestats.services import outlook
     from tests.test_arr import connect
+    for mod in (pins, pin_lists, outlook):
+        monkeypatch.setattr(mod, "time", SimpleNamespace(time=lambda: float(NOW)))
     build(app_conn)
     connect(app_conn)
     return logged_in
