@@ -17,7 +17,7 @@ Self-hosted Plex monitoring and stats, a modern Tautulli replacement. Read DESIG
 - Plex only. SQLite only. Don't add Jellyfin/Emby or another database.
 - One admin, plus viewer logins that see only their own data (`web/routes_me.py`, gated in `web/auth.py`). Viewer access is an allow-list: any new page is admin-only unless it's added to the `me` blueprint and scoped to `session["viewer"]`.
 - Ingest is polling `/status/sessions`; the websocket only nudges a poll. No Plex webhooks.
-- The Plex token never reaches the browser: images go through `/img/`.
+- The Plex token never reaches the browser: images go through `/img/` (the UI) and `/api/v1/images/` (API readers and display pages).
 - All timestamps are UTC epoch seconds; display in the `ui.timezone` setting.
 - Long work runs as a row in `jobs`, picked up by the worker. Never do it in a request.
 - Settings live in the `settings` table, read only through `services/settings.py`.

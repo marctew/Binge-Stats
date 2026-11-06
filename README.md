@@ -26,7 +26,8 @@ Self-hosted Plex monitoring and statistics: a modern take on Tautulli. Live acti
 - **Stream rules:** per-person stream and transcode limits that alert, or stop the newest stream. Alerts for one account playing from two places at once, or from a new country.
 - **Home Assistant:** MQTT discovery for stream counts, bandwidth, Plex status, a "now watching" sensor and a "stop streams" button per person.
 - **Logins for your people:** give someone a password from their user page. They sign in with their Plex username and see only their own stats, history and Wrapped.
-- **The rest:** a REST API with tokens, nightly backups, and dark, light or system themes.
+- **For screens and automations:** an API built to the homelab API standard: a one-glance status, feeds (now playing, just arrived, history, downloads, pins), resized artwork, a few safe actions (pin, unpin, clear alerts), a live events stream, signed webhooks for Home Assistant and n8n, and a full-screen "now playing" page for a kiosk or Vital Signs. Tokens are read-only or read-write, and a read token can go in the URL for a display. See [docs/API.md](docs/API.md).
+- **The rest:** nightly backups, and dark, light or system themes.
 
 | | |
 |---|---|
@@ -116,6 +117,7 @@ DATA_DIR=./data .venv/bin/python -m bingestats worker  # second shell
 **Docs:**
 - [DESIGN.md](DESIGN.md) records the decisions.
 - [SPEC.md](SPEC.md) is the build spec.
+- [docs/API.md](docs/API.md) is the whole API; `scripts/check-api.sh <url> <token>` checks a running copy against the standard.
 - [docs/verification.md](docs/verification.md) is what's been checked against a real server.
 
 **CI** runs the tests on every push and publishes `ghcr.io/marctew/binge-stats` from the default branch and from `v*` tags.

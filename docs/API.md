@@ -12,7 +12,7 @@ This file is the whole API. Check a running Binge against the standard with `scr
 - `Authorization: Bearer <token>`, from Settings → API tokens. Read tokens read; write tokens read and write.
 - **Read tokens may go in the URL** as `?token=…`, for displays that can't set a header. A write token in the URL is refused with `400`, even on a GET. URL tokens never reach the access log: gunicorn logs the path without the query string, and no referrer.
 - A signed-in admin can read without a token (that's how the dashboard's charts load). Viewer logins can't use the API at all.
-- **Limits:** 10 bad tokens from one address in a minute locks that address out for 15 minutes (`429` with `Retry-After`). Each token gets 120 requests a minute, then `429`. Both are counted per gunicorn worker, so with two workers they're about twice as loose; that's accepted (API standard section 10).
+- **Limits:** 10 bad tokens from one address in a minute locks that address out for 15 minutes (`429` with `Retry-After`). Through the Cloudflare tunnel the address is `CF-Connecting-IP`, so one stranger can't lock out every tunnel reader. Each token gets 120 requests a minute, then `429`. Both are counted per gunicorn worker, so with two workers they're about twice as loose; that's accepted (API standard section 10).
 - **Through the tunnel:** `API_PUBLIC: "0"` in the compose file refuses any `/api/v1/` request that came through Cloudflare (`CF-Connecting-IP` set) with `403`. The default, `1`, answers there too, always with a token.
 - **Caching:** every successful GET has a weak `ETag`; send it back as `If-None-Match` and an unchanged answer is `304` with no body.
 - `/api/v1/health` needs no token.
