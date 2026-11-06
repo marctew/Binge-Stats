@@ -92,6 +92,9 @@
   .confirm { @apply absolute right-0 top-full z-30 mt-2 block w-72 max-w-[calc(100vw-2rem)] rounded-2xl border border-border bg-surface p-4
              text-left text-sm font-normal text-text shadow-2xl; }
   .confirm.left { @apply left-0 right-auto; }
+  /* Placed by duPlace() (js/confirm.js): over the page, above the button, so scrolling boxes never clip it. */
+  .confirm.is-placed { @apply fixed right-auto m-0 z-[60]; }
+  .confirm { @apply whitespace-normal; }        /* a table cell's nowrap mustn't reach the question */
   .confirm-actions { @apply mt-3 flex justify-end gap-2; }
   .is-busy { @apply pointer-events-none opacity-60; }
   .brand-gradient { @apply bg-gradient-to-r from-accent to-accent-2 bg-clip-text text-transparent; }
