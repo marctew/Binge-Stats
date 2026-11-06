@@ -153,9 +153,12 @@ class ApiCore:
     actions: list[dict] = field(default_factory=list)
     displays: list[dict] = field(default_factory=list)
     events: list[str] = field(default_factory=list)
+    max_streams: int = 8               # per process; the standard's 8 per app, split across workers
 
     def __post_init__(self):
         self.limiter = _Limiter(self.limits, self.clock)
+        self.stopping = threading.Event()
+        self.streams = StreamSlots(self.max_streams)
 
     # -- registry, for /api/v1/meta --------------------------------------------------------------
 
@@ -425,6 +428,77 @@ def prune_image_cache(cache_dir, max_bytes: int = IMAGE_CACHE_BYTES) -> int:
     return gone
 
 
+# -- the events stream (API standard section 8) ------------------------------------------------------
+
+STREAM_POLL_S = 1.0
+STREAM_PING_S = 25.0
+STREAM_MAX_S = 3600.0      # then the reader reconnects with Last-Event-ID; nothing is lost
+STREAM_RETRY_MS = 5000
+
+
+def sse(event: dict) -> str:
+    import json
+    return f"event: {event['type']}\nid: {event['id']}\ndata: {json.dumps(event, separators=(',', ':'))}\n\n"
+
+
+def event_stream(rows_after: Callable[[int], list[dict]], last_id: int, *, stopping: threading.Event,
+                 clock: Callable[[], float] = time.monotonic, sleep: Callable[[float], Any] | None = None,
+                 poll_s: float = STREAM_POLL_S, ping_s: float = STREAM_PING_S, max_s: float = STREAM_MAX_S):
+    """Yield SSE text: what's after `last_id` straight away, then new rows as they appear, checked
+    every `poll_s`, with a `: ping` every `ping_s` so proxies (Cloudflare closes idle ones at
+    about 100 s) keep it open. Ends after `max_s`, or as soon as `stopping` is set (SIGTERM)."""
+    wait = sleep or stopping.wait
+    started = last_ping = clock()
+    yield f"retry: {STREAM_RETRY_MS}\n\n"
+    while not stopping.is_set():
+        for ev in rows_after(last_id):
+            last_id = ev["id"]
+            yield sse(ev)
+        now = clock()
+        if now - started >= max_s:
+            return
+        if now - last_ping >= ping_s:
+            last_ping = now
+            yield ": ping\n\n"
+        wait(poll_s)
+
+
+class StreamSlots:
+    """At most `n` open streams in this process; each holds a gunicorn thread."""
+
+    def __init__(self, n: int):
+        self.n = n
+        self._sem = threading.BoundedSemaphore(n) if n > 0 else None
+
+    def take(self) -> Callable[[], None] | None:
+        if self._sem is None or not self._sem.acquire(blocking=False):
+            return None
+        done = threading.Event()
+
+        def release():
+            if not done.is_set():
+                done.set()
+                self._sem.release()
+        return release
+
+
+def stop_streams_on_sigterm(c: "ApiCore") -> None:
+    """Chain onto the process's SIGTERM handler (gunicorn's worker sets one before loading the app),
+    so open streams end at once and a restart doesn't wait out the graceful timeout."""
+    import signal
+    if threading.current_thread() is not threading.main_thread():
+        return
+    previous = signal.getsignal(signal.SIGTERM)
+
+    def handler(signum, frame):
+        c.stopping.set()
+        if callable(previous):
+            previous(signum, frame)
+        elif previous == signal.SIG_DFL:
+            raise SystemExit(0)
+    signal.signal(signal.SIGTERM, handler)
+
+
 def cached(resp, refresh_s: int):
     """Cache-Control for status and feeds: private, half the refresh interval."""
     resp.headers["Cache-Control"] = f"private, max-age={max(0, refresh_s // 2)}"
@@ -435,7 +509,8 @@ def init_api(app, *, name: str, title: str, version: str, sha: Callable[[], str]
              time_zone: Callable[[], str], check_token: Callable[[str], dict | None],
              is_admin_session: Callable[[], bool], csrf_ok: Callable[[], bool],
              legacy_error: Callable[[str, str, int], Any], limits: Limits | None = None,
-             clock: Callable[[], float] | None = None, public: bool | None = None) -> ApiCore:
+             clock: Callable[[], float] | None = None, public: bool | None = None,
+             max_streams: int = 8) -> ApiCore:
     """Install the gate on `app` and return the core (also at app.extensions["du_api"]).
 
     `public` defaults to the API_PUBLIC env var (1 unless it's "0"). Register the standard's
@@ -445,7 +520,8 @@ def init_api(app, *, name: str, title: str, version: str, sha: Callable[[], str]
         public = os.environ.get("API_PUBLIC", "1").strip() != "0"
     c = ApiCore(name=name, title=title, version=version, sha=sha, accent=accent, icon=icon, time_zone=time_zone,
                 check_token=check_token, is_admin_session=is_admin_session, csrf_ok=csrf_ok,
-                legacy_error=legacy_error, public=public, limits=limits or Limits(), clock=clock or time.time)
+                legacy_error=legacy_error, public=public, limits=limits or Limits(), clock=clock or time.time,
+                max_streams=max_streams)
     app.extensions["du_api"] = c
     app.before_request(c.before)
     app.after_request(c.after)

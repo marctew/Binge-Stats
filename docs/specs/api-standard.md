@@ -1,6 +1,6 @@
 # Spec: bringing the REST API to the API standard
 
-Status: agreed 5 Nov 2026. Stages 1–3 built 5–6 Nov 2026; stages 4–6 not yet. Matches API standard draft 2.
+Status: agreed 5 Nov 2026. Stages 1–4 built 5–6 Nov 2026; stages 5–6 not yet. Matches API standard draft 2.
 
 ## Why
 

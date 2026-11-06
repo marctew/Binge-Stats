@@ -39,7 +39,7 @@ def _install_api(app: Flask) -> None:
         sent = request.headers.get("X-CSRF-Token", "")
         return bool(sent) and hmac.compare_digest(sent, session.get("csrf", ""))
 
-    api_core.init_api(
+    core = api_core.init_api(
         app, name="binge-stats", title="Binge Stats", version=__version__, sha=lambda: app.config["BS_SHA"],
         accent="violet", icon="/static/img/icon.svg",
         time_zone=lambda: settings.get(app.get_db(), "ui.timezone"),
@@ -47,7 +47,11 @@ def _install_api(app: Flask) -> None:
         is_admin_session=lambda: bool(session.get("admin")),
         csrf_ok=csrf_ok,
         legacy_error=lambda code, message, status: _err(code, message, status),
-    ).open_endpoints.add("api.health")
+        max_streams=4,          # event streams per gunicorn worker: 8 per app across the 2 workers
+    )
+    core.open_endpoints.add("api.health")
+    if not app.testing:
+        api_core.stop_streams_on_sigterm(core)
 
 
 def build_app(data_dir: str | None = None, *, testing: bool = False) -> Flask:
@@ -104,7 +108,9 @@ def build_app(data_dir: str | None = None, *, testing: bool = False) -> Flask:
     std = import_module(".routes_api_std", __package__)  # the API standard's routes, added to the api blueprint
     std.register_feeds(app.extensions["du_api"])
     std.register_actions(app.extensions["du_api"], app.get_db)
-    app.extensions["du_api"].unmetered_endpoints.add("api.std_image")
+    app.extensions["du_api"].unmetered_endpoints.update({"api.std_image", "api.std_events"})
+    from ..services import events
+    app.extensions["du_api"].add_events(events.TYPES)
     app.register_blueprint(auth_bp)
     app.register_blueprint(ui_bp)
     app.register_blueprint(img_bp)

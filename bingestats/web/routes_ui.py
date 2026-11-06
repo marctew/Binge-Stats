@@ -1,14 +1,14 @@
 """UI routes. Thin: every operation goes through services/."""
 from __future__ import annotations
 
-from flask import (Blueprint, Response, current_app, flash, jsonify, redirect, render_template, request,
+from flask import (Blueprint, Response, abort, current_app, flash, jsonify, redirect, render_template, request,
                    send_file, url_for)
 
 from ..arr.client import ArrError
 from ..plex.client import PlexError
 from ..services import tmdb
 from ..services import (accounts, activity, alerts, api_audit, api_tokens, arr, backups, binges, completion, geo, history, homeassistant, jobs,
-                        libraries, plex_setup, settings, stats, wrapped)
+                        events, libraries, plex_setup, settings, stats, webhooks, wrapped)
 
 bp = Blueprint("ui", __name__)
 
@@ -292,6 +292,36 @@ def settings_token_delete(token_id: int):
     return redirect(url_for("ui.settings_page") + "#api")
 
 
+@bp.route("/settings/webhooks", methods=["POST"])
+def settings_webhook_create():
+    conn = _db()
+    name = request.form.get("name", "")
+    try:
+        secret = webhooks.create(conn, name, request.form.get("url", ""), request.form.getlist("event_types"))
+    except ValueError as e:
+        flash(str(e), "error")
+        return redirect(url_for("ui.settings_page") + "#webhooks")
+    # Rendered straight into this response, never put in the session cookie.
+    return _render_settings(conn, new_webhook_secret=secret, new_webhook_name=name.strip())
+
+
+@bp.route("/settings/webhooks/<int:webhook_id>/secret", methods=["POST"])
+def settings_webhook_secret(webhook_id: int):
+    conn = _db()
+    secret = webhooks.new_secret(conn, webhook_id)
+    if secret is None:
+        abort(404)
+    name = next((w["name"] for w in webhooks.list_webhooks(conn) if w["id"] == webhook_id), "")
+    return _render_settings(conn, new_webhook_secret=secret, new_webhook_name=name)
+
+
+@bp.route("/settings/webhooks/<int:webhook_id>/delete", methods=["POST"])
+def settings_webhook_delete(webhook_id: int):
+    webhooks.delete(_db(), webhook_id)
+    flash("Webhook deleted", "ok")
+    return redirect(url_for("ui.settings_page") + "#webhooks")
+
+
 @bp.route("/settings", methods=["GET", "POST"])
 def settings_page():
     conn = _db()
@@ -338,7 +368,8 @@ def settings_page():
 def _render_settings(conn, **extra):
     values = {k: settings.get(conn, k) for k, _l, _t in EDITABLE}
     return render_template("pages/settings.html", fields=EDITABLE, values=values, tokens=api_tokens.list_tokens(conn),
-                           api_actions=api_audit.recent(conn, 20),
+                           api_actions=api_audit.recent(conn, 20), webhooks=webhooks.list_webhooks(conn),
+                           event_types=events.TYPES,
                            **extra,
                            plex_url=settings.get(conn, "plex.url"),
                            server=conn.execute("SELECT * FROM servers ORDER BY id LIMIT 1").fetchone(),

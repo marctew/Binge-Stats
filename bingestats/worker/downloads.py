@@ -245,7 +245,29 @@ class DownloadWatcher(threading.Thread):
             log.info("SABnzbd queue: reading again")
         self.failing = False
         store(conn, live, self.known)
+        self.publish_finished(conn, live, now)
         return bool(live["rows"] or live["pp"])
+
+    def publish_finished(self, conn, live: dict, now: float) -> None:
+        """download.finished for TV and film jobs (ones Sonarr or Radarr know) that have just completed.
+        What's already in SABnzbd's history when the worker starts isn't announced."""
+        from ..services import events
+        done = {r["nzo_id"]: r for r in live.get("recent") or [] if r.get("status") == "Completed"}
+        seen = self.st.get("finished_seen")
+        self.st["finished_seen"] = set(done) | (seen or set())
+        if seen is None:
+            return
+        for nzo, job in done.items():
+            recs = self.known.get(nzo)
+            if nzo in seen or not recs:
+                continue
+            try:
+                title, item = events.download_item(job, recs, now)
+                events.publish(conn, events.DOWNLOAD_FINISHED, title, item, now)
+            except Exception:  # noqa: BLE001
+                log.exception("publishing download.finished failed")
+        # SABnzbd's recent history is short; forget what's dropped out of it
+        self.st["finished_seen"] &= set(done) | {r["nzo_id"] for r in live.get("pp") or []}
 
     def run(self) -> None:
         conn = db.connect(self.db_path)

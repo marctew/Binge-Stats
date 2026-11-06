@@ -22,6 +22,7 @@ from .jobs_runner import JobRunner, schedule_due
 from .downloads import DownloadWatcher
 from .mqtt import MqttBridge
 from .poller import Poller
+from .webhook_sender import WebhookSender
 from ..services import pin_notify
 from .recently_added import check_recent, digest
 
@@ -60,6 +61,7 @@ class Worker:
         self.client: PlexClient | None = None
         self.notifier = Notifier(self.conn, cfg.db_path, poster_fetch=self._poster)
         self.downloads = DownloadWatcher(cfg.db_path, self.stop)
+        self.webhooks = WebhookSender(cfg.db_path, self.stop)
         self.mqtt = MqttBridge(self.conn, stop_user=self._stop_user, wake=self.nudge.set)
 
     def _stop_user(self, user_id: int) -> int:
@@ -74,6 +76,15 @@ class Worker:
     def on_event(self, trigger: str, ctx: dict) -> None:
         log_event(trigger, ctx)
         self.notifier.handle(trigger, ctx)
+        self.publish(trigger, ctx)
+
+    def publish(self, trigger: str, ctx: dict) -> None:
+        """The outside API's events stream and webhooks (services/events.py). Never stops a poll."""
+        try:
+            from ..services import events, notify
+            events.publish_trigger(self.conn, trigger, notify.build_context(self.conn, trigger, ctx))
+        except Exception:  # noqa: BLE001
+            log.exception("publishing %s to the events stream failed", trigger)
 
     def recently_added(self) -> None:
         """Quick new-item check when due, then fire any digest that's ready."""
@@ -127,18 +138,21 @@ class Worker:
 
     def housekeeping(self, now: float | None = None) -> None:
         """Hourly, for the outside API: resized images oldest first above 500 MB (API standard
-        section 6), idempotency keys after 24 hours and the action log after 90 days."""
+        section 6), idempotency keys after 24 hours, the action log after 90 days, events after an
+        hour (keeping the last 200) and finished webhook deliveries after a week."""
         now = now or time.time()
         if now - self._pruned_at < 3600:
             return
         self._pruned_at = now
-        from ..services import api_actions, api_audit
+        from ..services import api_actions, api_audit, events, webhooks
         from ..web.api_core import prune_image_cache
         n = prune_image_cache(self.cfg.data_dir / "image-cache")
         if n:
             log.info("image cache: removed %d old file(s)", n)
         api_actions.prune(self.conn, now)
         api_audit.prune(self.conn, now)
+        events.prune(self.conn, now)
+        webhooks.prune(self.conn, now)
 
     def heartbeat(self, error: str = "") -> None:
         settings.set(self.conn, "worker.heartbeat_at", int(time.time()))
@@ -149,6 +163,7 @@ class Worker:
         log.info("Worker started")
         self.jobs.start()
         self.downloads.start()
+        self.webhooks.start()
         while not self.stop.is_set():
             error = ""
             try:
