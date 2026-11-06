@@ -109,7 +109,7 @@ Readers send `Accept: application/json` (except for images, events and display p
 - `image` is a path on the same app (section 6), never a third-party URL that carries a token.
 - `url` opens the thing in the app, for a tap on a screen or a link in a brief.
 - `meta` holds the feed's own fields. It's documented per feed and is where app-specific detail goes, so the top level stays the same for everyone.
-- **Query parameters** every feed accepts: `limit` (default 20, at most 100), `since` (ISO time: items with `at` after it), `cursor` (from `next_cursor`). A feed may add its own, listed in `meta`.
+- **Query parameters:** every feed accepts `limit` (default 20, at most 100). A feed ordered by time, newest first (arrivals, history, alerts), also accepts `since` (ISO time: items with `at` after it) and `cursor` (from `next_cursor`). A feed in some other order (a live queue, what's playing now, an air-date schedule) is answered whole up to `limit`, with `next_cursor: null`, and ignores `since` and `cursor`; its documentation says so. A feed may add its own parameters, listed in `meta`.
 
 ### Errors
 
@@ -300,3 +300,4 @@ From building and running the pilot in Binge Stats (6 Nov 2026):
 3. **Display pages reload their own body** (`fragment=1`) rather than re-rendering JSON in the browser, **refuse with a plain HTML page**, and send no-referrer and no-store. (Section 9.)
 4. **Section 12 now describes the shared code as built**: `init_api` with callables and an optional `legacy_error`, `@standard` and `@display` rather than per-feed decorators, `image_response`, `event_stream` with `StreamSlots`, and `sign`. Each app keeps its own events and webhook tables. The updater config lines are listed.
 5. **Docs:** the tokens and webhooks cards say what they need; `tools/check_api.py` also checks images, the events stream and display pages.
+6. **`since` and `cursor` are only for feeds ordered by time**, newest first. A live queue or a schedule ignores them and answers whole up to `limit`, as Binge's `now_playing`, `downloads` and pins feeds do. (Section 5, v1.10.1.)
