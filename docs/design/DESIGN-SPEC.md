@@ -332,6 +332,20 @@ The footer is 24px below the nav, with a hairline and 16px above Sign out. **Not
 
 A **GitHub** button sits in the page header when the repo is public or the user can reach it.
 
+### 7.16 Maps
+
+From Muddy Paws (`paws/static/gmaps.js`, `map.js`). Maps are Google Maps (the Maps JavaScript API), drawn by one small loader shared by every page with a map.
+
+- **Shape:** a full-bleed map in a card with no padding (`.map-card`, `overflow: hidden`), 60vh tall between 320 and 640px, on `surface-2` while it loads. Anything else about the map (a note, a list of who's on it) sits below it in the same card.
+- **Only on pages that have one.** The loader adds Google's script when a page makes its first map, and the server sends that page Google's CSP allowlist (`MAP_CSP` in `paws/web.py`, from Google's CSP guide, applied by `pages.map_page`). Every other page keeps the app's usual CSP, which loads nothing from anywhere. A page whose map has no key yet is sent without it.
+- **Keys:** the element carries `data-key` (the browser key, restricted on Google's side to the Maps JavaScript API and the app's hostname) and `data-map-id`. Any other Google key stays on the server (`APP-STANDARD.md` 11).
+- **Theme:** `colorScheme` is `DARK` or `LIGHT` from `data-theme` when the map is created, with `backgroundColor` set to `surface-2`. Google only reads it at creation, which is fine because the theme switch reloads the page (13).
+- **Controls:** no Street View, map type or clickable points of interest; full screen on; `gestureHandling: "greedy"` so one finger pans on a phone.
+- **Markers:** each person, dog or device is drawn in its chart palette slot (11), so it's the same colour on the map as on every chart. A person is a 32px round marker with their initial in white (36px for you); a dog has 10px corners instead. Both have a 2px white ring and a soft shadow, which suit both themes. A faint circle in the same colour (12% fill, 50% stroke) shows a fix's accuracy. Markers glide to a new position over 1s (12), or jump with reduced motion.
+- **Map unavailable:** beside the map is a hidden `[data-map-failed]` empty state (7.11) with the glyph `alert`, titled "Map unavailable", and one line saying what to check ("Google Maps didn't load. Check the connection, or that the browser key allows this address."). It replaces the map when the script fails to load, and when Google refuses the key afterwards (Google calls `window.gm_authFailure`). Anything that works without the map (a list, a form) stays.
+- **No key yet:** an empty state in place of the card ("No map yet"), telling an admin where to add the keys and anyone else that an admin does it.
+- **A sketch where only the shape matters.** Lists of routes don't load a map for each card: `geo.sketch` turns the line into an SVG path (a 240 × 120 viewBox, 2:1), drawn as a 3px round-capped `--accent` stroke on `surface-2`. It costs no map loads and works without Google.
+
 ## 8. States and live data
 
 ### 8.1 Interaction states
@@ -359,7 +373,7 @@ A **GitHub** button sits in the page header when the repo is public or the user 
 
 ## 9. Glyphs
 
-There are 61 glyphs in `glyphs/`. Binge Stats' set is the core; the rest were added for other apps in the same hand.
+There are 69 glyphs in `glyphs/`. Binge Stats' set is the core; the rest were added for other apps in the same hand.
 
 ### 9.1 Drawing rules: every glyph, no exceptions
 
@@ -391,11 +405,12 @@ There are 61 glyphs in `glyphs/`. Binge Stats' set is the core; the rest were ad
 | Group | Glyphs |
 |---|---|
 | Navigation | `home` `grid` `activity` `history` `chart` `bulb` `users` `user` `stack` `bell` `settings` `menu` `more` `logout` |
-| Actions | `plus` `pencil` `trash` `x` `check` `search` `filter` `refresh` `upload` `download` `send` `copy` `link` `external` `eye` `lock` `power` `grip` `to-top` `to-bottom` |
+| Actions | `plus` `pencil` `trash` `x` `check` `search` `filter` `refresh` `upload` `download` `send` `copy` `link` `external` `eye` `lock` `power` `grip` `to-top` `to-bottom` `star` `tag` |
 | Direction | `chevron-up` `chevron-down` `chevron-left` `chevron-right` |
 | Status | `info` `alert` `check-circle` `bolt` `buffer` `clock` `calendar` |
-| Media and playback | `play` `pause` `stop` `tv` `film` `music` |
-| Devices and network | `device` `monitor` `server` `chip` `lan` `wan` |
+| Media and playback | `play` `pause` `stop` `tv` `film` `image` `music` |
+| Devices and network | `device` `monitor` `server` `chip` `lan` `wan` `headset` |
+| Maps and outdoors | `map` `route` `pin` `paw` |
 | Theme | `sun` `moon` `monitor` |
 | App-specific, don't reuse | `plex` (the Plex mark), `home-assistant` |
 
@@ -421,6 +436,8 @@ Use the same glyph for the same idea in every app:
 | On the local network | `lan` | Over the internet | `wan` |
 | Turn on or off, restart | `power` | Secret / locked setting | `lock` |
 | Reorder by dragging | `grip` | Send to top / bottom | `to-top` / `to-bottom` |
+| A map view | `map` | A planned or saved route | `route` |
+| A place or position | `pin` | Dogs / pets | `paw` |
 
 ### 9.5 Adding a glyph
 
@@ -478,14 +495,14 @@ These are Apache ECharts with one shared theme, from Binge Stats' `static/js/cha
 - **Three preferences:** Dark (the default), Light and System. They're stored per user if the app has logins, otherwise in `localStorage` under "theme". The control is the sun / moon / monitor segmented control in the sidebar footer.
 - **Setting the theme:** `data-theme` is set before first paint by the inline script in `partials/theme_head.html`, so the wrong theme never flashes. "System" follows the OS and reloads when the OS flips, so charts redraw.
 - **Checking both:** every screen is checked in both themes. The usual traps:
-  - images or maps that only suit one theme. Binge darkens OpenStreetMap tiles in dark mode with a CSS filter.
+  - images or maps that only suit one theme. Binge darkens OpenStreetMap tiles in dark mode with a CSS filter; Google maps take the theme as their colour scheme (7.16).
   - hard-coded `white` or `black`, or any hex. Use tokens. The only exceptions are:
     - text on a filled accent (`--on-accent`) or danger button;
     - the app icon;
     - another service's brand mark used as that service's sign-in button (Binge's Plex-gold button);
     - HTML bars that mirror the chart palette (11);
     - map backgrounds behind themed tiles;
-    - the thin white rings round posters and the white knob of a switch, which suit both themes;
+    - the thin white rings round posters and map markers, the white initial on a marker, and the white knob of a switch, which suit both themes;
     - white text and icons on a dark scrim over artwork (a thumbnail's duration label, a ☆ over a poster), since the artwork is the same in both themes.
 - **Print, where it matters:** print forces light tokens (Binge's Wrapped).
 
@@ -545,7 +562,7 @@ Scrollbars are thin, rounded and quiet until hovered, and they follow the theme.
 5. **Pages:** build only from the components in section 7. Every list and chart gets an empty state, every action gives toast feedback, and every page-level problem gets a banner.
 6. **Assets:**
    - Front-end libraries (htmx, Alpine, ECharts, SortableJS) are pinned by version and sha256 and fetched at build time.
-   - No CDNs at runtime.
+   - No CDNs at runtime. **The one exception is Google Maps**, which can only be loaded from Google; it's allowed on pages with a map, and only those pages' CSP lets Google in (7.16).
    - Images from other services go through the app's own proxy.
 7. **Check it:**
    - both themes;
@@ -616,3 +633,6 @@ health = "http://127.0.0.1:8765/healthz" # anything below 500 counts as up
 | 2026-11-04 | The Design system card sends a CSRF token (`data-csrf`, as `X-CSRF-Token`) for apps that check one on every POST. White text on a dark scrim over artwork is an allowed hard-coded colour (13). | PodBridge |
 | 2026-11-04 | Added `APP-STANDARD.md`: how every app is built, run and deployed, with The Back Room as the reference app. The 18.1 example now uses `/healthz` and `scripts/update.sh`. | The Back Room |
 | 2026-11-05 | `APP-STANDARD.md`: every app is done, and claude-ops is recorded as the second exception (FastMCP and Docker, the look inlined by hand, no updater). Encore, PodBridge and claude-ops icons added to `brand/`. | claude-ops |
+| 2026-11-05 | The `map`, `route`, `pin` and `paw` glyphs, in a new Maps and outdoors group (9.3, 9.4). The 9.3 table now also lists `star`, `tag`, `image` and `headset`. | – |
+| 2026-11-05 | From Muddy Paws: the map component (7.16) and Google Maps as the one stated exception to no CDNs at runtime (17.6). Map markers' white ring and initial are allowed hard-coded colours (13). `APP-STANDARD.md` gains apps with more than one person (9), ingest endpoints with their own tokens (10) and secrets an admin enters in Settings (11). Docs only. | Muddy Paws (source) |
+| 2026-11-06 | The outside API's shared code, lifted from Binge Stats' pilot: `tools/du_api.py`, `templates/display/base.html`, the API tokens and Webhooks cards for Settings, and `tools/check_api.py`. `API-STANDARD.md` draft 3. Apps that adopt the API add six lines to their updater config (API-STANDARD 12). | Binge Stats (source) |
