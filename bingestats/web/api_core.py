@@ -196,6 +196,11 @@ class ApiCore:
         return resp
 
     def _refuse(self, code: str, message: str, status: int, retry_after: int | None = None):
+        if _is_display():
+            resp = display_error(message, status)
+            if retry_after is not None:
+                resp.headers["Retry-After"] = str(retry_after)
+            return resp
         if _is_standard():
             return self.error(code, message, status, retry_after)
         resp = current_app.make_response(self.legacy_error(code, message, status))
@@ -267,6 +272,11 @@ def core() -> ApiCore:
 
 def identity() -> Identity | None:
     return g.get("api_identity")
+
+
+def _is_display() -> bool:
+    fn = current_app.view_functions.get(request.endpoint or "")
+    return bool(getattr(fn, "_du_display", False))
 
 
 def _is_standard() -> bool:
@@ -497,6 +507,43 @@ def stop_streams_on_sigterm(c: "ApiCore") -> None:
         elif previous == signal.SIG_DFL:
             raise SystemExit(0)
     signal.signal(signal.SIGTERM, handler)
+
+
+# -- display pages (API standard section 9) ----------------------------------------------------------
+
+DISPLAY_NEEDS_TOKEN = "This display needs a read token: add ?token=… to the address (Settings → API tokens)."
+
+
+def display_headers(resp):
+    """A display page carries its token in its own URLs, so it's never cached or sent on as a referrer."""
+    resp.headers["Referrer-Policy"] = "no-referrer"
+    resp.headers["Cache-Control"] = "no-store"
+    resp.headers["X-Robots-Tag"] = "noindex"
+    return resp
+
+
+def display_error(message: str, status: int):
+    """A plain page, not JSON: whatever shows a display page is a screen with nobody to read JSON."""
+    from html import escape
+
+    from flask import make_response
+    body = ("<!doctype html><html lang=\"en-GB\"><meta charset=\"utf-8\"><meta name=\"viewport\" "
+            "content=\"width=device-width, initial-scale=1\"><title>Display</title>"
+            "<body style=\"margin:0;min-height:100vh;display:grid;place-items:center;background:#090b11;"
+            "color:#9aa1b2;font:16px/1.5 system-ui,sans-serif;text-align:center;padding:24px\">"
+            f"<p>{escape(message, quote=False)}</p></body></html>")
+    return display_headers(make_response(body, status, {"Content-Type": "text/html; charset=utf-8"}))
+
+
+def display(fn):
+    """Mark a route as a display page (read access; refusals as a plain page, not JSON)."""
+    @wraps(fn)
+    def wrapper(*a, **kw):
+        if identity() is None:
+            return display_error(DISPLAY_NEEDS_TOKEN, 401)
+        return display_headers(current_app.make_response(fn(*a, **kw)))
+    wrapper._du_display = True  # type: ignore[attr-defined]
+    return wrapper
 
 
 def cached(resp, refresh_s: int):

@@ -102,6 +102,7 @@ def build_app(data_dir: str | None = None, *, testing: bool = False) -> Flask:
     from .routes_notify import bp as notify_bp
     from .routes_pins import bp as pins_bp
     from .routes_ui import bp as ui_bp
+    from .routes_display import bp as display_bp, register as register_displays
 
     install_auth(app)
     _install_api(app)
@@ -120,6 +121,8 @@ def build_app(data_dir: str | None = None, *, testing: bool = False) -> Flask:
     app.register_blueprint(wrapped_bp)
     app.register_blueprint(me_bp)
     app.register_blueprint(pins_bp)
+    app.register_blueprint(display_bp)
+    register_displays(app.extensions["du_api"])
 
     @app.get("/healthz")
     def healthz():

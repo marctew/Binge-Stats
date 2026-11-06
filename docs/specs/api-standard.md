@@ -1,6 +1,6 @@
 # Spec: bringing the REST API to the API standard
 
-Status: agreed 5 Nov 2026. Stages 1–4 built 5–6 Nov 2026; stages 5–6 not yet. Matches API standard draft 2.
+Status: agreed 5 Nov 2026. Stages 1–5 built 5–6 Nov 2026; stage 6 not yet. Matches API standard draft 2.
 
 ## Why
 
@@ -301,7 +301,7 @@ CREATE TABLE api_audit (
   - `accent=` (any DU accent name; anything else is ignored)
   - `static=1` (rendered on the server, no JS)
 - Without `static=1`:
-  - a small inline script listens to `/api/v1/events?token=…` for `playback.*` and re-fetches `/api/v1/feeds/now_playing`;
+  - a small inline script listens to `/api/v1/events?token=…` for `playback.*` and `arrival`, and reloads the page's body (built: the same template with `?fragment=1`, so there's one renderer rather than one in Jinja and another in JS);
   - it falls back to polling at `refresh_s`;
   - if Binge stops answering, it keeps what it shows and adds a faint "Last updated 14:02".
   - No Alpine or HTMX on this page, to keep it light for Pis.

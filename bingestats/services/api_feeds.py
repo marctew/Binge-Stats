@@ -182,6 +182,13 @@ def _feed(name: str, title: str, refresh_s: int, params: dict | None = None, tim
     return deco
 
 
+def feed_args(conn: sqlite3.Connection, base: str, *, limit: int = DEFAULT_LIMIT, since: float | None = None,
+              cursor: str | None = None, args: dict | None = None, now: float | None = None) -> FeedArgs:
+    from . import stats
+    return FeedArgs(limit=max(1, min(MAX_LIMIT, limit)), since=since, cursor=cursor, args=dict(args or {}),
+                    now=now or time.time(), tz=stats._tz(conn), base=base)
+
+
 def feed(conn: sqlite3.Connection, name: str, fa: FeedArgs) -> dict:
     f = FEEDS[name]
     items, cursor = f.build(conn, fa)
