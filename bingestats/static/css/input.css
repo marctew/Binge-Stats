@@ -29,17 +29,3 @@
 .bar-1 { background-color: #d95926; }
 [data-theme="light"] .bar-0 { background-color: #2a78d6; }
 [data-theme="light"] .bar-1 { background-color: #eb6834; }
-
-/* Horizontal scroll rows (Airing this week, Watching now): the edge fades out where there's more
-   to scroll, instead of a card being cut off hard. app.js sets data-fade-l / data-fade-r from the
-   scroll position, so the fade goes when you reach that end. */
-@property --fade-l { syntax: "<length>"; inherits: false; initial-value: 0px; }
-@property --fade-r { syntax: "<length>"; inherits: false; initial-value: 0px; }
-.scroll-fade {
-  --fade-l: 0px; --fade-r: 0px;
-  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 var(--fade-l), #000 calc(100% - var(--fade-r)), transparent 100%);
-  mask-image: linear-gradient(to right, transparent 0, #000 var(--fade-l), #000 calc(100% - var(--fade-r)), transparent 100%);
-  transition: --fade-l 0.2s ease, --fade-r 0.2s ease;
-}
-.scroll-fade[data-fade-l] { --fade-l: 3rem; }
-.scroll-fade[data-fade-r] { --fade-r: 3rem; }
