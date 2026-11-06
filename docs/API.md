@@ -26,6 +26,8 @@ Binge has two kinds of route under `/api/v1/`:
 | POST | `/actions/{name}` | One named thing to do, below. Write token, in the header only |
 | GET | `/events` | Server-sent events: live changes, below |
 
+And one display page, outside `/api/v1`: `GET /display/now-playing`, below.
+
 **`/status`**, from the database only (it never waits on Plex or the *arrs):
 
 ```json
@@ -132,6 +134,23 @@ import hashlib, hmac
 ok = hmac.compare_digest(request.headers["X-Signature"],
                          "sha256=" + hmac.new(SECRET.encode(), request.get_data(), hashlib.sha256).hexdigest())
 ```
+
+### Display page
+
+`/display/now-playing?token=<read token>` is a full-screen page in Binge's look for a kiosk, a Vital Signs screen or the widget display. It has no sidebar, no login and no scroll bars, and it fills whatever size it's given. It shows what's playing: one stream large, several as cards. When nothing is playing it shows the last three arrivals.
+
+| Param | Does |
+|---|---|
+| `token` | A read token (each screen its own, so it can be revoked alone). A signed-in admin can open it without one to preview it |
+| `theme=dark\|light` | Default dark |
+| `size=800x480` | A layout hint: up to 480 wide is small (one column, fewer details), up to 1100 is medium, wider is large. The page still fills the window |
+| `scale=1.5` | Everything bigger, for a screen across the room (0.5 to 3) |
+| `accent=blue\|graphite\|teal\|fuchsia` | Use another Design Uniformity accent family, so a wall of screens can match. Anything else is ignored |
+| `static=1` | Rendered once, with no JavaScript: for e-ink and screenshot services |
+
+Without `static=1`, the page reloads its own body every 10 seconds, and straight away when a `playback.*` or `arrival` event comes in on `/api/v1/events`. If Binge stops answering, it keeps what it's showing and adds a faint "Last updated 14:02". Its images come from `/api/v1/images/` with the same token, sized for the screen.
+
+The page sends `Referrer-Policy: no-referrer` and `Cache-Control: no-store`, since its token is in its URLs. Errors (no token, a bad one) come back as a plain page, not JSON. It's listed in `/api/v1/meta` under `displays`.
 
 Home Assistant:
 

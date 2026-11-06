@@ -10,7 +10,7 @@ import time
 
 from flask import current_app, jsonify, request
 
-from ..services import activity, api_feeds, arr, stats
+from ..services import activity, api_feeds, arr
 from . import api_core
 from .api_core import standard
 from .routes_api import bp
@@ -59,9 +59,8 @@ def std_feed(name: str):
             return api_core.ApiCore.error("bad_request", "since must be a time like 2026-11-05T19:00:00Z.", 400)
     conn = _db()
     args = {k: v for k, v in request.args.items() if k not in ("token", "limit", "since", "cursor")}
-    fa = api_feeds.FeedArgs(limit=max(1, min(api_feeds.MAX_LIMIT, limit)), since=since,
-                            cursor=request.args.get("cursor") or None, args=args, now=time.time(),
-                            tz=stats._tz(conn), base=api_feeds.public_url(conn, request.host_url))
+    fa = api_feeds.feed_args(conn, api_feeds.public_url(conn, request.host_url), limit=limit, since=since,
+                             cursor=request.args.get("cursor") or None, args=args, now=time.time())
     body = api_feeds.feed(conn, name, fa)
     return api_core.cached(jsonify(body), body["refresh_s"])
 

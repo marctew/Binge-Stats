@@ -1,0 +1,78 @@
+{#- Binge's now-playing display (routes_display.py): what's playing, or what just arrived. Also the
+    ?fragment=1 answer the shell reloads. Sizes: s up to 480 px wide, m up to 1100, l beyond.
+    Posters are sized from the screen's height (vh), so a 800x480 panel and a 1080p TV both fill. -#}
+{% from "macros/ui.html" import poster, decision_badge, progress, empty_state %}
+{%- set items = page.playing -%}
+{%- set one = items | length == 1 -%}
+{%- set small = {'s': 'text-xs', 'm': 'text-sm', 'l': 'text-lg'}[opts.size] -%}
+<div class="flex h-full flex-col gap-[3vh]" data-now-playing data-count="{{ items | length }}">
+  <header class="flex items-center gap-3">
+    <span class="inline-flex h-2.5 w-2.5 rounded-full {{ 'bg-success' if items else 'bg-faint' }}"></span>
+    <h1 class="{{ small }} font-semibold uppercase tracking-wide text-muted">{{ 'Now playing' if items else 'Nothing playing' }}</h1>
+    {% if items | length > 1 %}<span class="badge-accent">{{ items | length }}</span>{% endif %}
+  </header>
+
+  {% if one %}
+  {%- set it = items[0] -%}{%- set m = it.meta -%}
+  <section class="card flex min-h-0 flex-1 items-center gap-[4vw] p-[4vh]">
+    {{ poster(None, it.title, 'w-[30vh]' if opts.size == 's' else 'w-[42vh]',
+              shape='square' if m.media_type == 'track' else 'poster', src=page.img(it.image)) }}
+    <div class="min-w-0 flex-1">
+      <div class="{{ {'s': 'text-xl', 'm': 'text-4xl', 'l': 'text-6xl'}[opts.size] }} line-clamp-2 font-semibold leading-tight tracking-tight">{{ it.title }}</div>
+      {% if it.subtitle %}<div class="{{ {'s': 'text-sm', 'm': 'text-xl', 'l': 'text-3xl'}[opts.size] }} mt-[1.5vh] line-clamp-2 text-muted">{{ it.subtitle }}</div>{% endif %}
+      <div class="mt-[3vh] flex flex-wrap items-center gap-2 {{ '[&>span]:px-3 [&>span]:py-1 [&>span]:text-lg' if opts.size == 'l' }}">
+        {% if m.state == 'paused' %}<span class="badge-muted">Paused</span>
+        {% elif m.state == 'buffering' %}<span class="badge-warning">Buffering</span>{% endif %}
+        {{ decision_badge(m.decision) }}
+      </div>
+      {{ progress(m.progress_pct, 'mt-[3vh]' ~ (' h-3' if opts.size == 'l' else '')) }}
+    </div>
+  </section>
+
+  {% elif items %}
+  {%- set cols = 'grid-cols-1' if opts.size == 's' else ('grid-cols-2' if items | length <= 4 else 'grid-cols-3') -%}
+  {%- set big = {'s': 'text-base', 'm': 'text-xl', 'l': 'text-3xl'}[opts.size] -%}
+  <ul class="grid min-h-0 flex-1 auto-rows-fr gap-[3vh] {{ cols }}">
+    {% for it in items[:(4 if opts.size == 's' else 9)] %}
+    {%- set m = it.meta -%}
+    <li class="card flex min-h-0 min-w-0 items-center gap-[2vw] p-[2.5vh]">
+      {{ poster(None, it.title, 'w-[14vh]' if items | length > 4 else 'w-[22vh]',
+                shape='square' if m.media_type == 'track' else 'poster', src=page.img(it.image)) }}
+      <div class="min-w-0 flex-1">
+        <div class="{{ big }} line-clamp-2 font-semibold leading-tight">{{ it.title }}</div>
+        {% if it.subtitle %}<div class="{{ small }} mt-1 line-clamp-2 text-muted">{{ it.subtitle }}</div>{% endif %}
+        <div class="mt-[1.5vh] flex flex-wrap items-center gap-2">
+          {% if m.state == 'paused' %}<span class="badge-muted">Paused</span>
+          {% elif m.state == 'buffering' %}<span class="badge-warning">Buffering</span>{% endif %}
+          {% if opts.size != 's' %}{{ decision_badge(m.decision) }}{% endif %}
+        </div>
+        {{ progress(m.progress_pct, 'mt-[1.5vh]') }}
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+
+  {% elif page.arrivals %}
+  <section class="flex min-h-0 flex-1 flex-col">
+    <h2 class="{{ {'s': 'text-base', 'm': 'text-2xl', 'l': 'text-4xl'}[opts.size] }} mb-[3vh] font-semibold tracking-tight">Just arrived</h2>
+    <ul class="grid gap-[3vw] {{ 'grid-cols-1' if opts.size == 's' else 'grid-cols-3' }}">
+      {% for a in page.arrivals %}
+      <li class="{{ 'flex items-center gap-3' if opts.size == 's' else 'flex flex-col' }} min-w-0">
+        {{ poster(None, a.title, 'w-[12vh]' if opts.size == 's' else 'w-[34vh] max-w-full',
+                  shape='square' if a.meta.kind == 'album' else 'poster', src=page.img(a.image)) }}
+        <div class="min-w-0 {{ 'mt-[2vh]' if opts.size != 's' }}">
+          <div class="{{ {'s': 'text-sm', 'm': 'text-lg', 'l': 'text-2xl'}[opts.size] }} truncate font-semibold">{{ a.title }}</div>
+          {% if a.subtitle %}<div class="{{ small }} truncate text-muted">{{ a.subtitle }}</div>{% endif %}
+          {% if a.at_label %}<div class="{{ small }} text-faint">{{ a.at_label }}</div>{% endif %}
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+
+  {% else %}
+  <div class="flex min-h-0 flex-1 items-center justify-center">
+    {{ empty_state('Nothing playing', 'Streams show here as soon as they start.', 'tv') }}
+  </div>
+  {% endif %}
+</div>

@@ -229,7 +229,8 @@ def test_meta(client, read_token, app_conn):
     assert m["accent"] == "violet" and m["time_zone"] == "America/New_York"
     assert re.match(r"^\d+\.\d+\.\d+", m["version"]) and "sha" in m
     assert [a["name"] for a in m["actions"]] == ["pin_show", "unpin_show", "ack_alert", "ack_all_alerts"]
-    assert m["displays"] == [] and "playback.start" in m["events"] and "download.finished" in m["events"]
+    assert m["displays"] == [{"name": "now-playing", "title": "Now playing", "sizes": ["320x240", "800x480", "1920x1080"]}]
+    assert "playback.start" in m["events"] and "download.finished" in m["events"]
 
 
 def test_meta_lists_only_what_is_registered_and_allowed(client, core, read_token):

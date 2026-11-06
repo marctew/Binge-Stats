@@ -87,6 +87,11 @@
         {% else %}<p class="text-sm text-muted">No tokens yet.</p>{% endif %}
       </div>
     </div>
+    <h3 class="mt-6 text-sm font-semibold">Display pages</h3>
+    <p class="mt-1 text-sm text-muted">Full-screen pages for a kiosk, a Vital Signs screen or the widget display. Give each screen its own read-only token:
+      <code class="text-text">/display/now-playing?token=…</code>, plus <code class="text-text">theme=light</code>, <code class="text-text">size=800x480</code>,
+      <code class="text-text">scale=1.5</code>, <code class="text-text">accent=teal</code> or <code class="text-text">static=1</code> for e-ink.</p>
+    <p class="mt-2 text-sm" data-display-pages><a class="underline hover:text-text" href="{{ url_for('display.now_playing') }}" target="_blank" rel="noopener">Preview Now playing</a></p>
     <h3 class="mt-6 text-sm font-semibold">Recent API actions</h3>
     <p class="mt-1 text-xs text-muted">Every <code class="text-text">POST /api/v1/actions/…</code>, refused ones included, with the token that sent it.</p>
     {% if api_actions %}

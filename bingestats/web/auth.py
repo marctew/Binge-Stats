@@ -42,8 +42,8 @@ def install(app) -> None:
     @app.before_request
     def _gate():
         ep = request.endpoint or ""
-        if ep.startswith("api.") or ep == "healthz":
-            return None  # the API checks bearer tokens / session itself; health is public
+        if ep.startswith(("api.", "display.")) or ep == "healthz":
+            return None  # the API and display pages check tokens / the admin session themselves; health is public
         conn = app.get_db()
         if not auth_svc.admin_exists(conn):
             if ep in ("auth.setup_admin", "static"):
