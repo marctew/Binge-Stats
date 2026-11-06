@@ -3,7 +3,9 @@
 Binge has two kinds of route under `/api/v1/`:
 
 - **The API standard's routes** (Design Uniformity `API-STANDARD.md`, draft 2; plan in `docs/specs/api-standard.md`): the same shape in every one of Marc's apps, for displays, Docket, Home Assistant and TRMNL. Errors are `{"error": "<sentence>", "code": "<code>"}`.
-- **Binge's own routes** (the pins section below, and SPEC.md section 16), kept exactly as they were for the widget, the PC panel and the dashboard. Errors are `{"error": {"code", "message"}}`.
+- **Binge's own routes** (the second half of this file), kept exactly as they were for the widget, the PC panel and the dashboard's charts. Errors are `{"error": {"code", "message"}}`.
+
+This file is the whole API. Check a running Binge against the standard with `scripts/check-api.sh`.
 
 ## Tokens, for every route
 
@@ -19,7 +21,7 @@ Binge has two kinds of route under `/api/v1/`:
 
 | Method | Path | Answers |
 |---|---|---|
-| GET | `/meta` | Who Binge is and what it offers: `app`, `name`, `version`, `sha`, `api` (1), `accent`, `icon`, `time_zone`, and the lists `feeds`, `actions`, `displays`, `events` (empty until later stages) |
+| GET | `/meta` | Who Binge is and what it offers: `app`, `name`, `version`, `sha`, `api` (1), `accent`, `icon`, `time_zone`, and the lists `feeds`, `actions`, `displays`, `events` |
 | GET | `/status` | The one-glance summary, below. `Cache-Control: private, max-age=7` |
 | GET | `/feeds/{name}` | A list in the common item shape, below |
 | GET | `/images/{kind}/{id}` | Artwork, resized here: `poster/{rating_key}`, `art/{rating_key}`, `show/{tvdb_id}` |
@@ -165,9 +167,36 @@ rest:
         json_attributes: [headline, detail, counts]
 ```
 
-# Binge's own routes: pins
+# Binge's own routes
 
-The rest of Binge's own API is in SPEC.md section 16. Everything here is under `/api/v1/pins`, JSON only.
+Binge's API from before the standard, kept exactly as it was: the dashboard's charts, the PC media panel and the Scriptable widget use it. Same tokens and limits as above. Errors are `{"error": {"code", "message"}}`. Times are UTC epoch seconds. Lists take `limit` and, where they page, `cursor` (the last answer's `next_cursor`).
+
+Ranges: the `stats`, `insights` and `users/{id}/stats` routes take `range` (`7d`, `30d` (the default), `90d`, `1y` or `all`) or `from` and `to` (`YYYY-MM-DD`, in Binge's timezone), plus `user_id` and `library_id` where it makes sense. `metric` is `plays` or `watch_time`.
+
+| Method | Path | Answers | Scope |
+|---|---|---|---|
+| GET | `/health` | `{ok, worker_alive, plex_up, plex_configured, version}`. No token | none |
+| GET | `/activity` | `{totals, sessions}`: what's playing, with progress | read |
+| POST | `/activity/{session_id}/stop` `{message}` | Stops that stream in Plex | write |
+| POST | `/downloads/{nzo_id}/move` `{to}` or `{above, below}` | Moves a SABnzbd job; `403` unless moves are on in Settings | write |
+| GET | `/history?user_id&type&decision&from&to&q&limit&cursor` | `{items, next_cursor}` | read |
+| GET | `/users`, `/users/{id}` | Users (no share salts) | read |
+| GET | `/users/{id}/stats?range` | `{summary, heatmap, top_shows, top_movies}` | read |
+| PATCH | `/users/{id}` `{friendly_name, keep_history, max_streams, max_transcodes, limit_action, limit_message}` | Edits a user | write |
+| POST | `/users/{id}/stop` `{message}` | Stops all their streams: `{stopped}` | write |
+| GET | `/users/{id}/completion` | `{in_progress, finished, abandoned}` | read |
+| GET | `/alerts?all&user_id&limit` | `{items, unacknowledged}` | read |
+| POST | `/alerts/{id}/ack`, `/alerts/ack` | Acknowledge one, or all | write |
+| GET | `/libraries`, `/libraries/{id}`, `/items/{rating_key}` | Libraries and items | read |
+| GET | `/stats/summary`, `/stats/timeseries?group&split`, `/stats/by?dim`, `/stats/heatmap`, `/stats/breakdown?field`, `/stats/top?kind`, `/stats/concurrent?group`, `/stats/resolution` | The Graphs page's data, chart-ready | read |
+| GET | `/insights/transcodes`, `/insights/transcodes/share`, `/insights/transcodes/reasons` | Transcodes: summary, reasons, by field, re-encode candidates | read |
+| GET | `/insights/library-health?library_id&type&limit`, `/insights/collection?library_id&type&limit` | Library health and collection makeup | read |
+| GET | `/insights/binges?range&user_id&limit`, `/insights/playback?range&limit` | Binges; playback quality | read |
+| GET | `/insights/downloads`, `/insights/downloads/series?days`, `/insights/arr?limit` | SABnzbd totals and chart; Sonarr and Radarr summaries | read |
+
+## Pins
+
+Everything here is under `/api/v1/pins`, JSON only.
 
 - **Auth:** as above. Reads work with any token; pinning and unpinning need a write one.
 - **Errors:** `{"error": {"code", "message"}}`.
