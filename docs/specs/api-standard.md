@@ -1,6 +1,6 @@
 # Spec: bringing the REST API to the API standard
 
-Status: agreed 5 Nov 2026. Stages 1–5 built 5–6 Nov 2026; stage 6 not yet. Matches API standard draft 2.
+Status: agreed 5 Nov 2026. All six stages built 5–6 Nov 2026 and running on LXC 406; what was checked live is in `docs/verification.md`. Matches API standard draft 2.
 
 ## Why
 

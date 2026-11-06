@@ -710,32 +710,7 @@ Every page is a Jinja template that extends `base.html`. Pages refresh their par
 
 ## 16. REST API
 
-`/api/v1/`, JSON only, `Authorization: Bearer <token>`. Errors look like `{"error": {"code", "message"}}`. List endpoints take `limit` (max 500) and `cursor`. A UI session cookie also works, so the UI can use it for charts.
-
-| Method | Path | Scope |
-|---|---|---|
-| GET | `/health` | none (no auth): `{ok, worker_alive, plex_up, version}` |
-| GET | `/activity` | read |
-| POST | `/activity/{session_id}/stop` `{message}` | write |
-| GET | `/history?user_id&library_id&type&decision&from&to&q` | read |
-| GET | `/users`, `/users/{id}`, `/users/{id}/stats?from&to` | read |
-| PATCH | `/users/{id}` `{friendly_name, max_streams, max_transcodes, limit_action, limit_message, keep_history}` | write |
-| POST | `/users/{id}/stop` `{message}` → `{stopped}` | write |
-| GET | `/libraries`, `/libraries/{id}` | read |
-| GET | `/items/{rating_key}` | read |
-| GET | `/stats/summary?from&to` | read |
-| GET | `/stats/timeseries?metric=plays\|watch_time&group=day\|week\|month&split=media_type\|user\|decision&from&to` | read |
-| GET | `/stats/top?kind=users\|shows\|movies\|platforms&from&to&limit` | read |
-| GET | `/stats/heatmap?user_id&from&to` | read |
-| GET | `/insights/transcodes?range`, `/insights/transcodes/share`, `/insights/transcodes/reasons` | read |
-| GET | `/insights/library-health?library_id&type&limit`, `/insights/binges?range&user_id&limit` | read |
-| GET | `/users/{id}/completion` → `{in_progress, finished, abandoned}` | read |
-| GET | `/alerts?all&user_id&limit` → `{items, unacknowledged}` | read |
-| POST | `/alerts/{id}/ack`, `/alerts/ack` (all) | write |
-| GET | `/wrapped/{user_id}/{year}` | read |
-| POST | `/jobs` `{kind, params}`, GET `/jobs/{id}` | write / read |
-
-Document it in `docs/API.md`, with an example per endpoint. The pin endpoints (`/api/v1/pins/...`) are documented there; see also `docs/widget/` for the iPhone widget that uses them.
+The whole API is documented in `docs/API.md`: the Design Uniformity API standard's routes (`meta`, `status`, `feeds`, `images`, `actions`, `events`, and `/display/` pages; plan and decisions in `docs/specs/api-standard.md`), then Binge's own older routes, which keep their shape for the widget, the PC panel and the dashboard. `scripts/check-api.sh` checks a running Binge against the standard.
 
 ---
 

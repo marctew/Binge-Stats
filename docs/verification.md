@@ -265,3 +265,25 @@ I moved a job deep in the "other" part of the queue and put it back.
 - **Upgrades and new rating keys.** Only 2 of 40,715 episode guids in the library have ever appeared under more than one Plex rating key, so a Sonarr upgrade normally keeps the key. Arrival messages are deduped by show, season and episode number in any case (`pin_notified`), so the rare re-added episode can't be announced twice.
 - **The week ahead claimed this week on deploy** (a Thursday): the rules were still off, so nothing was sent, and the first digest goes out on Monday 9 November at 08:00.
 - **Sensors for Marc:** next pinned was The Simpsons S38E06 (Mon 9 Nov 01:00). Pinned ready was 83 episodes: pinned shows' episodes added in the last 30 days that he hasn't finished, including whole seasons that just landed (A Tale of Two Cities, Black Doves).
+
+## The outside API standard, 2026-11-05 and 06 (Binge as the pilot)
+
+Each stage of `docs/specs/api-standard.md` was deployed to LXC 406 and checked against the live server with a temporary token, then the token and anything it wrote were deleted.
+
+- **Status and feeds, real data.** `status` answered `ok`, "2 streams", with the first stream as detail ("Wazzaboothy · Richard Hammond's Workshop S06E02, 3%"), 8.2 Mbps and 439 pinned episodes ready. `arrivals` grouped Hinterland seasons 1 and 2 into one item each ("Season 2 · 4 new episodes"). A music track in `now_playing` comes through as title = track, subtitle = artist · album.
+- **ETags:** a GET with the ETag sent back gave `304`. (HEAD requests don't get one; only GETs are tagged.)
+- **Binge's own routes unchanged:** `/pins/widget` and `/pins/summary` answered as before; a bad token still gets `{"error": {"code", "message"}}`, which the Scriptable widget reads.
+- **Access log:** paths only, no query strings, so `?token=` never shows (`docker compose logs web`).
+- **`trusted_proxies = []` on the LXC:** every request through the tunnel arrives from cloudflared's address. The bad-token lockout is therefore keyed by `CF-Connecting-IP` when present, or one stranger could lock out every tunnel reader.
+- **Images:** a poster at `w=320` came back as WebP (20 KB); at `w=160&gray=1` with no WebP in `Accept`, JPEG (7.5 KB); the second request for the same image took 3 ms from the cache.
+- **Actions:** only calls that change nothing were tried live: `pin_show` on an already-pinned show ("Major Crimes Unit was already pinned.", `changed: false`), a repeat with the same `Idempotency-Key` (same answer, nothing run), `ack_alert` on a missing id (404), a read token (403), a write token in the URL (400), `stop_session` (404, lists the real actions). `move_download` is listed because SABnzbd moves are on in Settings.
+- **Webhooks:** a webhook pointed at a throwaway listener on the LXC host received a test event as a signed POST; the `X-Signature` matched an HMAC computed from the secret, and Settings recorded the success.
+- **Events from the worker:** two real `playback.stop` events (00:33:51 and 00:34:06 on 6 Nov) came through the stream within a second of the streams stopping.
+- **Through the Cloudflare tunnel** (`https://binge.marctew.co.uk`): `status` answered 200 with a token. An events stream held open for 5½ minutes with `: ping` every 25 s and no drop; a test event published at the 4-minute mark arrived a second later. Cloudflare's ~100 s idle cut-off never kicked in.
+- **Display page:** `/display/now-playing` answered 200 with `Referrer-Policy: no-referrer` and `Cache-Control: no-store`, showing the two live streams; no token gave the plain 401 page. Layouts were checked by screenshot (seeded data) at 320×240, 800×480 and 1920×1080, dark and light.
+
+**Not yet checked live:**
+- Home Assistant's own webhook trigger as the target (only a plain listener was used).
+- The display page on a Vital Signs Pi, and Chromium there re-connecting the events stream after a Binge restart.
+- JPEG images on the ESP32 panel's decoder, and `gray=1` on e-ink.
+- TRMNL (standard open question 1).
