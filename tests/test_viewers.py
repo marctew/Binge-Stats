@@ -179,3 +179,9 @@ def test_viewer_cannot_move_downloads(alex, app_conn):
     for url in ("/downloads/move", "/downloads/front"):
         r = alex.post(url, {"nzo_id": "SABnzbd_nzo_x", "to": "top"})
         assert r.status_code in (302, 403) and b'"ok"' not in r.data
+
+
+def test_viewer_cant_use_api_actions(alex, people):
+    r = alex.client.post("/api/v1/actions/ack_all_alerts", json={}, headers={"X-CSRF-Token": alex.csrf or ""})
+    assert r.status_code == 401
+    assert people.execute("SELECT COUNT(*) FROM api_audit").fetchone()[0] == 0

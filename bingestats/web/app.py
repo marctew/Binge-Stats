@@ -103,6 +103,7 @@ def build_app(data_dir: str | None = None, *, testing: bool = False) -> Flask:
     _install_api(app)
     std = import_module(".routes_api_std", __package__)  # the API standard's routes, added to the api blueprint
     std.register_feeds(app.extensions["du_api"])
+    std.register_actions(app.extensions["du_api"], app.get_db)
     app.extensions["du_api"].unmetered_endpoints.add("api.std_image")
     app.register_blueprint(auth_bp)
     app.register_blueprint(ui_bp)

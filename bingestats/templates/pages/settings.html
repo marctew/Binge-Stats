@@ -51,7 +51,7 @@
 
   <section id="api" class="card p-5 lg:col-span-3">
     <h2 class="font-semibold">API tokens</h2>
-    <p class="mt-1 text-sm text-muted">For Home Assistant, scripts and anything else that reads <code class="text-text">/api/v1</code>. Send <code class="text-text">Authorization: Bearer &lt;token&gt;</code>.</p>
+    <p class="mt-1 text-sm text-muted">For Home Assistant, scripts and anything else that reads <code class="text-text">/api/v1</code>. Send <code class="text-text">Authorization: Bearer &lt;token&gt;</code>; a display that can't set a header can put a read-only token in the URL as <code class="text-text">?token=</code>. Write tokens only work in the header.</p>
     {% if new_token %}
     <div class="mt-4 rounded-2xl border border-play/30 bg-play/10 p-4" x-data="{ copied: false }">
       <div class="text-sm font-medium">Token for {{ new_token_name }}. Copy it now: it won't be shown again.</div>
@@ -87,6 +87,20 @@
         {% else %}<p class="text-sm text-muted">No tokens yet.</p>{% endif %}
       </div>
     </div>
+    <h3 class="mt-6 text-sm font-semibold">Recent API actions</h3>
+    <p class="mt-1 text-xs text-muted">Every <code class="text-text">POST /api/v1/actions/…</code>, refused ones included, with the token that sent it.</p>
+    {% if api_actions %}
+    <ul class="mt-2 divide-y divide-border rounded-xl border border-border" data-api-actions>
+      {% for a in api_actions %}
+      <li class="flex items-center gap-3 px-3 py-2 text-sm">
+        <span class="{{ 'badge-muted' if a.status < 300 else 'badge-danger' }} shrink-0 font-mono">{{ a.action }}</span>
+        <span class="min-w-0 flex-1 truncate">{{ a.message or '' }}</span>
+        <span class="hidden shrink-0 text-xs text-muted sm:inline">{{ a.token_name }}</span>
+        <span class="shrink-0 text-xs text-muted">{{ a.at | relative }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}<p class="mt-2 text-sm text-muted">No actions yet.</p>{% endif %}
   </section>
 
   <section id="homeassistant" class="card p-5 lg:col-span-3" x-data="{ on: {{ 'true' if ha['mqtt.enabled'] else 'false' }} }">

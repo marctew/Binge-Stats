@@ -125,16 +125,20 @@ class Worker:
             self.nudger.close()
             self.nudger = None
 
-    def prune_images(self, now: float | None = None) -> None:
-        """The API's resized images (API standard section 6): oldest first above 500 MB, hourly."""
+    def housekeeping(self, now: float | None = None) -> None:
+        """Hourly, for the outside API: resized images oldest first above 500 MB (API standard
+        section 6), idempotency keys after 24 hours and the action log after 90 days."""
         now = now or time.time()
         if now - self._pruned_at < 3600:
             return
         self._pruned_at = now
+        from ..services import api_actions, api_audit
         from ..web.api_core import prune_image_cache
         n = prune_image_cache(self.cfg.data_dir / "image-cache")
         if n:
             log.info("image cache: removed %d old file(s)", n)
+        api_actions.prune(self.conn, now)
+        api_audit.prune(self.conn, now)
 
     def heartbeat(self, error: str = "") -> None:
         settings.set(self.conn, "worker.heartbeat_at", int(time.time()))
@@ -174,9 +178,9 @@ class Worker:
             except Exception:  # noqa: BLE001
                 log.exception("MQTT publish failed")
             try:
-                self.prune_images()
+                self.housekeeping()
             except Exception:  # noqa: BLE001
-                log.exception("image cache prune failed")
+                log.exception("API housekeeping failed")
             interval = settings.get(self.conn, "poll.interval_s")
             # A websocket nudge cuts the wait short, debounced by 1 s so a burst
             # of notifications becomes one poll.

@@ -23,6 +23,7 @@ Binge has two kinds of route under `/api/v1/`:
 | GET | `/status` | The one-glance summary, below. `Cache-Control: private, max-age=7` |
 | GET | `/feeds/{name}` | A list in the common item shape, below |
 | GET | `/images/{kind}/{id}` | Artwork, resized here: `poster/{rating_key}`, `art/{rating_key}`, `show/{tvdb_id}` |
+| POST | `/actions/{name}` | One named thing to do, below. Write token, in the header only |
 
 **`/status`**, from the database only (it never waits on Plex or the *arrs):
 
@@ -68,6 +69,25 @@ Every item has `id` and `title`; any of `subtitle`, `at` (UTC, `...Z`), `at_labe
 - WebP if the request's `Accept` lists `image/webp`, else JPEG (for ESP32 decoders). `fmt=webp|jpeg` forces one, `q=40..95` sets the quality (80), `gray=1` gives greyscale for e-ink.
 - `Cache-Control: public, max-age=86400` and an `ETag`. They're cached in `/data/image-cache/`; the worker trims it, oldest first, above 500 MB.
 - An image path in a feed works with the same token the feed was read with, URL token included. Images don't count towards the rate limit.
+
+### Actions
+
+`POST /api/v1/actions/{name}` with a JSON object as the body (an empty body counts as `{}`). A write token, sent as `Authorization: Bearer`; a write token in the URL is refused. A signed-in admin can also call them, with the `X-CSRF-Token` header.
+
+The answer is `{"ok": true, "message": "Pinned Slow Horses.", "result": {...}}`. `message` is short enough for a toast or a panel's status line. Refusals use the standard's error shape with `bad_request` (400), `forbidden` (403), `not_found` (404) or `upstream` (502, SABnzbd or Plex said no).
+
+| Action | Body | `result` |
+|---|---|---|
+| `pin_show` | `{"tvdb_id": 412, "user_id": 5342218}`; `user_id` defaults to the Plex owner | `tvdb_id`, `user_id`, `pinned`, `changed` (false if it was already pinned) |
+| `unpin_show` | the same | the same, `pinned: false` |
+| `ack_alert` | `{"alert_id": 17}` | `alert_id` |
+| `ack_all_alerts` | `{}` | `acknowledged`: how many |
+| `move_download` | `{"nzo_id": "SABnzbd_nzo_x", "to": "top"}` (`top` or `bottom`), or `above` / `below` with the neighbouring job's id | what SABnzbd reported. Only listed in `meta`, and only allowed, while Settings → SABnzbd → "Allow moving jobs" is on; otherwise `403` |
+
+Nothing destructive is offered: there's no action to stop a stream (the older `POST /api/v1/activity/{id}/stop` is still there for the PC panel).
+
+- **`Idempotency-Key`** (any string up to 100 characters): send the same key again within 24 hours, from the same token, and you get the first answer back with nothing done twice. Refusals are remembered too; an upstream failure (502) isn't, so it can be retried with the same key. The same key for a different action is a `400`.
+- **The action log:** every call, refused ones included, is logged with the token's name and shown under **Recent API actions** in Settings → API tokens. Kept 90 days.
 
 Home Assistant:
 

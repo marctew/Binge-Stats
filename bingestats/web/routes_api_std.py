@@ -125,3 +125,25 @@ def std_image(kind: str, ident: int):
         fetch = _plex_fetch(src[1], 1.5) if src[0] == "plex" else _sonarr_fetch(int(src[1]))
         return api_core.image_response(cache, kind, f"{ident}:{src[0]}:{src[1]}", fetch)
     return api_core.ApiCore.error("not_found", "Image kinds: poster, art, show.", 404)
+
+
+# -- actions -----------------------------------------------------------------------------------
+
+def register_actions(core, get_db) -> None:
+    from ..services import api_actions
+    for a in api_actions.ACTIONS.values():
+        when = (lambda a=a: a.when(get_db())) if a.when else None
+        core.add_action(a.name, a.title, a.body, when=when)
+
+
+@bp.route("/actions/<name>", methods=["POST"])
+@standard("write")
+def std_action(name: str):
+    from ..services import api_actions
+    who = api_core.identity()
+    body = request.get_json(silent=True) if request.get_data() else {}
+    status, out = api_actions.run(_db(), name, body, token_id=who.token_id, token_name=who.name or "A token",
+                                  key=request.headers.get("Idempotency-Key"))
+    resp = jsonify(out)
+    resp.status_code = status
+    return resp

@@ -7,7 +7,7 @@ from flask import (Blueprint, Response, current_app, flash, jsonify, redirect, r
 from ..arr.client import ArrError
 from ..plex.client import PlexError
 from ..services import tmdb
-from ..services import (accounts, activity, alerts, api_tokens, arr, backups, binges, completion, geo, history, homeassistant, jobs,
+from ..services import (accounts, activity, alerts, api_audit, api_tokens, arr, backups, binges, completion, geo, history, homeassistant, jobs,
                         libraries, plex_setup, settings, stats, wrapped)
 
 bp = Blueprint("ui", __name__)
@@ -338,6 +338,7 @@ def settings_page():
 def _render_settings(conn, **extra):
     values = {k: settings.get(conn, k) for k, _l, _t in EDITABLE}
     return render_template("pages/settings.html", fields=EDITABLE, values=values, tokens=api_tokens.list_tokens(conn),
+                           api_actions=api_audit.recent(conn, 20),
                            **extra,
                            plex_url=settings.get(conn, "plex.url"),
                            server=conn.execute("SELECT * FROM servers ORDER BY id LIMIT 1").fetchone(),

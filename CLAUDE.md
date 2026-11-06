@@ -8,7 +8,7 @@ Self-hosted Plex monitoring and stats, a modern Tautulli replacement. Read DESIG
 - `bingestats/plex/` the only code that knows Plex's API shape. Everything else uses its dataclasses.
 - `bingestats/arr/` the only code that knows Sonarr, Radarr and SABnzbd's APIs. GET only, except `SabClient.move` (SABnzbd `mode=switch`, behind `sabnzbd.allow_moves`). Never add another write call.
 - `bingestats/tmdb/` the only code that knows TMDB's API. GET only.
-- `bingestats/worker/` the only process that writes sessions, plays, library and user data. The web process writes settings, rules, tokens, jobs, alert acknowledgements, viewer logins, share salts and pins only.
+- `bingestats/worker/` the only process that writes sessions, plays, library and user data. The web process writes settings, rules, tokens, jobs, alert acknowledgements, viewer logins, share salts, pins, and the API's idempotency keys and action log (`api_idempotency`, `api_audit`) only; the worker prunes those two.
 - `bingestats/services/` all business operations. UI routes and the REST API both call these; routes stay thin.
 - `docker/` Dockerfile and compose. `scripts/build-css.sh` for local CSS builds.
 
