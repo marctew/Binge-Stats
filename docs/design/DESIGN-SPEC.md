@@ -251,7 +251,7 @@ Keep the text to one or two words. Add a dot or glyph only when the badge stands
 
 - **Header cells:** caps 12px muted (`.th` / `.table th`).
 - **Body cells:** 14px, with hairlines between rows and a faint hover.
-- **Width:** always wrap the table in `.scroll-x` (`overflow-x-auto`) so it scrolls inside its card on phones.
+- **Width:** always wrap the table in `.scroll-x` (`overflow-x-auto`) so it scrolls inside its card on phones, with `scroll-fade` (7.17) so a cut-off column fades rather than stopping dead.
 - **Alignment:** numbers align right and use tabular figures.
 - **Missing values:** shown as "–" (an en dash), never "null", "None" or blank.
 
@@ -345,6 +345,15 @@ From Muddy Paws (`paws/static/gmaps.js`, `map.js`). Maps are Google Maps (the Ma
 - **Map unavailable:** beside the map is a hidden `[data-map-failed]` empty state (7.11) with the glyph `alert`, titled "Map unavailable", and one line saying what to check ("Google Maps didn't load. Check the connection, or that the browser key allows this address."). It replaces the map when the script fails to load, and when Google refuses the key afterwards (Google calls `window.gm_authFailure`). Anything that works without the map (a list, a form) stays.
 - **No key yet:** an empty state in place of the card ("No map yet"), telling an admin where to add the keys and anyone else that an admin does it.
 - **A sketch where only the shape matters.** Lists of routes don't load a map for each card: `geo.sketch` turns the line into an SVG path (a 240 × 120 viewBox, 2:1), drawn as a 3px round-capped `--accent` stroke on `surface-2`. It costs no map loads and works without Google.
+
+### 7.17 Scroll fade
+
+From Binge Stats (its dashboard's "Airing this week" row). A row that scrolls sideways never cuts a card off hard at its edge: the edge fades out, so it reads as "there's more this way" rather than a mistake.
+
+- **Where:** every sideways scroller that can hide content past an edge: card rows (day cards, posters, sessions), tab strips (6), and wide tables in `.scroll-x` when they're wider than their card on a phone. Add the class `scroll-fade` beside whatever makes it scroll (`.scroll-x`, or `overflow-x-auto` in Tailwind).
+- **What it does:** a 48px mask gradient on the side that has more to scroll. At the start only the right edge fades; part way, both; at the end the right fade goes and the last item shows in full. It eases in and out over 0.2s (none with reduced motion).
+- **How:** `js/scroll-fade.js` sets `data-fade-l` and `data-fade-r` from the scroll position, on load, scroll and resize, after an htmx swap and when a row's size changes. A page that changes a row some other way calls `duScrollFade()`. Without the script nothing fades, which is the old look, not a broken one.
+- **Not** a gradient overlay in a colour: the mask fades the content itself, so it works on any background, in both themes, with no extra elements.
 
 ## 8. States and live data
 
@@ -636,3 +645,4 @@ health = "http://127.0.0.1:8765/healthz" # anything below 500 counts as up
 | 2026-11-05 | The `map`, `route`, `pin` and `paw` glyphs, in a new Maps and outdoors group (9.3, 9.4). The 9.3 table now also lists `star`, `tag`, `image` and `headset`. | – |
 | 2026-11-05 | From Muddy Paws: the map component (7.16) and Google Maps as the one stated exception to no CDNs at runtime (17.6). Map markers' white ring and initial are allowed hard-coded colours (13). `APP-STANDARD.md` gains apps with more than one person (9), ingest endpoints with their own tokens (10) and secrets an admin enters in Settings (11). Docs only. | Muddy Paws (source) |
 | 2026-11-06 | The outside API's shared code, lifted from Binge Stats' pilot: `tools/du_api.py`, `templates/display/base.html`, the API tokens and Webhooks cards for Settings, and `tools/check_api.py`. `API-STANDARD.md` draft 3. Apps that adopt the API add six lines to their updater config (API-STANDARD 12). | Binge Stats (source) |
+| 2026-11-06 | The scroll fade (7.17), from Binge Stats: `scroll-fade` in both CSS files and `js/scroll-fade.js`, so a sideways row fades at the edge where there's more to scroll instead of cutting a card off. | Binge Stats (source) |
