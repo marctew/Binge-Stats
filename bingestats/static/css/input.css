@@ -32,3 +32,21 @@
 
 /* The mobile top bar clears the notch when installed full screen (PWA-ICONS.md 3; uniform.css does this for the other apps). */
 .topbar-safe { padding-top: calc(12px + env(safe-area-inset-top)); }
+
+/* Collapsible sidebar (Design Uniformity 6.1, taken into this app's own shell). Collapsed, the sidebar is a 72px
+   rail of icons; each nav link's title is its tooltip. partials/theme_head.html sets <html data-sidebar="collapsed">
+   before first paint; static/design/sidebar.js toggles it. Desktop only: phones have no sidebar. */
+.sidebar-toggle svg { transition: transform 200ms cubic-bezier(0.4, 0, 0.2, 1); }
+@media (min-width: 1024px) {
+  .app-shell, .app-sidebar { transition: padding 200ms cubic-bezier(0.4, 0, 0.2, 1), width 200ms cubic-bezier(0.4, 0, 0.2, 1); }
+  [data-sidebar="collapsed"] .app-shell { padding-left: 72px; }
+  [data-sidebar="collapsed"] .app-sidebar { width: 72px; padding-left: 12px; padding-right: 12px; overflow: hidden; }
+  [data-sidebar="collapsed"] .app-brand { justify-content: center; gap: 0; padding: 0; }
+  [data-sidebar="collapsed"] .app-brand > span { display: none; }
+  [data-sidebar="collapsed"] .app-sidebar .nav-link { justify-content: center; gap: 0; padding-left: 0; padding-right: 0; font-size: 0; }
+  [data-sidebar="collapsed"] .sidebar-toggle svg { transform: rotate(180deg); }
+  [data-sidebar="collapsed"] .app-sidebar-foot form { padding-left: 0; padding-right: 0; }
+  [data-sidebar="collapsed"] .app-sidebar-foot [role="radiogroup"] { grid-template-columns: minmax(0, 1fr); }
+  [data-sidebar="collapsed"] .app-version { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .app-shell, .app-sidebar, .sidebar-toggle svg { transition: none; } }

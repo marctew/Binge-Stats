@@ -4,6 +4,7 @@
 <script>
 (function () {
   var pref = {{ pref | tojson }}, root = document.documentElement;
+  try { if (localStorage.getItem("sidebar") === "collapsed") root.dataset.sidebar = "collapsed"; } catch (e) {}   /* Design Uniformity 6.1 */
   root.dataset.themePref = pref;
   if (pref !== "system") { root.dataset.theme = pref; return; }
   var mq = window.matchMedia("(prefers-color-scheme: light)");

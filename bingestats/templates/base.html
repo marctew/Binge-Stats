@@ -18,6 +18,7 @@
   <script src="{{ url_for('static', filename='vendor/htmx.min.js') }}" defer></script>
   <script src="{{ url_for('static', filename='js/app.js') }}?v={{ app_sha or app_version }}" defer></script>
   <script src="{{ url_for('static', filename='design/scroll-fade.js') }}?v={{ app_sha or app_version }}" defer></script>
+  <script src="{{ url_for('static', filename='design/sidebar.js') }}?v={{ app_sha or app_version }}" defer></script>
   {% block head %}{% endblock %}
   <script src="{{ url_for('static', filename='vendor/alpine.min.js') }}" defer></script>
 </head>
@@ -38,26 +39,28 @@
 {% set nav = [('me.home', 'Home', 'home', ['me.home'])] + ([('me.calendar_page', 'Calendar', 'calendar', ['me.calendar_page', 'me.ready_page', 'me.retire_page', 'me.discover_page']), ('me.shows_page', 'Shows', 'tv', ['me.shows_page'])] if sonarr_configured else []) + [('me.history_page', 'History', 'history', ['me.history_page']),
                ('me.wrapped_page', 'Wrapped', 'bulb', ['me.wrapped_page']), ('me.account', 'Account', 'user', ['me.account'])] %}
 {% endif %}
-<div class="lg:pl-64">
+<div class="app-shell lg:pl-64">
   {# Sidebar (desktop) #}
-  <aside class="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-border bg-surface/60 px-4 py-6 backdrop-blur lg:flex">
-    <a href="{{ url_for(home_ep) }}" class="mb-8 flex items-center gap-2.5 px-2">
+  <aside class="app-sidebar fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-border bg-surface/60 px-4 py-6 backdrop-blur lg:flex">
+    <a href="{{ url_for(home_ep) }}" class="app-brand mb-8 flex items-center gap-2.5 px-2">
       <img src="{{ url_for('static', filename='img/icon.svg') }}" class="h-8 w-8" alt="">
       <span class="text-lg font-semibold tracking-tight">Binge <span class="brand-gradient">Stats</span></span>
     </a>
     <nav class="flex flex-1 flex-col gap-1">
       {% for ep, label, ic, eps in nav %}
-      <a href="{{ url_for(ep) }}" class="nav-link {{ 'active' if request.endpoint in eps }}">{{ icon(ic) }}{{ label }}</a>
+      <a href="{{ url_for(ep) }}" class="nav-link {{ 'active' if request.endpoint in eps }}" title="{{ label }}">{{ icon(ic) }}{{ label }}</a>
       {% endfor %}
     </nav>
-    <div class="mt-6 border-t border-border pt-4">
+    {#- Collapse (Design Uniformity 6.1): static/design/sidebar.js, styled in input.css. -#}
+    <button type="button" class="nav-link sidebar-toggle w-full" data-sidebar-toggle aria-expanded="true" title="Collapse the sidebar">{{ icon('chevron-left') }}<span>Collapse</span></button>
+    <div class="app-sidebar-foot mt-6 border-t border-border pt-4">
       <form method="post" action="{{ url_for('auth.logout') }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button class="nav-link w-full">{{ icon('logout') }}Sign out</button>
+        <button class="nav-link w-full" title="Sign out">{{ icon('logout') }}Sign out</button>
       </form>
       {% include "partials/theme_switch.html" %}
-      {% if viewer %}<div class="mt-3 px-3 text-xs text-faint">Binge Stats v{{ app_version }}</div>
-      {% else %}<a href="{{ url_for('ui.about_page') }}" class="mt-3 block px-3 text-xs text-faint hover:text-muted">v{{ app_version }}{% if app_sha %} · {{ app_sha }}{% endif %} · About</a>{% endif %}
+      {% if viewer %}<div class="app-version mt-3 px-3 text-xs text-faint">Binge Stats v{{ app_version }}</div>
+      {% else %}<a href="{{ url_for('ui.about_page') }}" class="app-version mt-3 block px-3 text-xs text-faint hover:text-muted">v{{ app_version }}{% if app_sha %} · {{ app_sha }}{% endif %} · About</a>{% endif %}
     </div>
   </aside>
 
