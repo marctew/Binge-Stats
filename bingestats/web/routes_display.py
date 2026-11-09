@@ -72,7 +72,7 @@ def now_playing():
             "generated_at": playing["generated_at"], "refresh_s": playing["refresh_s"]}
     keep = {k: request.args[k] for k in ("theme", "size", "scale", "accent") if k in request.args}
     template = "display/now_playing_body.html" if request.args.get("fragment") == "1" else "display/now_playing.html"
-    css = url_for("static", filename="css/app.css", v=current_app.config.get("BS_SHA") or current_app.config["BS_VERSION"])
+    css = url_for("static", filename="css/app.css")   # du_flask adds ?v=<mtime> (APP-STANDARD 12)
     return render_template(template, opts=opts, page=page, title="Now playing", stylesheets=[css],
                            fragment_url=_with_token(request.path, fragment=1, **keep),
                            events_url=_with_token("/api/v1/events"), event_names=EVENT_NAMES)

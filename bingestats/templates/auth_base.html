@@ -13,9 +13,9 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="manifest" href="{{ url_for('static', filename='manifest.json', v=app_version) }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v={{ app_sha or app_version }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
   <script src="{{ url_for('static', filename='vendor/htmx.min.js') }}" defer></script>
-  <script src="{{ url_for('static', filename='js/app.js') }}?v={{ app_sha or app_version }}" defer></script>
+  <script src="{{ url_for('static', filename='js/app.js') }}" defer></script>
   <script src="{{ url_for('static', filename='vendor/alpine.min.js') }}" defer></script>
 </head>
 <body class="min-h-screen" hx-headers='{"X-CSRF-Token": "{{ csrf_token() }}"}'>

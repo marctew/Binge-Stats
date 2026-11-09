@@ -16,7 +16,7 @@
   <meta property="og:title" content="{{ possessive }} {{ w.year }} on Plex">
   <meta property="og:description" content="{{ '{:,}'.format(w.hours | round | int) }} hours, {{ '{:,}'.format(w.plays) }} plays{% if w.top_shows %}, mostly {{ w.top_shows[0].title }}{% endif %}.">
   <link rel="icon" href="{{ url_for('static', filename='img/icon.svg') }}" type="image/svg+xml">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v={{ app_sha or app_version }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
   {% if not public %}<script src="{{ url_for('static', filename='vendor/alpine.min.js') }}" defer></script>{% endif %}
 </head>
 <body class="wrapped min-h-screen bg-bg text-text antialiased">

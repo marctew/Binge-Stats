@@ -4,7 +4,7 @@
 {% block title %}Downloads · Binge Stats{% endblock %}
 {% block head %}{% if q and q.can_move %}
 <script src="{{ url_for('static', filename='vendor/sortable.min.js') }}" defer></script>
-<script src="{{ url_for('static', filename='js/downloads.js') }}?v={{ app_sha or app_version }}" defer></script>
+<script src="{{ url_for('static', filename='js/downloads.js') }}" defer></script>
 {% endif %}{% endblock %}
 {% block content %}
 {% call page_header('Downloads', 'What SABnzbd is fetching, named by Sonarr and Radarr') %}
