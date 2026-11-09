@@ -101,3 +101,37 @@ def test_more_in_the_bottom_nav(logged_in):
     more = settings_page[settings_page.index('class="nav-more'):]
     assert 'class="flex flex-1 flex-col items-center gap-1 py-2.5 text-[11px] font-medium' in more
     assert "active text-accent" in more[:more.index("More</button>")]   # Settings lives inside More
+
+
+def _every_plain_get(app):
+    """Every GET route without a URL parameter, except streams (SSE) that never end."""
+    for rule in app.url_map.iter_rules():
+        if "GET" in rule.methods and not rule.arguments and rule.endpoint != "static" and "events" not in rule.rule:
+            yield rule.rule
+
+
+def test_nothing_is_left_for_a_shared_cache(app, logged_in):
+    """APP-STANDARD 12 (Encore, 9 Nov 2026): every answer that isn't a static file is no-store or private, signed in
+    or not, so Cloudflare never keeps one and hands it to someone else. Unmarked JSON is what it cached."""
+    anon = app.test_client()
+    for path in _every_plain_get(app):
+        for who, client in (("signed in", logged_in), ("signed out", anon)):
+            r = client.get(path)
+            cc = r.headers.get("Cache-Control", "")
+            assert ("no-store" in cc or "private" in cc) and "public" not in cc, f"{path} ({who}, {r.status_code}): {cc!r}"
+
+
+def test_signed_in_json_is_no_store(logged_in):
+    r = logged_in.get("/api/v1/stats/summary")
+    assert r.status_code == 200 and r.mimetype == "application/json"
+    assert r.headers["Cache-Control"] == "no-store"
+
+
+def test_public_is_made_private(app):
+    """send_file says public when given a max_age; a shared cache would keep that and serve it to anyone."""
+    from flask import Response
+
+    with app.test_request_context("/somewhere"):
+        resp = Response(b"x", mimetype="image/jpeg")
+        resp.headers["Cache-Control"] = "public, max-age=60"
+        assert app.process_response(resp).headers["Cache-Control"] == "private, max-age=60"

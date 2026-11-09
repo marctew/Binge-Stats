@@ -291,7 +291,7 @@ def test_poster_webp_by_default_for_browsers(client, tok, library, photos):
     assert r.status_code == 200 and r.mimetype == "image/webp"
     im = Image.open(io.BytesIO(r.data))
     assert im.size == (320, 480)                                        # 300 snaps to 320
-    assert r.headers["Cache-Control"] == "public, max-age=86400" and r.headers["ETag"]
+    assert r.headers["Cache-Control"] == "private, max-age=86400" and r.headers["ETag"]
     assert photos.calls == [("/library/metadata/600/thumb/1", 320, 480)]
 
 

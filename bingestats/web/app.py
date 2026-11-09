@@ -55,14 +55,22 @@ def _install_api(app: Flask) -> None:
 
 
 def _cache_headers(resp):
-    """Design Uniformity APP-STANDARD 12: pages are no-store and static files no-cache (revalidated by ETag, so a
-    deploy's CSS and JS show at once; their links also carry ?v=<mtime> from du_flask). A response that sets its own
-    Cache-Control keeps it: the /img/ proxy (a week, private), the API's images and feeds, display pages, SSE."""
+    """Design Uniformity APP-STANDARD 12: static files are no-cache (revalidated by ETag, so a deploy's CSS and JS show
+    at once; their links also carry ?v=<mtime> from du_flask). Everything else is someone's own and never goes in a
+    shared cache: no Cache-Control becomes no-store (pages, JSON, HTMX fragments, redirects), and what sets its own
+    caching (the /img/ proxy, the API's images and feeds, display pages, SSE) keeps its max-age but is made private.
+    Through the tunnel, Cloudflare stores an unmarked answer and hands it to anyone (Encore, 9 Nov 2026)."""
     if request.endpoint == "static":
         resp.headers["Cache-Control"] = "no-cache"
         resp.headers.pop("Expires", None)
-    elif resp.mimetype == "text/html" and "Cache-Control" not in resp.headers:
-        resp.headers["Cache-Control"] = "no-store"
+        return resp
+    words = [w.strip() for w in resp.headers.get("Cache-Control", "").split(",")
+             if w.strip() and w.strip().lower() != "public"]
+    if not words:
+        words = ["no-store"]
+    elif not {"private", "no-store"} & {w.lower() for w in words}:
+        words.insert(0, "private")
+    resp.headers["Cache-Control"] = ", ".join(words)
     return resp
 
 

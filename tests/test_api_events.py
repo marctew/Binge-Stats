@@ -170,7 +170,7 @@ def read_stream(app, url, headers, n):
 def test_events_route_replays_after_last_event_id(app, app_conn, tok):
     a, b = ev(app_conn), ev(app_conn, "arrival", "Just arrived: Rumours")
     r, chunks = read_stream(app, "/api/v1/events", {**bearer(tok), "Last-Event-ID": str(a)}, 2)
-    assert r.mimetype == "text/event-stream" and r.headers["Cache-Control"] == "no-cache"
+    assert r.mimetype == "text/event-stream" and r.headers["Cache-Control"] == "private, no-cache"
     assert chunks[0].startswith("retry:") and chunks[1].startswith(f"event: arrival\nid: {b}\n")
 
 
