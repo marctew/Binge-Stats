@@ -14,11 +14,11 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="manifest" href="{{ url_for('static', filename='manifest.json', v=app_version) }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v={{ app_sha or app_version }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
   <script src="{{ url_for('static', filename='vendor/htmx.min.js') }}" defer></script>
-  <script src="{{ url_for('static', filename='js/app.js') }}?v={{ app_sha or app_version }}" defer></script>
-  <script src="{{ url_for('static', filename='design/scroll-fade.js') }}?v={{ app_sha or app_version }}" defer></script>
-  <script src="{{ url_for('static', filename='design/sidebar.js') }}?v={{ app_sha or app_version }}" defer></script>
+  <script src="{{ url_for('static', filename='js/app.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='design/scroll-fade.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='design/sidebar.js') }}" defer></script>
   {% block head %}{% endblock %}
   <script src="{{ url_for('static', filename='vendor/alpine.min.js') }}" defer></script>
 </head>
@@ -107,17 +107,24 @@
     {% endfor %}
   </nav>
   {% else %}
-  <nav class="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-border bg-surface/90 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden" x-data="{ more: false }">
+  {#- More (Design Uniformity 6.2), in Alpine since this is Binge's own shell: the glyph is `more`, it turns the accent
+      colour while open or when the current page is inside it, opens upwards 8px in from the right with rows inside,
+      and closes on a tap outside it or Escape. -#}
+  <nav class="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-border bg-surface/90 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden">
     {% for ep, label, ic, eps in nav[:4] %}
     <a href="{{ url_for(ep) }}" class="flex flex-col items-center gap-1 py-2.5 text-[11px] font-medium {{ 'text-accent' if request.endpoint in eps else 'text-muted' }}">{{ icon(ic) }}{{ label }}</a>
     {% endfor %}
     {% set ns = namespace(more=false) %}{% for _e, _l, _i, eps in nav[4:] %}{% if request.endpoint in eps %}{% set ns.more = true %}{% endif %}{% endfor %}
-    <button type="button" @click="more = !more" class="flex flex-col items-center gap-1 py-2.5 text-[11px] font-medium {{ 'text-accent' if ns.more else 'text-muted' }}">{{ icon('stack') }}More</button>
-    <div x-cloak x-show="more" x-transition @click.outside="more = false"
-         class="absolute bottom-full right-3 mb-2 w-48 rounded-2xl border border-border bg-surface p-2 shadow-2xl">
-      {% for ep, label, ic, eps in nav[4:] %}
-      <a href="{{ url_for(ep) }}" class="nav-link {{ 'active' if request.endpoint in eps }}">{{ icon(ic) }}{{ label }}</a>
-      {% endfor %}
+    <div class="nav-more relative flex" x-data="{ more: false }" @click.outside="more = false" @keydown.escape.window="more = false">
+      <button type="button" @click="more = !more" :aria-expanded="more.toString()" aria-expanded="false"
+              class="flex flex-1 flex-col items-center gap-1 py-2.5 text-[11px] font-medium [-webkit-tap-highlight-color:transparent] {{ 'active text-accent' if ns.more else 'text-muted' }}"
+              {% if not ns.more %}:class="{ '!text-accent': more }"{% endif %}>{{ icon('more') }}More</button>
+      <div x-cloak x-show="more" x-transition
+           class="menu bottom-full right-2 top-auto mb-2 mt-0 w-auto min-w-[200px]">
+        {% for ep, label, ic, eps in nav[4:] %}
+        <a href="{{ url_for(ep) }}" class="menu-item px-3.5 py-3 text-[15px] {{ 'active text-accent' if request.endpoint in eps }}">{{ icon(ic, 'h-4 w-4') }}{{ label }}</a>
+        {% endfor %}
+      </div>
     </div>
   </nav>
   {% endif %}

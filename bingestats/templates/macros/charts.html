@@ -3,7 +3,7 @@
 
 {% macro chart_scripts() -%}
 <script src="{{ url_for('static', filename='vendor/echarts.min.js') }}" defer></script>
-<script src="{{ url_for('static', filename='js/charts.js') }}?v={{ app_sha or app_version }}" defer></script>
+<script src="{{ url_for('static', filename='js/charts.js') }}" defer></script>
 {%- endmacro %}
 
 {% macro chart_card(title, kind, src, unit='plays', height='h-64', sub=None, cls='', empty=None) -%}
@@ -76,7 +76,7 @@
 {% macro map_scripts() -%}
 <link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet.css') }}">
 <script src="{{ url_for('static', filename='vendor/leaflet.js') }}" defer></script>
-<script src="{{ url_for('static', filename='js/map.js') }}?v={{ app_sha or app_version }}" defer></script>
+<script src="{{ url_for('static', filename='js/map.js') }}" defer></script>
 {%- endmacro %}
 
 {# Map + list of places plays came from. #}

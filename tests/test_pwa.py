@@ -1,6 +1,7 @@
 """Home screen icons and the manifest (Design Uniformity PWA-ICONS.md)."""
 import io
 import json
+import re
 
 from PIL import Image
 
@@ -18,7 +19,7 @@ def test_icons_load_without_signing_in(app, app_conn):
     ico = client.get("/static/favicon.ico")
     assert ico.status_code == 200 and Image.open(io.BytesIO(ico.data)).size == (32, 32)
     r = client.get("/favicon.ico")
-    assert r.status_code == 301 and r.headers["Location"].endswith("/static/favicon.ico")
+    assert r.status_code == 301 and "/static/favicon.ico" in r.headers["Location"]
 
 
 def test_favicon_before_setup(app):
@@ -44,6 +45,6 @@ def test_head_tags_on_the_app_and_the_login_page(app, logged_in):
         assert '<meta name="apple-mobile-web-app-capable" content="yes">' in html
         assert '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">' in html
         assert 'rel="manifest" href="/static/manifest.json?v=' in html
-        assert 'href="/static/img/icon.svg"' in html and 'href="/static/favicon.ico" sizes="32x32"' in html
+        assert 'href="/static/img/icon.svg?v=' in html and re.search(r'href="/static/favicon.ico\?v=\d+" sizes="32x32"', html)
         assert html.count('<meta name="theme-color"') == 1      # only the one from theme_head.html
     assert 'class="topbar-safe ' in pages[0]                    # the top bar clears the notch (PWA-ICONS.md 3)

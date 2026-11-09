@@ -7,7 +7,7 @@ from importlib import import_module
 from datetime import timedelta
 from pathlib import Path
 
-from flask import Flask, g
+from flask import Flask, g, request
 
 from .. import __version__
 from .. import config as config_mod
@@ -54,6 +54,18 @@ def _install_api(app: Flask) -> None:
         du_api.stop_streams_on_sigterm(core)
 
 
+def _cache_headers(resp):
+    """Design Uniformity APP-STANDARD 12: pages are no-store and static files no-cache (revalidated by ETag, so a
+    deploy's CSS and JS show at once; their links also carry ?v=<mtime> from du_flask). A response that sets its own
+    Cache-Control keeps it: the /img/ proxy (a week, private), the API's images and feeds, display pages, SSE."""
+    if request.endpoint == "static":
+        resp.headers["Cache-Control"] = "no-cache"
+        resp.headers.pop("Expires", None)
+    elif resp.mimetype == "text/html" and "Cache-Control" not in resp.headers:
+        resp.headers["Cache-Control"] = "no-store"
+    return resp
+
+
 def build_app(data_dir: str | None = None, *, testing: bool = False) -> Flask:
     cfg = config_mod.load(data_dir)
     logging.basicConfig(level=cfg.log_level, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -70,8 +82,9 @@ def build_app(data_dir: str | None = None, *, testing: bool = False) -> Flask:
         BS_CONFIG=cfg,
         BS_VERSION=__version__,
         BS_SHA=_git_sha(),
-        SEND_FILE_MAX_AGE_DEFAULT=3600,
     )
+
+    app.after_request(_cache_headers)
 
     if cfg.trusted_proxies:
         from werkzeug.middleware.proxy_fix import ProxyFix
