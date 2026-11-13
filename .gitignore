@@ -1,5 +1,8 @@
 __pycache__/
 *.pyc
+*.bak*
+*.env
+!deploy/*.env.example
 .venv/
 .cache/
 
